@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0066cc">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/SophisticatedInga.jpg">
+  <title>Player Piano</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="auth-hidden">
+  <div id="loginOverlay">
+    <section style="max-width:400px;margin:100px auto;text-align:center">
+      <h1>Player Piano v1.0.2</h1>
+      <p>Enter master password</p>
+      <input type="password" id="loginPass" placeholder="Password" style="width:100%;padding:10px;font-size:16px">
+      <button id="loginBtn" style="margin:20px 0;width:100%;padding:10px">Login</button>
+    </section>
+  </div>
+
+  <div id="mainContent">
+    <h1>Player Piano v1.0.2</h1>
+    <div id="topControls">
+      <label id="themeLabel">Theme</label>
+      <button id="themeToggle" title="Toggle theme"><span id="themeIcon">🌙</span> <span id="themeText">Toggle</span></button>
+      <button id="logoutBtn">Logout</button>
+    </div>
+
+    <section>
+      <h2>Upload MIDI</h2>
+      <input id="fileInput" type="file" accept=".mid,.midi">
+      <div style="margin-top:8px">
+        <label><input id="processAfterUpload" type="checkbox"> Process after upload (clean)</label>
+        <button id="uploadBtn">Upload</button>
+      </div>
+    </section>
+    <section>
+      <h2>Settings</h2>
+      <label for="midiOutputs">Select output for preview/play:</label>
+      <select id="midiOutputs"></select>
+      <button id="refreshOutputs">Refresh</button>
+      <div style="margin-top:10px">
+        <label for="defaultPort">Default Disklavier port:</label>
+        <input id="defaultPort" placeholder="(saved default)">
+        <button id="saveDefault">Save default</button>
+      </div>
+      <div style="margin-top:8px">
+        <label for="targetDevice">BT MIDI Device Name:</label>
+        <input id="targetDevice" placeholder="MD-BT01">
+        <button id="saveTargetDevice">Save</button>
+      </div>
+      <div style="margin-top:15px; border-top: 1px solid rgba(0,0,0,0.1); padding-top:10px">
+        <label for="newPassword">Master Password:</label>
+        <input type="password" id="newPassword" placeholder="New password">
+        <button id="savePassword">Update Password</button>
+      </div>
+    </section>
+
+  <section>
+    <h2>Files</h2>
+    <div id="files"></div>
+    <div id="previewBar" style="margin-top:10px;display:flex;align-items:center;gap:8px">
+      <input type="range" id="playProgress" value="0" min="0" max="1" step="0.1" style="flex:1">
+      <div id="playTimes" class="muted">00:00 / 00:00</div>
+      <button id="stopPreview">Stop</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Playlists</h2>
+    <input id="newPlaylist" placeholder="Playlist name">
+    <button id="createPlaylist">Create</button>
+    <div id="playlists"></div>
+  </section>
+
+  <section id="playlistPlayer">
+    <h2>Playlist Player</h2>
+    <div id="status">Stopped</div>
+    <div id="playlistProgressContainer" style="margin-top:10px;display:flex;align-items:center;gap:8px">
+      <input type="range" id="playlistProgress" value="0" min="0" max="1" step="0.1" style="flex:1">
+      <div id="playlistTimes" class="muted">00:00 / 00:00</div>
+    </div>
+    <div style="margin-top:10px">
+      <button id="stop">Stop</button>
+      <button id="next">Next</button>
+    </div>
+  </section>
+
+  <script src="/static/midi-player.min.js"></script>
+  <script src="/static/soundfont-player.min.js"></script>
+  <script src="/static/app.js?v=1.0.2"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/service-worker.js');
+    }
+  </script>
+</body>
+</html>

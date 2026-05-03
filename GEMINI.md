@@ -1,0 +1,50 @@
+# Yamahalalala - Status Summary
+
+This project is a native mobile ecosystem designed to manage and play MIDI files on a Yamaha Disklavier piano. It consists of a FastAPI backend and a high-performance Expo (React Native) mobile application.
+
+## 🚀 Current Architecture
+- **Backend:** FastAPI (Python 3.11)
+  - **Transcription:** Dual-engine support (Bytedance Piano-Focused + Spotify Basic Pitch Polyphonic).
+  - **Separation:** High-precision Demucs 6-Stem Pro model (isolated Piano, Guitar, Strings).
+  - **AI Audio Engine:** Demucs + Piano Transcription Inference + Audio-Anchored DTW.
+- **Frontend:** Native Expo App (`player-piano-native/`)
+  - **Workstation:** 4-Stage Tabbed Orchestrator (Create, Perform, Master, Library).
+  - **Engine:** React Native + Zustand + Expo AV + Expo Keep Awake.
+
+## ✨ Key Features
+- **Workstation UI**: Professional stage-based workflow for MP3 separation, transcription, and sync.
+- **Hybrid Alignment**: Warp high-quality library MIDIs to match MP3 vocals with sub-millisecond precision.
+- **Dual-Engine Transcription**: Adjustable sensitivity and volume gain for specialized vs general instrument capture.
+- **Acoustic Auto-Sync**: Automated loopback calibration via phone microphone.
+- **Background Protection**: Prevent audio suspension during screen sleep using CPU wake-locks.
+
+## ✅ Recent Accomplishments
+- **Pedal Clank Mitigation (Temporary)**: Temporarily mapped 'Medium' and 'Full' pedal presets to 'Light' intensity to address physical hardware noise. Re-cleaned 570+ MIDI files across the main library and Orchestrator to apply these safe settings while preserving original metadata for future restoration.
+- **6-Stem Isolation**: Upgraded to `htdemucs_6s` for surgical separation of piano from strings/guitars.
+- **Workstation UX**: Implemented top-tab navigation and "Files-style" library with search and bulk delete.
+- **Transcription Tuning**: Added volume gain for Bytedance and threshold sensitivity for Spotify engines.
+- **Hybrid Merge**: Ability to combine the perfect MIDI pass with the perfect audio pass into a master track.
+- **Filename Retention**: Fixed bug to preserve original filenames instead of UUIDs.
+
+## 🏃 Next Steps
+1. **Hybrid Metadata & Tags**: Update the Perform tab to display separate tags for Vocal and MIDI source configurations in Hybrid jobs.
+2. **Library Action Bar**: Move 'Delete' and 'Cancel' buttons to the left of the selection count in the Orchestrator library to avoid Voice Control overlap.
+3. **Hybrid "Freezing"**: Implement the permanent merge/export to main library (fixing the Android modal workflow). Figure out how we can integrate these hybrid files types with normal midi files in playlists. What kind of behavior do we expect? If we auto play a hybrid file the sync will likely be off, so just playing them casually with normal midi files will not work as is.
+4. **Library Search/Sort**: Refine the Orchestrator library sorting (Date, Name, Engine).
+5. **AI-Powered Organization**: Integrate Gemini on the backend to auto-assign metadata.
+6. **Improve Files Seach** THe search logic should assume dashses are spaces. Example searching "back to black" should find song "back-to-black" This worked previously but I just noticed it's no longer working.
+
+## 🛠 Development Workflow
+- **Stop and Ask:** Always stop and ask questions to clarify ambiguities or ask for examples instead of guessing.
+- **Planning First:** Before implementing any significant change, especially after a user question, provide a concise plan or strategy for approval.
+- **Atomic Commits:** Commit after each functional change on the feature branch.
+- **Never Work in Master:** NEVER make direct changes or commits to the `master` branch.
+- **Always Branch:** Always create a new branch for every task, bug fix, or feature (e.g., `feature/...` or `bugfix/...`).
+- **One Task at a Time:** Focus on a single item from the implementation plan.
+- **User Validation:** Before merging to `master`, notify the user and wait for them to explicitly test and confirm that the changes work as expected.
+- **Master Merge:** Only merge into `master` after explicit user confirmation.
+
+## ⚙️ How to Run
+1. **Backend:** `python -m app.main` from the project root.
+2. **Mobile (Dev):** `npx expo run:android` (local build) or `npx expo start`.
+3. **Mobile (Prod):** Install the standalone APK generated via EAS Local Build.

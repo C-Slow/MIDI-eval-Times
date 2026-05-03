@@ -1,0 +1,17 @@
+{
+  "name": "Player Piano",
+  "short_name": "Piano",
+  "description": "Upload and play MIDI to Disklavier",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0066cc",
+  "icons": [
+    {
+      "src": "/static/SophisticatedInga.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

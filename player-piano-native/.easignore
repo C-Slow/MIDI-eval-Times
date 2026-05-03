@@ -1,0 +1,11 @@
+# Absolute patterns for EAS
+node_modules/
+.expo/
+dist/
+
+# Large project folders to skip
+/storage/
+/player-piano-app/storage/
+/Midi-Projects/
+/Cubase Projects/
+/.git/

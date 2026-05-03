@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Piano App specific ignores (relative to project root)
+storage/
+player-piano-app/storage/
+Midi-Projects/
+Cubase Projects/
+.git/

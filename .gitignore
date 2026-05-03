@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+*.sqlite3
+*.db
+.env
+.DS_Store
+.vscode/
+.idea/
+*.log
+Thumbs.db
+
+# Ignore large audio/Cubase project files
+Cubase Projects/
+*.cpr
+
+# Ignore local storage of uploaded/processed MIDIs
+storage/raw/
+storage/processed/
+storage/render_cache/
+storage/midi_info_cache.json
+storage/metadata.json
+storage/playlists.json
+storage/settings.json
+storage/backups/
+storage/mp3_uploads/
+storage/separated/
+storage/mp3_jobs.json
+
+# Legacy output folder from older scripts
+Midi-Projects/Output-Midi/
+
+# Virtual envs in subprojects
+**/.venv/
+**/venv/
+
+# Ignore entire Midi-Projects workspace (large data, environments)
+Midi-Projects/

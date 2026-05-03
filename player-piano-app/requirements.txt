@@ -1,0 +1,18 @@
+fastapi
+uvicorn[standard]
+python-multipart
+aiofiles
+mido
+python-rtmidi
+pretty_midi
+bleak
+google-genai
+demucs @ git+https://github.com/facebookresearch/demucs#egg=demucs
+piano_transcription_inference
+basic-pitch
+librosa
+torch<2.1
+torchaudio<2.1
+torchvision<0.16
+numpy<2
+# 'runpy' is part of the Python standard library; do not include it here
