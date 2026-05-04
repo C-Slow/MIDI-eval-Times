@@ -42,36 +42,35 @@ def create_backup(storage_dir: Path, backup_dir: Path):
         print(f"Backup failed: {e}")
         return None
 
-def rotate_backups(backup_dir: Path, keep_days: int = 7):
+def rotate_backups(backup_dir: Path, max_backups: int = 10):
     """
-    Deletes backups older than keep_days.
+    Deletes oldest backups if more than max_backups exist.
     """
     if not backup_dir.exists():
         return
 
-    now = datetime.now()
-    cutoff = now - timedelta(days=keep_days)
-
+    # Get all backups and sort by filename (which contains timestamp: backup_YYYY-MM-DD_HH-MM-SS.zip)
+    backups = sorted(list(backup_dir.glob("backup_*.zip")))
+    
     deleted_count = 0
-    for file in backup_dir.glob("backup_*.zip"):
-        try:
-            # Filename format: backup_YYYY-MM-DD_HH-MM-SS.zip
-            file_time_str = file.name.replace("backup_", "").replace(".zip", "")
-            # We only need the date part for comparison
-            file_date = datetime.strptime(file_time_str, "%Y-%m-%d_%H-%M-%S")
-            
-            if file_date < cutoff:
+    if len(backups) > max_backups:
+        # The oldest files will be at the start of the sorted list
+        num_to_delete = len(backups) - max_backups
+        to_delete = backups[:num_to_delete]
+        
+        for file in to_delete:
+            try:
                 file.unlink()
-                print(f"Deleted old backup: {file.name}")
+                print(f"Deleted old backup (count limit): {file.name}")
                 deleted_count += 1
-        except Exception as e:
-            print(f"Error checking backup rotation for {file.name}: {e}")
+            except Exception as e:
+                print(f"Error deleting old backup {file.name}: {e}")
     
     return deleted_count
 
-def run_backup_cycle(storage_dir: str, keep_days: int = 7):
+def run_backup_cycle(storage_dir: str, max_backups: int = 10):
     s_path = Path(storage_dir)
     b_path = s_path / 'backups'
     
     create_backup(s_path, b_path)
-    rotate_backups(b_path, keep_days)
+    rotate_backups(b_path, max_backups)
