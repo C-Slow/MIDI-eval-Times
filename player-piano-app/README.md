@@ -1,4 +1,4 @@
-# Yamahalalala - Backend Server
+# MIDI-eval Times - Backend Server
 
 FastAPI-based server for MIDI processing, AI transcription, and Disklavier communication.
 

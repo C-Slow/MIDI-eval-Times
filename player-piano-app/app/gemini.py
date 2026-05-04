@@ -159,7 +159,7 @@ class GeminiService:
                 audio_bytes = f.read()
             
             prompt_text = f"""
-            Listen to this voice command and decide the best action for the Player Piano app.
+            Listen to this voice command and decide the best action for the MIDI-eval Times app.
             
             Library Context:
             - Playlists: {json.dumps(context.get('playlists', []))}

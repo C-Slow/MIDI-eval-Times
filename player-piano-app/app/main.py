@@ -48,7 +48,7 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
-app = FastAPI(title='Player Piano App')
+app = FastAPI(title='MIDI-eval Times')
 
 app.add_middleware(
     CORSMiddleware,

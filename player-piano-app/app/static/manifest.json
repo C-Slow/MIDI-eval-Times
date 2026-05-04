@@ -1,7 +1,7 @@
 {
-  "name": "Player Piano",
-  "short_name": "Piano",
-  "description": "Upload and play MIDI to Disklavier",
+  "name": "MIDI-eval Times",
+  "short_name": "MIDI-eval",
+  "description": "MIDI Processing and Playback",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
