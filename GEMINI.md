@@ -1,4 +1,4 @@
-# Yamahalalala - Status Summary
+# MIDI-eval Times - Status Summary
 
 This project is a native mobile ecosystem designed to manage and play MIDI files on a Yamaha Disklavier piano. It consists of a FastAPI backend and a high-performance Expo (React Native) mobile application.
 

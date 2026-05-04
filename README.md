@@ -1,4 +1,4 @@
-# Yamahalalala - AI Player Piano Ecosystem
+# MIDI-eval Times - AI Player Piano Ecosystem
 
 A high-performance ecosystem for managing and performing MIDI files on a Yamaha Disklavier piano, featuring AI-powered vocal separation, piano transcription, and synchronized hybrid playback.
 

@@ -1,4 +1,4 @@
-# Yamahalalala - Native Mobile App
+# MIDI-eval Times - Native Mobile App
 
 This is the Expo-based native mobile application for managing and playing MIDI files on your Yamaha Disklavier. It provides high-performance local audio previews and over-the-air updates.
 
