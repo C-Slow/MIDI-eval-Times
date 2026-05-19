@@ -621,7 +621,7 @@ async function pollStatus(){
     if (s.playing) {
       if(el) { 
         const label = s.current_playlist === 'Single Track' ? '' : `(#${s.current_index+1})`;
-        el.textContent = `Piano: ${s.current_playlist} - ${s.file || ''} ${label}`; 
+        el.textContent = `MIDI-eval: ${s.current_playlist} - ${s.file || ''} ${label}`; 
       }
       if(progress && times) {
         if(s.length) { 
@@ -631,7 +631,7 @@ async function pollStatus(){
         times.textContent = `${formatTime(s.elapsed||0)} / ${formatTime(s.length||0)}`;
       }
     } else {
-      if(el) el.textContent = 'Piano: Stopped';
+      if(el) el.textContent = 'MIDI-eval: Stopped';
       if(progress) progress.value = 0;
       if(times) times.textContent = '00:00 / 00:00';
     }

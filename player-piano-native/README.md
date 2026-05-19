@@ -68,3 +68,8 @@ Since you have Android Studio installed, you can build the APK directly:
 ## ⚙️ Configuration
 - **Server URL:** Enter your PC's IP address (e.g., `http://192.168.1.14:8000`).
 - **Master Password:** Default is `piano`.
+
+-- Note from me, how to srtart up:
+PS C:\Users\coren\projects> cd .\player-piano-app\
+PS C:\Users\coren\projects\player-piano-app> .\.venv\Scripts\activate
+(.venv) PS C:\Users\coren\projects\player-piano-app> python -m app.main
