@@ -654,9 +654,9 @@ def generate_smart_playlist_logic(name: str, f_type: str, f_val: str, exclude_dn
                 pass
         else:
             # Metadata values might be None or not present
-            val = str(meta.get(f_type) or '').lower().strip()
+            val = str(meta.get(f_type) or '').lower().strip().replace('-', ' ').replace('_', ' ')
             
-            f_val_lower = str(f_val).lower().strip()
+            f_val_lower = str(f_val).lower().strip().replace('-', ' ').replace('_', ' ')
             if f_val_lower == '*':
                 if val: match = True
             else:

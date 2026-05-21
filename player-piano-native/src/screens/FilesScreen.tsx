@@ -224,17 +224,17 @@ export const FilesScreen = () => {
 
   const flattenedData = useMemo(() => {
     const result: any[] = [];
-    const s = search.toLowerCase();
+    const s = search.toLowerCase().replace(/[-_]/g, ' ');
     ['processed', 'raw'].forEach(group => {
       const groupFiles = files[group as keyof typeof files] || [];
       const filtered = groupFiles.filter(f => {
         if (!s) return true;
-        const matchesName = f.name.toLowerCase().includes(s);
-        const matchesArtist = f.metadata?.artist?.toLowerCase().includes(s);
-        const matchesGenre = f.metadata?.genre?.toLowerCase().includes(s);
-        const matchesMood = f.metadata?.mood?.toLowerCase().includes(s);
-        const matchesSource = f.metadata?.source?.toLowerCase().includes(s);
-        const matchesComments = f.metadata?.comments?.toLowerCase().includes(s);
+        const matchesName = f.name.toLowerCase().replace(/[-_]/g, ' ').includes(s);
+        const matchesArtist = f.metadata?.artist?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
+        const matchesGenre = f.metadata?.genre?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
+        const matchesMood = f.metadata?.mood?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
+        const matchesSource = f.metadata?.source?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
+        const matchesComments = f.metadata?.comments?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
         return matchesName || matchesArtist || matchesGenre || matchesMood || matchesSource || matchesComments;
       })
       .sort((a, b) => {

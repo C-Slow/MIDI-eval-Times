@@ -744,7 +744,7 @@ export const Mp3OrchestrateScreen = () => {
             )}
 
             <FlatList
-              data={library.filter(j => j.status === 'completed' && j.original_name.toLowerCase().includes(search.toLowerCase()))}
+              data={library.filter(j => j.status === 'completed' && j.original_name.toLowerCase().replace(/[-_]/g, ' ').includes(search.toLowerCase().replace(/[-_]/g, ' ')))}
               keyExtractor={item => item.job_id}
               contentContainerStyle={{ paddingBottom: 100 }}
               renderItem={({ item }) => {
