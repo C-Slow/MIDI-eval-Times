@@ -36,18 +36,23 @@ This project is a native mobile ecosystem designed to manage and play MIDI files
 
 
 ## 🛠 Development Workflow
+
+### 🛡️ Branch Protection
+- **Never Work in Main:** NEVER make direct changes or commits to the `main` branch.
+- **Always Branch:** Always create a new branch for every task, bug fix, or feature (e.g., `feature/...` or `bugfix/...`).
+- **Atomic Commits:** Commit after each functional change on the feature branch.
+- **User Validation:** Before merging to `main`, notify the user and wait for them to explicitly test and confirm that the changes work as expected.
+- **Main Merge:** Only merge into `main` after explicit user confirmation.
+
+### ⚙️ Standards
 - **No Large Binaries:** Don't commit large binary files (audio, .cpr projects, virtualenvs). Use `.gitignore`.
 - **Utility Scripts:** Keep small utility scripts under `tools/` or top-level `scripts/` so they can be tracked without large assets.
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.
 - **UI Changes:** For UI changes, prefer lightweight vanilla JS and keep static assets inside `player-piano-app/app/static/`.
 - **Stop and Ask:** Always stop and ask questions to clarify ambiguities or ask for examples instead of guessing.
 - **Planning First:** Before implementing any significant change, especially after a user question, provide a concise plan or strategy for approval.
-- **Atomic Commits:** Commit after each functional change on the feature branch.
-- **Never Work in Main:** NEVER make direct changes or commits to the `main` branch.
-- **Always Branch:** Always create a new branch for every task, bug fix, or feature (e.g., `feature/...` or `bugfix/...`).
 - **One Task at a Time:** Focus on a single item from the implementation plan.
-- **User Validation:** Before merging to `main`, notify the user and wait for them to explicitly test and confirm that the changes work as expected.
-- **Main Merge:** Only merge into `main` after explicit user confirmation.
+
 
 ## ⚙️ How to Run
 1. **Backend:** `python -m app.main` from the project root.
