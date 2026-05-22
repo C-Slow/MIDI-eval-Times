@@ -1,0 +1,9 @@
+{
+  "domain": "midieval_times",
+  "name": "MIDI-eval Times Piano",
+  "documentation": "https://github.com/C-Slow/MIDI-eval-Times",
+  "requirements": ["requests"],
+  "codeowners": ["@corens"],
+  "version": "1.0.0",
+  "iot_class": "local_polling"
+}
