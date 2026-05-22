@@ -12,13 +12,37 @@ python -m app.main
 ```
 *Note: Make sure your PC and phone are on the same Wi-Fi network.*
 
-### 2. Run in Development (Expo Go)
-To test new changes instantly on your phone:
-```bash
-cd player-piano-native
-npx expo start --tunnel
+### 3. Direct USB Deployment (Physical Device)
+
+1. **Connect your phone** via USB and ensure **USB Debugging** is enabled.
+2. **Verify connection:**
+   ```powershell
+   # Ensure adb sees your device
+   adb devices
+   ```
+
+#### A. Development Build (Fastest for coding)
+Installs a version that stays connected to your computer for instant code updates.
+```powershell
+npx expo run:android --device
 ```
-Scan the QR code using the **Expo Go** app.
+
+#### B. Full Standalone Build (Install and walk away)
+Builds the "Release" version and installs it. This version is self-contained and does not require your computer to stay connected.
+```powershell
+npx expo run:android --variant release --device
+```
+
+*Note: If you have multiple devices or emulators, you will be prompted to select your phone.*
+
+#### Troubleshooting Environment Variables
+If the build fails because it can't find Java or the Android SDK, run these lines first:
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path += ";$env:JAVA_HOME\bin"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:Path += ";$env:ANDROID_HOME\platform-tools"
+```
 
 ## 🛠 Management & Version Control
 
