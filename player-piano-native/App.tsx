@@ -9,9 +9,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Keep the splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync().catch(() => {
-  /* reloading the app might cause this error. */
-});
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from './src/store/useStore';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -126,6 +125,9 @@ export default function App() {
   const theme = useStore((state) => state.theme);
   const initialize = useStore((state) => state.initialize);
   const setPianoPlayback = useStore((state) => state.setPianoPlayback);
+  const stopAll = useStore((state) => state.stopAll);
+  const isLocalPlaying = useStore(state => state.localPlayback.isPlaying);
+  const isPianoPlaying = useStore(state => state.pianoPlayback.isPlaying);
   const themeColors = Colors[theme];
   
   const [appIsReady, setAppIsReady] = React.useState(false);
@@ -133,44 +135,9 @@ export default function App() {
 
   const pollTimer = React.useRef<any>(null);
 
-  React.useEffect(() => {
-    async function prepare() {
-      try {
-        // Pre-load fonts, make any API calls you need to do here
-        initialize();
-        fetchPianoStatus();
-        
-        // Artificially delay for the "experience"
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        // Tell the application to render
-        setAppIsReady(true);
-      }
-    }
-
-    prepare();
-  }, []);
-
-  const onLayoutRootView = React.useCallback(async () => {
-    if (appIsReady) {
-      // This tells the splash screen to hide immediately! If we need this after
-      // the app has been displayed, we can move it inside the render
-      await SplashScreen.hideAsync();
-      
-      // Delay hiding the manual splash for a smooth transition
-      setTimeout(() => setShowManualSplash(false), 500);
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
-    return null;
-  }
-
-  const fetchPianoStatus = async () => {
-    const { pianoApi } = require('./src/services/api');
+  const fetchPianoStatus = React.useCallback(async () => {
     try {
+      const { pianoApi } = require('./src/services/api');
       let s = await pianoApi.getQueueStatus();
       if (!s.playing) {
         const ps = await pianoApi.getPlaybackStatus();
@@ -184,73 +151,73 @@ export default function App() {
       }
       setPianoPlayback(s);
     } catch (e) {}
-  };
+  }, [setPianoPlayback]);
 
-  const showRemote = async () => {
-    await Notifications.scheduleNotificationAsync({
-      identifier: REMOTE_ID,
-      content: {
-        title: "Yamaha Remote",
-        body: "Controls for Piano and MIDI",
-        categoryIdentifier: 'player_controls',
-        sticky: true,
-      },
-      trigger: null,
-    });
-  };
+  const showRemote = React.useCallback(async () => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: REMOTE_ID,
+        content: {
+          title: "Yamaha Remote",
+          body: "Controls for Piano and MIDI",
+          categoryIdentifier: 'player_controls',
+          sticky: true,
+        },
+        trigger: null,
+      });
+    } catch (e) {}
+  }, []);
 
-  // Watch for playback starts to restore notification if dismissed
-  const isLocalPlaying = useStore(state => state.localPlayback.isPlaying);
-  const isPianoPlaying = useStore(state => state.pianoPlayback.isPlaying);
-
+  // Main Initialization
   React.useEffect(() => {
-    if (isLocalPlaying || isPianoPlaying) {
-      showRemote();
-    }
-  }, [isLocalPlaying, isPianoPlaying]);
+    async function prepare() {
+      try {
+        // Initialize store
+        initialize();
+        
+        // Setup Notifications
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          await Notifications.requestPermissionsAsync();
+        }
 
-  React.useEffect(() => {
-    initialize();
-    
-    fetchPianoStatus();
-    pollTimer.current = setInterval(fetchPianoStatus, 2000);
+        Notifications.setNotificationCategoryAsync('player_controls', [
+          {
+            identifier: 'skip',
+            buttonTitle: 'Skip Track',
+            options: { opensAppToForeground: false },
+          },
+          {
+            identifier: 'stop',
+            buttonTitle: 'Stop All',
+            options: { opensAppToForeground: false },
+          },
+        ]);
 
-    // Request permissions
-    async function requestPermissions() {
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== 'granted') {
-        await Notifications.requestPermissionsAsync();
+        // Start polling
+        fetchPianoStatus();
+        pollTimer.current = setInterval(fetchPianoStatus, 2000);
+
+        // Artificial delay for the "Full Splash Experience"
+        await new Promise(resolve => setTimeout(resolve, 3500));
+      } catch (e) {
+        console.warn('Initialization Error:', e);
+      } finally {
+        setAppIsReady(true);
       }
-      if (isLoggedIn) showRemote();
     }
-    requestPermissions();
 
-    // Define the buttons for our notification
-    Notifications.setNotificationCategoryAsync('player_controls', [
-      {
-        identifier: 'skip',
-        buttonTitle: 'Skip Track',
-        options: { opensAppToForeground: false },
-      },
-      {
-        identifier: 'stop',
-        buttonTitle: 'Stop All',
-        options: { opensAppToForeground: false },
-      },
-    ]);
+    prepare();
 
-    // Listen for button taps
     const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
       const action = response.actionIdentifier;
-      const state = useStore.getState();
       const { pianoApi } = require('./src/services/api');
-      
       try {
         if (action === 'skip') {
           await pianoApi.next();
         } else if (action === 'stop') {
           await pianoApi.stop();
-          state.stopAll();
+          stopAll();
         }
       } catch (e) {
         console.error("Notification action failed", e);
@@ -259,9 +226,16 @@ export default function App() {
 
     return () => {
       subscription.remove();
-      clearInterval(pollTimer.current);
+      if (pollTimer.current) clearInterval(pollTimer.current);
     };
-  }, [isLoggedIn]);
+  }, [initialize, fetchPianoStatus, stopAll]);
+
+  // Show remote notification when playing
+  React.useEffect(() => {
+    if (isLoggedIn && (isLocalPlaying || isPianoPlaying)) {
+      showRemote();
+    }
+  }, [isLoggedIn, isLocalPlaying, isPianoPlaying, showRemote]);
 
   // Sync Android Navigation Bar color
   React.useEffect(() => {
@@ -270,6 +244,21 @@ export default function App() {
       NavigationBar.setButtonStyleAsync(theme === 'dark' ? 'light' : 'dark');
     }
   }, [theme, themeColors]);
+
+  const onLayoutRootView = React.useCallback(async () => {
+    if (appIsReady) {
+      // Hide the native splash immediately
+      await SplashScreen.hideAsync().catch(() => {});
+      // Fade out the manual splash
+      setTimeout(() => setShowManualSplash(false), 800);
+    }
+  }, [appIsReady]);
+
+  if (!appIsReady) {
+    // While app is NOT ready, we are still showing the NATIVE splash screen
+    // so we return null to keep the screen blank under the native splash
+    return null;
+  }
 
   return (
     <SafeAreaProvider onLayout={onLayoutRootView}>
