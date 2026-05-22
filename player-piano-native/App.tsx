@@ -199,7 +199,7 @@ export default function App() {
         pollTimer.current = setInterval(fetchPianoStatus, 2000);
 
         // Artificial delay for the "Full Splash Experience"
-        await new Promise(resolve => setTimeout(resolve, 3500));
+        await new Promise(resolve => setTimeout(resolve, 800));
       } catch (e) {
         console.warn('Initialization Error:', e);
       } finally {
@@ -250,7 +250,7 @@ export default function App() {
       // Hide the native splash immediately
       await SplashScreen.hideAsync().catch(() => {});
       // Fade out the manual splash
-      setTimeout(() => setShowManualSplash(false), 800);
+      setTimeout(() => setShowManualSplash(false), 400);
     }
   }, [appIsReady]);
 
