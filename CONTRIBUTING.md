@@ -10,6 +10,9 @@ Thanks for helping! A few guidelines:
 - **Main Merge:** Only merge into `main` after explicit user confirmation.
 
 ## 🛠️ General Rules
+- **AI-Optimized Indexing:** This project uses `jcodemunch-mcp` for high-efficiency code exploration. Contributors should ensure the local index is up to date or the watcher is running.
+  - Install: `.\player-piano-app\.venv\Scripts\pip install jcodemunch-mcp` (or from GitHub if PyPI is quarantined)
+  - Watch: `.\player-piano-app\.venv\Scripts\jcodemunch-mcp watch .`
 - **No Large Binaries:** Don't commit large binary files (audio, .cpr Cubase projects, virtualenvs). Use `.gitignore` to manage local large data.
 - **Utility Scripts:** Keep small utility scripts under `tools/` or top-level `scripts/` so they can be tracked without large assets.
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.

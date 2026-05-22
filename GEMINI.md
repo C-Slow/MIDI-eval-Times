@@ -45,6 +45,8 @@ This project is a native mobile ecosystem designed to manage and play MIDI files
 - **Main Merge:** Only merge into `main` after explicit user confirmation.
 
 ### ⚙️ Standards
+- **AI-Optimized Indexing:** ALWAYS ensure the `jcodemunch-mcp` watcher is running while performing development tasks to maintain a high-efficiency symbol index. 
+  - Command: `.\player-piano-app\.venv\Scripts\jcodemunch-mcp watch .`
 - **No Large Binaries:** Don't commit large binary files (audio, .cpr projects, virtualenvs). Use `.gitignore`.
 - **Utility Scripts:** Keep small utility scripts under `tools/` or top-level `scripts/` so they can be tracked without large assets.
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.
