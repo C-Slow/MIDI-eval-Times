@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import { useStore } from '../store/useStore';
 import { authApi } from '../services/api';
 import { Colors } from '../constants/Colors';
@@ -46,8 +46,13 @@ export const LoginScreen = () => {
       style={[styles.container, { backgroundColor: themeColors.background }]}
     >
       <View style={styles.inner}>
-        <Text style={[styles.title, { color: themeColors.accent }]}>Player Piano</Text>
-        <Text style={[styles.subtitle, { color: themeColors.textMuted }]}>Native Edition</Text>
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../assets/icon.png')} 
+            style={styles.logo}
+          />
+        </View>
+        <Text style={[styles.title, { color: themeColors.accent }]}>MIDI-eval Times</Text>
         
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: themeColors.textMuted }]}>Server URL</Text>
@@ -84,8 +89,9 @@ export const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1, justifyContent: 'center', padding: 30 },
-  title: { fontSize: 32, fontWeight: '700', textAlign: 'center' },
-  subtitle: { fontSize: 14, textAlign: 'center', marginBottom: 40, letterSpacing: 2, textTransform: 'uppercase' },
+  logoContainer: { alignItems: 'center', marginBottom: 20 },
+  logo: { width: 180, height: 180, borderRadius: 20, overflow: 'hidden' },
+  title: { fontSize: 32, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 12, marginBottom: 8, fontWeight: '600' },
   input: { borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16 },

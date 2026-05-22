@@ -10,9 +10,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#121212"
     },
     "updates": {
       "url": "https://u.expo.dev/8285a4ab-c40f-48d8-a0ba-c1b37324ade6"
@@ -27,10 +27,8 @@
       "usesCleartextTraffic": true,
       "permissions": ["RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_AUDIO_PLAYBACK"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/icon.png"
       },
       "package": "com.corens.playerpianonative"
     },
