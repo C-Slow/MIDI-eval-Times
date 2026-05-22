@@ -3,9 +3,15 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Text, Platform } from 'react-native';
+import { View, StyleSheet, Text, Platform, Image } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* reloading the app might cause this error. */
+});
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from './src/store/useStore';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -121,8 +127,46 @@ export default function App() {
   const initialize = useStore((state) => state.initialize);
   const setPianoPlayback = useStore((state) => state.setPianoPlayback);
   const themeColors = Colors[theme];
+  
+  const [appIsReady, setAppIsReady] = React.useState(false);
+  const [showManualSplash, setShowManualSplash] = React.useState(true);
 
   const pollTimer = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    async function prepare() {
+      try {
+        // Pre-load fonts, make any API calls you need to do here
+        initialize();
+        fetchPianoStatus();
+        
+        // Artificially delay for the "experience"
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        // Tell the application to render
+        setAppIsReady(true);
+      }
+    }
+
+    prepare();
+  }, []);
+
+  const onLayoutRootView = React.useCallback(async () => {
+    if (appIsReady) {
+      // This tells the splash screen to hide immediately! If we need this after
+      // the app has been displayed, we can move it inside the render
+      await SplashScreen.hideAsync();
+      
+      // Delay hiding the manual splash for a smooth transition
+      setTimeout(() => setShowManualSplash(false), 500);
+    }
+  }, [appIsReady]);
+
+  if (!appIsReady) {
+    return null;
+  }
 
   const fetchPianoStatus = async () => {
     const { pianoApi } = require('./src/services/api');
@@ -228,7 +272,7 @@ export default function App() {
   }, [theme, themeColors]);
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider onLayout={onLayoutRootView}>
       <NavigationContainer>
         <View style={[styles.container, { backgroundColor: themeColors.background }]}>
           <View style={{ flex: 1 }}>
@@ -246,6 +290,16 @@ export default function App() {
           <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         </View>
       </NavigationContainer>
+
+      {showManualSplash && (
+        <View style={[StyleSheet.absoluteFill, styles.splashContainer, { backgroundColor: '#121212' }]}>
+          <Image 
+            source={require('./assets/icon.png')} 
+            style={styles.splashImage}
+            resizeMode="contain"
+          />
+        </View>
+      )}
     </SafeAreaProvider>
   );
 }
@@ -253,5 +307,14 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  splashContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  splashImage: {
+    width: '100%',
+    height: '100%',
   },
 });
