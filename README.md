@@ -47,10 +47,17 @@ A high-performance ecosystem for managing and performing MIDI files on a Yamaha 
    ```bash
    python -c "import urllib.request, pathlib; url='https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1'; p = pathlib.Path.home() / 'piano_transcription_inference_data'; p.mkdir(exist_ok=True); print('Downloading checkpoint...'); urllib.request.urlretrieve(url, p / 'note_F1=0.9677_pedal_F1=0.9186.pth'); print('Done!')"
    ```
-5. **Start the server:**
+5. **Install FluidSynth (Required for local audio rendering):**
+   FluidSynth is used on the backend to render MIDI files to WAV audio for local mobile previews. 
+   - Download the latest Windows release (e.g., `win10-x64` zip) from [FluidSynth Releases](https://github.com/FluidSynth/fluidsynth/releases).
+   - Extract it (e.g., to `C:\fluidsynth` or local folder `C:\app\fluidsynth`).
+   - Define the environment variable `FLUIDSYNTH_BIN` pointing to `fluidsynth.exe` (defaults to `C:\fluidsynth\bin\fluidsynth.exe` if not provided).
+
+6. **Start the server:**
    ```bash
    # From the player-piano-app directory
    $env:PYTHONPATH="."
+   $env:FLUIDSYNTH_BIN="C:\app\fluidsynth\bin\fluidsynth.exe" # Set custom path to fluidsynth.exe
    python -m app.main
    ```
 
