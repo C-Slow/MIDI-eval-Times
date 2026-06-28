@@ -13,6 +13,8 @@ export const SettingsScreen = () => {
   const [geminiKey, setGeminiKey] = useState('');
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   const themeColors = Colors[theme];
 
@@ -88,6 +90,41 @@ export const SettingsScreen = () => {
     } catch (error) {
       Alert.alert('Error', 'Failed to update target device.');
     }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword.trim()) {
+      Alert.alert('Validation Error', 'Password cannot be empty.');
+      return;
+    }
+    
+    Alert.alert(
+      'Update Password',
+      'This will change the master password. You will need to log in again on all devices. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Update & Logout', 
+          style: 'destructive', 
+          onPress: async () => {
+            setIsSavingPassword(true);
+            try {
+              const currentSettings = await settingsApi.getSettings();
+              currentSettings.password = newPassword.trim();
+              await settingsApi.saveSettings(currentSettings);
+              
+              Alert.alert('Success', 'Password updated successfully. Logging out...', [
+                { text: 'OK', onPress: logout }
+              ]);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to update password.');
+            } finally {
+              setIsSavingPassword(false);
+            }
+          } 
+        }
+      ]
+    );
   };
 
   return (
@@ -217,6 +254,43 @@ export const SettingsScreen = () => {
           {devices.length === 0 && (
             <Text style={[styles.emptyText, { color: themeColors.textMuted }]}>No devices found. Tap Scan to search.</Text>
           )}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: themeColors.textMuted }]}>Security</Text>
+        <View style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+          <Text style={{ color: themeColors.text, fontSize: 14, marginBottom: 10 }}>Master Password</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TextInput
+              style={{ 
+                flex: 1, 
+                backgroundColor: themeColors.background, 
+                color: themeColors.text, 
+                padding: 10, 
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border
+              }}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New Master Password"
+              placeholderTextColor={themeColors.textMuted}
+              secureTextEntry
+            />
+            <TouchableOpacity 
+              onPress={handleChangePassword}
+              disabled={isSavingPassword}
+              style={{ 
+                backgroundColor: themeColors.accent, 
+                paddingHorizontal: 20, 
+                borderRadius: 8, 
+                justifyContent: 'center' 
+              }}
+            >
+              {isSavingPassword ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '600' }}>Update</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
