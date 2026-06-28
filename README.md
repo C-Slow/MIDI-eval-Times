@@ -42,7 +42,12 @@ A high-performance ecosystem for managing and performing MIDI files on a Yamaha 
    ```bash
    pip install -r requirements.txt
    ```
-4. **Start the server:**
+4. **Download Transcription Checkpoint (Required for Windows):**
+   The transcription library attempts to download its model checkpoint via the `wget` system command, which is not available by default on Windows. Run this Python command to pre-download it:
+   ```bash
+   python -c "import urllib.request, pathlib; url='https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1'; p = pathlib.Path.home() / 'piano_transcription_inference_data'; p.mkdir(exist_ok=True); print('Downloading checkpoint...'); urllib.request.urlretrieve(url, p / 'note_F1=0.9677_pedal_F1=0.9186.pth'); print('Done!')"
+   ```
+5. **Start the server:**
    ```bash
    # From the player-piano-app directory
    $env:PYTHONPATH="."
