@@ -286,7 +286,7 @@ def get_midi_info(path: str):
     if cache_key in _midi_info_cache:
         return _midi_info_cache[cache_key]
 
-    info = {'length': None, 'size': file_size, 'created': os.path.getctime(path)}
+    info = {'length': None, 'size': file_size, 'created': file_mtime}
     try:
         mid = mido.MidiFile(path)
         length = getattr(mid, 'length', None)
