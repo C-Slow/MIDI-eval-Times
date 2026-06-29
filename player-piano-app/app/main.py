@@ -67,6 +67,12 @@ async def startup_event():
         backup.run_backup_cycle(str(BASE_DIR / 'storage'))
     except Exception as e:
         print(f"Startup backup failed: {e}")
+
+    # Clean up obsolete render cache files on startup
+    try:
+        utils.cleanup_render_cache()
+    except Exception as e:
+        print(f"Startup render cache cleanup failed: {e}")
     
     # Start background thread for daily backups
     import threading
@@ -504,9 +510,31 @@ def _do_rename(old: str, new: str):
                 po_path.replace(pn_path)
             elif pn_path.exists():
                 print(f"RENAME: Paired file {pn_path} already exists.")
-            else:
-                print(f"RENAME: No paired file found at {po_path}")
-            
+        # 2b. Rename cached render files if they exist
+        from app.utils import RENDER_CACHE
+        old_cache = os.path.join(RENDER_CACHE, old + '.wav')
+        new_cache = os.path.join(RENDER_CACHE, new + '.wav')
+        if os.path.exists(old_cache):
+            try:
+                if os.path.exists(new_cache):
+                    os.remove(new_cache)
+                os.rename(old_cache, new_cache)
+                print(f"RENAME: Renamed cached render file to {new_cache}")
+            except Exception as e:
+                print(f"RENAME: Failed to rename cached render file: {e}")
+
+        if paired_old and paired_new:
+            old_paired_cache = os.path.join(RENDER_CACHE, paired_old + '.wav')
+            new_paired_cache = os.path.join(RENDER_CACHE, paired_new + '.wav')
+            if os.path.exists(old_paired_cache):
+                try:
+                    if os.path.exists(new_paired_cache):
+                        os.remove(new_paired_cache)
+                    os.rename(old_paired_cache, new_paired_cache)
+                    print(f"RENAME: Renamed cached paired render file to {new_paired_cache}")
+                except Exception as e:
+                    print(f"RENAME: Failed to rename cached paired render file: {e}")
+
         # 3. Update metadata (Batch update for efficiency)
         all_meta = utils.get_all_metadata()
         meta_changed = False
@@ -567,6 +595,17 @@ def delete_file(req: DeleteRequest):
         raise HTTPException(status_code=404, detail='file not found')
     try:
         target.unlink()
+        
+        # Delete cached render file if it exists
+        from app.utils import RENDER_CACHE
+        cache_file = os.path.join(RENDER_CACHE, fn + '.wav')
+        if os.path.exists(cache_file):
+            try:
+                os.remove(cache_file)
+                print(f"DELETE: Deleted cached render file {cache_file}")
+            except Exception as e:
+                print(f"DELETE: Failed to delete cached render file: {e}")
+
         utils.delete_file_metadata(fn)
         for pl_name in list(manager.playlists.keys()):
             if fn in manager.playlists[pl_name]:

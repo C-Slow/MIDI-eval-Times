@@ -523,3 +523,38 @@ def load_profiles():
 def save_profiles(profiles: dict):
     with open(PEDAL_JSON, 'w', encoding='utf-8') as f:
         json.dump(profiles, f, indent=2)
+
+
+def cleanup_render_cache():
+    """Delete cached .wav files that no longer correspond to existing processed or raw MIDI files."""
+    if not os.path.exists(RENDER_CACHE):
+        return 0
+        
+    try:
+        processed_dir = STORAGE_PROCESSED
+        raw_dir = STORAGE_RAW
+        
+        # Gather set of existing midi filenames
+        existing_midis = set()
+        if os.path.exists(processed_dir):
+            existing_midis.update(f for f in os.listdir(processed_dir) if f.lower().endswith(('.mid', '.midi')))
+        if os.path.exists(raw_dir):
+            existing_midis.update(f for f in os.listdir(raw_dir) if f.lower().endswith(('.mid', '.midi')))
+            
+        deleted_count = 0
+        for f in os.listdir(RENDER_CACHE):
+            if f.lower().endswith('.wav'):
+                midi_name = f[:-4] # Remove '.wav'
+                if midi_name not in existing_midis:
+                    try:
+                        os.remove(os.path.join(RENDER_CACHE, f))
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"Failed to remove obsolete render cache file {f}: {e}")
+                        
+        if deleted_count > 0:
+            print(f"RENDER_CACHE: Cleaned up {deleted_count} obsolete cache files.")
+        return deleted_count
+    except Exception as e:
+        print(f"RENDER_CACHE: Cleanup failed: {e}")
+        return 0
