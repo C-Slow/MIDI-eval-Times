@@ -2,6 +2,24 @@
 
 A high-performance ecosystem for managing and performing MIDI files on a Yamaha Disklavier piano, featuring AI-powered vocal separation, piano transcription, and synchronized hybrid playback.
 
+## ⚡ Quick Start (Automatic Environment Setup)
+
+We have provided wrapper scripts in the project root to automatically handle virtual environments and configurations without needing manual `source` activation:
+
+* **On Command Prompt or PowerShell:**
+  ```cmd
+  .\run.bat
+  ```
+  *(Or bypass the menu and run directly: `.\run.bat backend`, `.\run.bat frontend`, `.\run.bat mcp`, or `.\run.bat shell`)*
+
+* **On Git Bash / Bash:**
+  ```bash
+  ./run.sh
+  ```
+  *(Or bypass the menu and run directly: `./run.sh backend`, `./run.sh frontend`, `./run.sh mcp`, or `./run.sh shell`)*
+
+---
+
 ## 🚀 Features
 
 ### 🎹 MP3 Orchestrator
