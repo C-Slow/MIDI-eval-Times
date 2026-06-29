@@ -61,6 +61,21 @@ A high-performance ecosystem for managing and performing MIDI files on a Yamaha 
    python -m app.main
    ```
 
+7. **Windows Automatic Startup (Optional):**
+   To have the backend server start automatically when you log in to Windows:
+   - Press `Win + R`, type `shell:startup`, and press **Enter** to open the Windows Startup folder.
+   - Create a new batch file named `start_midi_backend.bat` in that folder with the following content:
+     ```cmd
+     @echo off
+     title MIDI-eval Times Backend
+     cd /d "C:\app\player-piano-app"
+     set PYTHONPATH=.
+     set FLUIDSYNTH_BIN=C:\app\fluidsynth\bin\fluidsynth.exe
+     "C:\app\player-piano-app\.venv\Scripts\python.exe" -u -m app.main
+     pause
+     ```
+   - *(Optional) Run Minimized:* To launch the command window minimized to the taskbar, right-click `start_midi_backend.bat` in the Startup folder, choose **Create shortcut**, right-click the shortcut, select **Properties**, and change **Run** from *Normal window* to **Minimized**.
+
 ### Mobile Setup
 1. **Install Dependencies:**
    ```bash
