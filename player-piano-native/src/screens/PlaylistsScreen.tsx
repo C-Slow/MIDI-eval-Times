@@ -197,7 +197,13 @@ export const PlaylistsScreen = () => {
         Alert.alert('Success', `Created "${res.created}" with ${res.count} tracks.`);
       }
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.detail || 'Failed to create smart playlist');
+      const errorDetail = e.response?.data?.detail;
+      const errorMessage = typeof errorDetail === 'string'
+        ? errorDetail
+        : (Array.isArray(errorDetail)
+            ? errorDetail.map((err: any) => err.msg || JSON.stringify(err)).join('\n')
+            : (errorDetail ? JSON.stringify(errorDetail) : 'Failed to create smart playlist'));
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
