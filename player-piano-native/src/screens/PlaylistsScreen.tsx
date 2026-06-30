@@ -56,13 +56,15 @@ export const PlaylistsScreen = () => {
     name: string, 
     filterType: 'artist' | 'genre' | 'mood' | 'source' | 'rating' | 'all',
     filterValue: string,
-    excludeDnu: boolean
+    excludeDnu: boolean,
+    filters?: Array<{ filter_type: string, filter_value: string }>
   }>({
     visible: false,
     name: '',
     filterType: 'artist',
     filterValue: '',
-    excludeDnu: true
+    excludeDnu: true,
+    filters: []
   });
 
   const fetchPlaylists = async () => {
@@ -172,17 +174,24 @@ export const PlaylistsScreen = () => {
     }
   };
 
-  const handleCreateSmartPlaylist = async (customName?: string, customType?: string, customValue?: string, customExcludeDnu?: boolean) => {
+  const handleCreateSmartPlaylist = async (
+    customName?: string, 
+    customType?: string, 
+    customValue?: string, 
+    customExcludeDnu?: boolean,
+    customFilters?: Array<{ filter_type: string, filter_value: string }>
+  ) => {
     const name = customName || smartModal.name.trim();
-    const type = customType || smartModal.filterType;
-    const value = customValue || smartModal.filterValue;
+    const type = customType !== undefined ? customType : (customFilters ? null : smartModal.filterType);
+    const value = customValue !== undefined ? customValue : (customFilters ? null : smartModal.filterValue);
     const exclude = customExcludeDnu !== undefined ? customExcludeDnu : smartModal.excludeDnu;
+    const filters = customFilters || smartModal.filters;
 
     if (!name) return;
     try {
       setLoading(true);
-      const res = await playlistApi.createSmartPlaylist(name, type, value, exclude);
-      setSmartModal({ ...smartModal, visible: false, name: '', filterValue: '' });
+      const res = await playlistApi.createSmartPlaylist(name, type, value, exclude, filters);
+      setSmartModal({ ...smartModal, visible: false, name: '', filterValue: '', filters: [] });
       await fetchPlaylists();
       if (!customName) {
         Alert.alert('Success', `Created "${res.created}" with ${res.count} tracks.`);
@@ -197,7 +206,8 @@ export const PlaylistsScreen = () => {
   const handleRefreshSmart = (name: string) => {
     const rule = smartRules[name];
     if (!rule) return;
-    handleCreateSmartPlaylist(name, rule.filter_type, rule.filter_value, rule.exclude_dnu);
+    const filters = rule.filters || [{ filter_type: rule.filter_type, filter_value: rule.filter_value }];
+    handleCreateSmartPlaylist(name, undefined, undefined, rule.exclude_dnu, filters);
   };
 
   const handleEditSmart = (name: string) => {
@@ -206,9 +216,10 @@ export const PlaylistsScreen = () => {
     setSmartModal({
       visible: true,
       name: name,
-      filterType: rule.filter_type,
-      filterValue: rule.filter_value,
-      excludeDnu: rule.exclude_dnu !== undefined ? rule.exclude_dnu : true
+      filterType: rule.filter_type || 'artist',
+      filterValue: rule.filter_value || '',
+      excludeDnu: rule.exclude_dnu !== undefined ? rule.exclude_dnu : true,
+      filters: rule.filters || (rule.filter_type ? [{ filter_type: rule.filter_type, filter_value: rule.filter_value }] : [])
     });
   };
 
@@ -382,7 +393,8 @@ export const PlaylistsScreen = () => {
           name: smartModal.name,
           filterType: smartModal.filterType,
           filterValue: smartModal.filterValue,
-          excludeDnu: smartModal.excludeDnu
+          excludeDnu: smartModal.excludeDnu,
+          filters: smartModal.filters
         }}
         onClose={() => setSmartModal(p => ({ ...p, visible: false }))}
         onGenerate={handleCreateSmartPlaylist}

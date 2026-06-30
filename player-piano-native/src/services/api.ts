@@ -104,8 +104,8 @@ export const playlistApi = {
     const res = await api.post(`/playlists/remove_bulk?name=${encodeURIComponent(name)}`, { filenames });
     return res.data;
   },
-  createSmartPlaylist: async (name: string, filterType: string, filterValue: string, excludeDnu: boolean = true) => {
-    const res = await api.post('/playlists/smart', { name, filter_type: filterType, filter_value: filterValue, exclude_dnu: excludeDnu });
+  createSmartPlaylist: async (name: string, filterType: string | null, filterValue: string | null, excludeDnu: boolean = true, filters?: Array<{ filter_type: string, filter_value: string }>) => {
+    const res = await api.post('/playlists/smart', { name, filter_type: filterType, filter_value: filterValue, exclude_dnu: excludeDnu, filters });
     return res.data;
   },
   getPlaylistRules: async () => {
