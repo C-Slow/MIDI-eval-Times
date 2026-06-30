@@ -297,54 +297,61 @@ export const PlaylistsScreen = () => {
 
     return (
       <View style={[styles.playlistContainer, { borderBottomColor: themeColors.border }]}>
-        <View style={[styles.playlistHeaderRow, { backgroundColor: themeColors.background }]}>
+        <View style={[styles.playlistHeaderRow, { backgroundColor: themeColors.background, paddingVertical: 10, paddingHorizontal: 10, gap: 8, alignItems: 'center' }]}>
           {/* Color Tab */}
-          <View style={{ width: 6, backgroundColor: getPlaylistColor(name), alignSelf: 'stretch' }} />
+          <View style={{ width: 6, backgroundColor: getPlaylistColor(name), borderRadius: 3, alignSelf: 'stretch' }} />
           
           {isSmart && (
             <TouchableOpacity 
-              style={{ padding: 15, paddingRight: 5 }} 
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
               onPress={() => handleRefreshSmart(name)}
             >
-              <Ionicons name="refresh-outline" size={20} color={themeColors.accent} />
+              <Ionicons name="refresh-outline" size={18} color={themeColors.accent} />
             </TouchableOpacity>
           )}
 
           <TouchableOpacity 
-            style={styles.headerMain} 
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }} 
             onPress={() => {
               setExpanded(isExpanded ? null : name);
               clearSelection();
             }}
             onLongPress={() => isSmart && handleEditSmart(name)}
           >
-            <View style={styles.headerLeft}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.playlistName, { color: themeColors.text }]}>{name}</Text>
-                {isSmart && <Ionicons name="sparkles" size={14} color={themeColors.accent} />}
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[styles.playlistName, { color: themeColors.text, fontSize: 16 }]} numberOfLines={1}>
+                  {name}
+                </Text>
+                {isSmart && <Ionicons name="sparkles" size={12} color={themeColors.accent} />}
               </View>
-              <Text style={[styles.trackCount, { color: themeColors.textMuted }]}>{Array.isArray(tracks) ? tracks.length : 0} tracks</Text>
+              <Text style={[styles.trackCount, { color: themeColors.textMuted, fontSize: 11, marginTop: 2 }]}>
+                {Array.isArray(tracks) ? tracks.length : 0} tracks
+              </Text>
             </View>
-            <Ionicons name={isExpanded ? "chevron-down" : "chevron-forward"} size={20} color={themeColors.accent} />
+            <Ionicons name={isExpanded ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.accent} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.headerDelete} onPress={() => handleDeletePlaylist(name)}>
-            <Ionicons name="trash-outline" size={20} color={themeColors.textMuted} />
+          {/* Action Buttons: Play, Shuffle, Delete */}
+          <TouchableOpacity 
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.accent, alignItems: 'center', justifyContent: 'center' }} 
+            onPress={() => handlePlayPlaylist(name)}
+          >
+            <Ionicons name="play" size={18} color="#fff" />
           </TouchableOpacity>
-        </View>
-
-        <View style={[styles.controls, { borderBottomColor: themeColors.border, borderBottomWidth: isExpanded ? 1 : 0, backgroundColor: themeColors.surface }]}>
-          <TouchableOpacity style={[styles.playBtn, { backgroundColor: themeColors.accent, flex: 1, alignItems: 'center', justifyContent: 'center' }]} onPress={() => handlePlayPlaylist(name)}>
-            <View style={styles.btnContent}>
-              <Ionicons name="play-outline" size={16} color="#fff" />
-              <Text style={styles.playBtnText}>Piano</Text>
-            </View>
+          
+          <TouchableOpacity 
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
+            onPress={() => handlePlayPlaylist(name, true)}
+          >
+            <Ionicons name="shuffle" size={18} color={themeColors.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary, flex: 1, alignItems: 'center', justifyContent: 'center' }]} onPress={() => handlePlayPlaylist(name, true)}>
-            <View style={styles.btnContent}>
-              <Ionicons name="shuffle-outline" size={16} color={themeColors.text} />
-              <Text style={[styles.shuffleBtnText, { color: themeColors.text }]}>Shuffle</Text>
-            </View>
+          
+          <TouchableOpacity 
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
+            onPress={() => handleDeletePlaylist(name)}
+          >
+            <Ionicons name="trash-outline" size={18} color={themeColors.textMuted} />
           </TouchableOpacity>
         </View>
 
