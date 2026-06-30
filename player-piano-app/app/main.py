@@ -656,17 +656,24 @@ def create_playlist(req: CreatePlaylistRequest):
         raise HTTPException(status_code=400, detail='playlist exists')
     return {'created': name}
 
+class PlaylistFilter(BaseModel):
+    filter_type: str
+    filter_value: str
+
 class SmartPlaylistRequest(BaseModel):
     name: str
-    filter_type: str # 'artist', 'genre', 'mood', 'source', 'all'
-    filter_value: str
+    filter_type: Optional[str] = None # 'artist', 'genre', 'mood', 'source', 'all'
+    filter_value: Optional[str] = None
+    filters: Optional[List[PlaylistFilter]] = None
     exclude_dnu: Optional[bool] = True
 
-def generate_smart_playlist_logic(name: str, f_type: str, f_val: str, exclude_dnu: bool):
-    """Core logic for smart playlist generation."""
-    print(f"DEBUG: Smart Playlist Logic - Type: {f_type}, Value: {f_val}, ExcludeDNU: {exclude_dnu}")
+def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], exclude_dnu: bool):
+    """Core logic for smart playlist generation with support for multiple filters (ANDed)."""
+    print(f"DEBUG: Smart Playlist Logic - Name: {name}, Filters: {filters}, ExcludeDNU: {exclude_dnu}")
     if not name:
         raise ValueError('name required')
+    if not filters:
+        raise ValueError('filters required')
         
     all_meta = utils.get_all_metadata()
     processed_files = [p.name for p in STORAGE_PROCESSED.iterdir() if p.suffix.lower() in ('.mid', '.midi')]
@@ -680,33 +687,54 @@ def generate_smart_playlist_logic(name: str, f_type: str, f_val: str, exclude_dn
         if exclude_dnu and meta.get('dnu'):
             continue
 
-        match = False
-        
-        if f_type == 'all':
-            match = True
-        elif f_type == 'rating':
-            try:
-                min_rating = int(f_val)
-                if int(meta.get('rating') or 0) >= min_rating:
-                    match = True
-            except ValueError:
-                pass
-        else:
-            # Metadata values might be None or not present
-            val = str(meta.get(f_type) or '').lower().strip().replace('-', ' ').replace('_', ' ')
+        # All filters must match (AND logic)
+        all_filters_match = True
+        for f in filters:
+            f_type = f.get('filter_type')
+            f_val = f.get('filter_value', '')
             
-            f_val_lower = str(f_val).lower().strip().replace('-', ' ').replace('_', ' ')
-            if f_val_lower == '*':
-                if val: match = True
+            filter_match = False
+            if f_type == 'all':
+                filter_match = True
+            elif f_type == 'rating':
+                parts = [p.strip() for p in str(f_val).split(',') if p.strip()]
+                song_rating = int(meta.get('rating') or 0)
+                for part in parts:
+                    try:
+                        val_int = int(part)
+                        if val_int == 0:
+                            if song_rating == 0:
+                                filter_match = True
+                                break
+                        else:
+                            if len(parts) == 1:
+                                if song_rating >= val_int:
+                                    filter_match = True
+                                    break
+                            else:
+                                if song_rating == val_int:
+                                    filter_match = True
+                                    break
+                    except ValueError:
+                        pass
             else:
-                # Support comma-separated values (OR logic)
-                target_values = [v.strip() for v in f_val_lower.split(',') if v.strip()]
-                for tv in target_values:
-                    if tv in val:
-                        match = True
-                        break
+                val = str(meta.get(f_type) or '').lower().strip().replace('-', ' ').replace('_', ' ')
+                f_val_lower = str(f_val).lower().strip().replace('-', ' ').replace('_', ' ')
+                if f_val_lower == '*':
+                    if val:
+                        filter_match = True
+                else:
+                    target_values = [v.strip() for v in f_val_lower.split(',') if v.strip()]
+                    for tv in target_values:
+                        if tv in val:
+                            filter_match = True
+                            break
             
-        if match:
+            if not filter_match:
+                all_filters_match = False
+                break
+                
+        if all_filters_match:
             to_add.append(fn)
             
     print(f"DEBUG: Found {len(to_add)} matches.")
@@ -720,8 +748,7 @@ def generate_smart_playlist_logic(name: str, f_type: str, f_val: str, exclude_dn
         
     manager.playlists[name] = to_add
     manager.smart_rules[name] = {
-        'filter_type': f_type,
-        'filter_value': f_val,
+        'filters': filters,
         'exclude_dnu': exclude_dnu
     }
     
@@ -731,10 +758,18 @@ def generate_smart_playlist_logic(name: str, f_type: str, f_val: str, exclude_dn
 @app.post('/playlists/smart')
 def create_smart_playlist(req: SmartPlaylistRequest):
     try:
+        filters_list = []
+        if req.filters:
+            filters_list = [f.model_dump() for f in req.filters]
+        elif req.filter_type and req.filter_value is not None:
+            filters_list = [{
+                'filter_type': req.filter_type,
+                'filter_value': req.filter_value
+            }]
+            
         name, count = generate_smart_playlist_logic(
             req.name.strip(), 
-            req.filter_type, 
-            req.filter_value.lower().strip(), 
+            filters_list, 
             req.exclude_dnu
         )
         return {'created': name, 'count': count}
@@ -747,16 +782,20 @@ def refresh_all_smart_playlists():
         return {'status': 'no_smart_playlists_found', 'refreshed': 0}
     
     refreshed_count = 0
-    # Copy keys to avoid mutation issues during iteration
     rule_names = list(manager.smart_rules.keys())
     
     for name in rule_names:
         rule = manager.smart_rules[name]
         try:
+            filters = rule.get('filters')
+            if not filters:
+                filters = [{
+                    'filter_type': rule['filter_type'],
+                    'filter_value': rule['filter_value']
+                }]
             generate_smart_playlist_logic(
                 name,
-                rule['filter_type'],
-                rule['filter_value'],
+                filters,
                 rule.get('exclude_dnu', True)
             )
             refreshed_count += 1
