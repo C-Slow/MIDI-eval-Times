@@ -19,6 +19,11 @@ This project is a native mobile ecosystem designed to manage and play MIDI files
 - **Background Protection**: Prevent audio suspension during screen sleep using CPU wake-locks.
 
 ## ✅ Recent Accomplishments
+- **Dynamic Playlist Builder AND Filter queries**: Upgraded the dynamic/smart playlist system to support multiple filter conditions combined with AND logic (inner join), featuring a scrollable modal builder UI with unique field value suggestions.
+- **Dynamic Playlist Ratings**: Expanded rating filters to support comma-separated values (e.g. `4,5` for exactly 4 or 5 stars) and unrated songs (`0`), preserving `>=` logic for single ratings.
+- **Compact Playlist Actions Layout**: Restructured the Playlists tab to place compact, circular inline Play (Piano), Shuffle, and Delete buttons directly in each playlist's header row, removing the redundant controls block.
+- **Global Repeat Button**: Moved the repeat playback toggle out of individual playlists to a single global header button (sharing the row dynamically with "Refresh Smart").
+- **Standalone Mobile Deployment**: Established and verified standard production release APK build pipelines (`npx expo run:android --variant release`) deploying directly to physical connected devices over USB.
 - **Search Normalization**: Updated the library and Orchestrator search to treat dashes and underscores as spaces, fixing matches for titles like 'back to black' vs 'back-to-black'.
 - **Pedal Clank Mitigation (Temporary)**: Temporarily mapped 'Medium' and 'Full' pedal presets to 'Light' intensity to address physical hardware noise. Re-cleaned 570+ MIDI files across the main library and Orchestrator to apply these safe settings while preserving original metadata for future restoration.
 - **6-Stem Isolation**: Upgraded to `htdemucs_6s` for surgical separation of piano from strings/guitars.
