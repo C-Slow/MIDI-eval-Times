@@ -333,32 +333,32 @@ export const PlaylistsScreen = () => {
           </TouchableOpacity>
         </View>
 
+        <View style={[styles.controls, { borderBottomColor: themeColors.border, borderBottomWidth: isExpanded ? 1 : 0, backgroundColor: themeColors.surface }]}>
+          <TouchableOpacity style={[styles.playBtn, { backgroundColor: themeColors.accent }]} onPress={() => handlePlayPlaylist(name)}>
+            <View style={styles.btnContent}>
+              <Ionicons name="play-outline" size={16} color="#fff" />
+              <Text style={styles.playBtnText}>Piano</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }]} onPress={() => handlePlayPlaylist(name, true)}>
+            <View style={styles.btnContent}>
+              <Ionicons name="shuffle-outline" size={16} color={themeColors.text} />
+              <Text style={[styles.shuffleBtnText, { color: themeColors.text }]}>Shuffle</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }, repeat && { borderColor: themeColors.accent, borderWidth: 1, backgroundColor: themeColors.accentLight }]} 
+            onPress={() => setRepeat(!repeat)}
+          >
+            <View style={styles.btnContent}>
+              <Ionicons name="repeat-outline" size={16} color={repeat ? themeColors.accent : themeColors.text} />
+              <Text style={[styles.shuffleBtnText, { color: repeat ? themeColors.accent : themeColors.text }]}>Repeat</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {isExpanded && (
           <View style={[styles.expandedContent, { backgroundColor: themeColors.surface }]}>
-            <View style={[styles.controls, { borderBottomColor: themeColors.border }]}>
-              <TouchableOpacity style={[styles.playBtn, { backgroundColor: themeColors.accent }]} onPress={() => handlePlayPlaylist(name)}>
-                <View style={styles.btnContent}>
-                  <Ionicons name="play-outline" size={16} color="#fff" />
-                  <Text style={styles.playBtnText}>Piano</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }]} onPress={() => handlePlayPlaylist(name, true)}>
-                <View style={styles.btnContent}>
-                  <Ionicons name="shuffle-outline" size={16} color={themeColors.text} />
-                  <Text style={[styles.shuffleBtnText, { color: themeColors.text }]}>Shuffle</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }, repeat && { borderColor: themeColors.accent, borderWidth: 1, backgroundColor: themeColors.accentLight }]} 
-                onPress={() => setRepeat(!repeat)}
-              >
-                <View style={styles.btnContent}>
-                  <Ionicons name="repeat-outline" size={16} color={repeat ? themeColors.accent : themeColors.text} />
-                  <Text style={[styles.shuffleBtnText, { color: repeat ? themeColors.accent : themeColors.text }]}>Repeat</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
             {Array.isArray(tracks) && tracks.map((track, idx) => renderTrackItem(track, name, idx))}
           </View>
         )}
