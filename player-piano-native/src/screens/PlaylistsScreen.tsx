@@ -334,25 +334,16 @@ export const PlaylistsScreen = () => {
         </View>
 
         <View style={[styles.controls, { borderBottomColor: themeColors.border, borderBottomWidth: isExpanded ? 1 : 0, backgroundColor: themeColors.surface }]}>
-          <TouchableOpacity style={[styles.playBtn, { backgroundColor: themeColors.accent }]} onPress={() => handlePlayPlaylist(name)}>
+          <TouchableOpacity style={[styles.playBtn, { backgroundColor: themeColors.accent, flex: 1, alignItems: 'center', justifyContent: 'center' }]} onPress={() => handlePlayPlaylist(name)}>
             <View style={styles.btnContent}>
               <Ionicons name="play-outline" size={16} color="#fff" />
               <Text style={styles.playBtnText}>Piano</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }]} onPress={() => handlePlayPlaylist(name, true)}>
+          <TouchableOpacity style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary, flex: 1, alignItems: 'center', justifyContent: 'center' }]} onPress={() => handlePlayPlaylist(name, true)}>
             <View style={styles.btnContent}>
               <Ionicons name="shuffle-outline" size={16} color={themeColors.text} />
               <Text style={[styles.shuffleBtnText, { color: themeColors.text }]}>Shuffle</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.shuffleBtn, { backgroundColor: themeColors.surfaceSecondary }, repeat && { borderColor: themeColors.accent, borderWidth: 1, backgroundColor: themeColors.accentLight }]} 
-            onPress={() => setRepeat(!repeat)}
-          >
-            <View style={styles.btnContent}>
-              <Ionicons name="repeat-outline" size={16} color={repeat ? themeColors.accent : themeColors.text} />
-              <Text style={[styles.shuffleBtnText, { color: repeat ? themeColors.accent : themeColors.text }]}>Repeat</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -432,15 +423,41 @@ export const PlaylistsScreen = () => {
           renderItem={renderPlaylistItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
-            Object.values(smartRules).length > 0 ? (
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, alignItems: 'center' }}>
+              {Object.values(smartRules).length > 0 && (
+                <TouchableOpacity 
+                  style={[styles.refreshAllBtn, { borderColor: themeColors.accent, flex: 1, marginBottom: 0 }]} 
+                  onPress={handleRefreshAllSmart}
+                >
+                  <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
+                  <Text style={[styles.refreshAllText, { color: themeColors.accent }]}>Refresh Smart</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity 
-                style={[styles.refreshAllBtn, { borderColor: themeColors.accent }]} 
-                onPress={handleRefreshAllSmart}
+                style={[
+                  { 
+                    borderColor: repeat ? themeColors.accent : themeColors.border, 
+                    borderWidth: 1,
+                    backgroundColor: repeat ? themeColors.accentLight : themeColors.surfaceSecondary,
+                    paddingHorizontal: 15,
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    minHeight: 44
+                  },
+                  !Object.values(smartRules).length && { flex: 1 }
+                ]} 
+                onPress={() => setRepeat(!repeat)}
               >
-                <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
-                <Text style={[styles.refreshAllText, { color: themeColors.accent }]}>Refresh All Smart Playlists</Text>
+                <Ionicons name="repeat-outline" size={18} color={repeat ? themeColors.accent : themeColors.text} />
+                <Text style={{ color: repeat ? themeColors.accent : themeColors.text, fontWeight: '600', fontSize: 13 }}>
+                  Repeat: {repeat ? "ON" : "OFF"}
+                </Text>
               </TouchableOpacity>
-            ) : null
+            </View>
           }
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 15, paddingTop: 10 }}
           removeClippedSubviews={true}
