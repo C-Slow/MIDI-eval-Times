@@ -1310,6 +1310,86 @@ async def get_midi_orchestrator_backing_audio(job_id: str, token: Optional[str] 
         
     return FileResponse(str(wav_path), media_type="audio/wav")
 
+
+@app.get("/midi-orchestrator/preview/{job_id}")
+async def get_midi_orchestrator_preview(
+    job_id: str, 
+    piano_tracks: str = Query(""), 
+    speaker_tracks: str = Query(""), 
+    pedal_preset: str = "light",
+    rhythm_factor: float = 1.0,
+    melody_factor: float = 1.0,
+    token: Optional[str] = None, 
+    authorization: Optional[str] = Header(None),
+    background_tasks: BackgroundTasks = None
+):
+    await verify_auth(authorization=authorization, token=token)
+    
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    src_midi = midi_orchestrator.uploads_dir / f"{job_id}.mid"
+    if not src_midi.exists():
+        src_midi = midi_orchestrator.jobs_dir / job_id / "original.mid"
+        if not src_midi.exists():
+            raise HTTPException(status_code=404, detail="Original MIDI file not found")
+            
+    # Parse track lists
+    p_tracks = [int(x) for x in piano_tracks.split(",") if x.strip()]
+    s_tracks = [int(x) for x in speaker_tracks.split(",") if x.strip()]
+    
+    try:
+        temp_dir = Path(tempfile.mkdtemp())
+        temp_midi = temp_dir / "preview.mid"
+        temp_wav = temp_dir / "preview.wav"
+        
+        pm = pretty_midi.PrettyMIDI(str(src_midi))
+        preview_pm = pretty_midi.PrettyMIDI()
+        
+        # Merge selected piano tracks
+        piano_notes = []
+        for idx in p_tracks:
+            if idx < len(pm.instruments):
+                piano_notes.extend(pm.instruments[idx].notes)
+                
+        if piano_notes:
+            # Piano instrument program is 0
+            piano_inst = pretty_midi.Instrument(program=0, name="Piano Preview")
+            piano_inst.notes = piano_notes
+            preview_pm.instruments.append(piano_inst)
+            
+        # Add selected speaker tracks
+        for idx in s_tracks:
+            if idx < len(pm.instruments):
+                orig_inst = pm.instruments[idx]
+                new_inst = pretty_midi.Instrument(program=orig_inst.program, name=orig_inst.name, is_drum=orig_inst.is_drum)
+                new_inst.notes = orig_inst.notes
+                new_inst.control_changes = orig_inst.control_changes
+                preview_pm.instruments.append(new_inst)
+                
+        preview_pm.write(str(temp_midi))
+        
+        # Render to WAV using FluidSynth
+        utils.render_midi_to_wav_with_soundfont(
+            str(temp_midi),
+            str(midi_orchestrator.soundfont_path),
+            str(temp_wav)
+        )
+        
+        def cleanup():
+            try:
+                shutil.rmtree(str(temp_dir))
+            except Exception:
+                pass
+                
+        if background_tasks:
+            background_tasks.add_task(cleanup)
+            
+        return FileResponse(str(temp_wav), media_type="audio/wav")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/midi-orchestrator/play/{job_id}", dependencies=[Depends(verify_auth)])
 async def play_midi_orchestrator(job_id: str):
     if job_id not in midi_orchestrator.status:

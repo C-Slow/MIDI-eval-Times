@@ -326,6 +326,12 @@ export const midiOrchestratorApi = {
     const token = getToken();
     return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
   },
+  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[]) => {
+    const token = getToken();
+    const pStr = pianoTracks.join(',');
+    const sStr = speakerTracks.join(',');
+    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&token=${encodeURIComponent(token || '')}`;
+  },
   playMidi: async (jobId: string) => {
     const res = await api.post(`/midi-orchestrator/play/${jobId}`);
     return res.data;

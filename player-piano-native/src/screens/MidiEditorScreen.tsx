@@ -55,6 +55,11 @@ export const MidiEditorScreen = () => {
   const playbackTimerRef = useRef<any>(null);
   const isSeekingRef = useRef(false);
 
+  // Preview State
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
+
   // Selected job details
   const currentJob = useMemo(() => {
     return jobs.find(j => j.job_id === selectedJobId) || null;
@@ -78,6 +83,7 @@ export const MidiEditorScreen = () => {
     return () => {
       task.cancel();
       stopPlayback();
+      stopPreview();
     };
   }, []);
 
@@ -183,6 +189,62 @@ export const MidiEditorScreen = () => {
       else next.delete(trackIndex);
       return next;
     });
+  };
+
+  const stopPreview = async () => {
+    if (previewSoundRef.current) {
+      try {
+        await previewSoundRef.current.stopAsync();
+        await previewSoundRef.current.unloadAsync();
+      } catch (e) {}
+      previewSoundRef.current = null;
+    }
+    setIsPreviewPlaying(false);
+    setIsPreviewLoading(false);
+  };
+
+  const handleTogglePreview = async () => {
+    if (!selectedJobId) return;
+    if (pianoTracks.size === 0 && speakerTracks.size === 0) {
+      Alert.alert('No Tracks Selected', 'Choose at least one track to preview.');
+      return;
+    }
+
+    if (isPreviewPlaying) {
+      await stopPreview();
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+      if (previewSoundRef.current) {
+        await previewSoundRef.current.unloadAsync();
+      }
+
+      const url = midiOrchestratorApi.getPreviewUrl(
+        selectedJobId, 
+        Array.from(pianoTracks), 
+        Array.from(speakerTracks)
+      );
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: url },
+        { shouldPlay: true },
+        (status: any) => {
+          if (status.didJustFinish) {
+            stopPreview();
+          }
+        }
+      );
+
+      previewSoundRef.current = sound;
+      setIsPreviewPlaying(true);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Preview Failed', 'Could not generate or play local audio preview.');
+    } finally {
+      setIsPreviewLoading(false);
+    }
   };
 
   // Run Backend Split & Synthesize Process
@@ -521,6 +583,7 @@ export const MidiEditorScreen = () => {
 
   // Exit config
   const handleExitConfig = () => {
+    stopPreview();
     setStage('list');
   };
 
@@ -749,20 +812,44 @@ export const MidiEditorScreen = () => {
               </View>
             </View>
 
-            <TouchableOpacity 
-              style={[styles.processBtn, { backgroundColor: themeColors.accent }]}
-              onPress={handleProcess}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="color-wand" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.processBtnText}>Process & Synthesize</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity 
+                style={[styles.previewBtn, { borderColor: themeColors.accent, borderWidth: 1.5 }]}
+                onPress={handleTogglePreview}
+                disabled={loading || isPreviewLoading}
+              >
+                {isPreviewLoading ? (
+                  <ActivityIndicator color={themeColors.accent} />
+                ) : (
+                  <>
+                    <Ionicons 
+                      name={isPreviewPlaying ? "stop" : "volume-high"} 
+                      size={20} 
+                      color={isPreviewPlaying ? "#ff5252" : themeColors.accent} 
+                      style={{ marginRight: 8 }} 
+                    />
+                    <Text style={[styles.previewBtnText, { color: isPreviewPlaying ? "#ff5252" : themeColors.accent }]}>
+                      {isPreviewPlaying ? "Stop Preview" : "Preview Mix"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.processBtn, { backgroundColor: themeColors.accent, flex: 1, marginLeft: 12, marginTop: 0 }]}
+                onPress={handleProcess}
+                disabled={loading || isPreviewPlaying}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="color-wand" size={20} color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={styles.processBtnText}>Process & Synthesize</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
 
           </ScrollView>
         </View>
@@ -1033,6 +1120,25 @@ const styles = StyleSheet.create({
   },
   sliderRow: {
     marginBottom: 15,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  previewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  previewBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   processBtn: {
     flexDirection: 'row',
