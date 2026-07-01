@@ -90,6 +90,9 @@ interface AppState {
   // Simplified Trigger for Notifications
   stopAll: () => void; // Will be set by useAudioPlayer
   setStopTrigger: (fn: () => void) => void;
+
+  midiOrchestrateOffset: number;
+  setMidiOrchestrateOffset: (offset: number) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -136,6 +139,12 @@ export const useStore = create<AppState>((set) => ({
   stopAll: () => {},
   setStopTrigger: (stopAll) => set({ stopAll }),
 
+  midiOrchestrateOffset: 0,
+  setMidiOrchestrateOffset: (midiOrchestrateOffset) => {
+    set({ midiOrchestrateOffset });
+    SecureStore.setItemAsync('midiOrchestrateOffset', String(midiOrchestrateOffset));
+  },
+
   setServerUrl: (serverUrl) => {
     set({ serverUrl });
     SecureStore.setItemAsync('serverUrl', serverUrl);
@@ -168,9 +177,11 @@ export const useStore = create<AppState>((set) => ({
     const serverUrl = await SecureStore.getItemAsync('serverUrl');
     const token = await SecureStore.getItemAsync('token');
     const theme = await SecureStore.getItemAsync('theme') as 'light' | 'dark' | null;
+    const midiOrchestrateOffset = await SecureStore.getItemAsync('midiOrchestrateOffset');
     if (serverUrl) set({ serverUrl });
     if (token) set({ token, isLoggedIn: true });
     if (theme) set({ theme });
+    if (midiOrchestrateOffset) set({ midiOrchestrateOffset: parseInt(midiOrchestrateOffset, 10) || 0 });
   },
 
   logout: async () => {

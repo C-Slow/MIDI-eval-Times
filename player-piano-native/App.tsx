@@ -19,6 +19,7 @@ import { PlaylistsScreen } from './src/screens/PlaylistsScreen';
 import { UploadScreen } from './src/screens/UploadScreen';
 import { Mp3OrchestrateScreen } from './src/screens/Mp3OrchestrateScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { MidiEditorScreen } from './src/screens/MidiEditorScreen';
 import { GlobalPlayer } from './src/components/GlobalPlayer';
 import { VoiceControl } from './src/components/VoiceControl';
 import { Colors } from './src/constants/Colors';
@@ -94,6 +95,15 @@ function MainTabs() {
           title: 'Orchestra',
           tabBarLabel: 'Orchestra',
           tabBarIcon: ({ color, size }) => <Ionicons name="musical-note-outline" size={size} color={color} />
+        }} 
+      />
+      <Tab.Screen 
+        name="MidiEditorTab" 
+        component={MidiEditorScreen} 
+        options={{ 
+          title: 'MIDI Editor',
+          tabBarLabel: 'MIDI Editor',
+          tabBarIcon: ({ color, size }) => <Ionicons name="create-outline" size={size} color={color} />
         }} 
       />
       <Tab.Screen 

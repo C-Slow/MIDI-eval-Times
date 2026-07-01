@@ -73,6 +73,12 @@ async def startup_event():
         processor.cleanup_stale_data_and_jobs()
     except Exception as e:
         print(f"Startup processor data cleanup failed: {e}")
+        
+    # Clean up stale midi orchestrator upload/job data on startup
+    try:
+        midi_orchestrator.cleanup_stale_data_and_jobs()
+    except Exception as e:
+        print(f"Startup midi orchestrator data cleanup failed: {e}")
     
     # Start background thread for daily backups
     import threading
@@ -127,6 +133,10 @@ manager = PlaylistManager(str(STORAGE_RAW), str(STORAGE_PROCESSED), PLAYLISTS_FI
 
 # Initialize audio processor for MP3 orchestration
 processor = audio_processor.AudioProcessor(BASE_DIR / 'storage')
+
+# Initialize MIDI orchestrator
+from app.midi_orchestrator import MidiOrchestrator
+midi_orchestrator = MidiOrchestrator(BASE_DIR / 'storage')
 
 class GeminiKeyRequest(BaseModel):
     key: str
@@ -1221,6 +1231,107 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
         return {"status": "aligned"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==========================================================
+#                   MIDI ORCHESTRATOR ROUTES
+# ==========================================================
+
+class ProcessMidiRequest(BaseModel):
+    piano_tracks: List[int]
+    speaker_tracks: List[int]
+    pedal_preset: Optional[str] = "light"
+    rhythm_factor: Optional[float] = 1.0
+    melody_factor: Optional[float] = 1.0
+
+@app.post("/midi-orchestrator/upload", dependencies=[Depends(verify_auth)])
+async def upload_midi_orchestrator(file: UploadFile = File(...)):
+    if not file.filename.endswith(('.mid', '.midi')):
+        raise HTTPException(status_code=400, detail="Only .mid or .midi files are accepted.")
+    
+    contents = await file.read()
+    job_id = midi_orchestrator.upload_midi(contents, file.filename)
+    return {"job_id": job_id, "tracks": midi_orchestrator.status[job_id]["tracks"]}
+
+@app.get("/midi-orchestrator/notes/{job_id}", dependencies=[Depends(verify_auth)])
+async def get_midi_orchestrator_notes(job_id: str):
+    notes = midi_orchestrator.get_track_notes(job_id)
+    if not notes:
+        raise HTTPException(status_code=404, detail="Job or MIDI file not found.")
+    return notes
+
+@app.post("/midi-orchestrator/process/{job_id}", dependencies=[Depends(verify_auth)])
+async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
+    try:
+        midi_orchestrator.start_processing(
+            job_id,
+            req.piano_tracks,
+            req.speaker_tracks,
+            req.pedal_preset,
+            req.rhythm_factor,
+            req.melody_factor
+        )
+        return {"status": "started"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/midi-orchestrator/jobs", dependencies=[Depends(verify_auth)])
+async def list_midi_orchestrator_jobs():
+    return midi_orchestrator.list_jobs()
+
+@app.get("/midi-orchestrator/jobs/{job_id}", dependencies=[Depends(verify_auth)])
+async def get_midi_orchestrator_job(job_id: str):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return midi_orchestrator.status[job_id]
+
+@app.delete("/midi-orchestrator/jobs/{job_id}", dependencies=[Depends(verify_auth)])
+async def delete_midi_orchestrator_job(job_id: str):
+    success = midi_orchestrator.delete_job(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "deleted"}
+
+@app.get("/midi-orchestrator/backing-audio/{job_id}")
+async def get_midi_orchestrator_backing_audio(job_id: str, token: Optional[str] = None):
+    await verify_auth(token=token)
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = midi_orchestrator.status[job_id]
+    if job["status"] != "completed" or not job["vocals"]:
+        raise HTTPException(status_code=400, detail="Backing audio not ready or does not exist")
+        
+    wav_path = Path(job["vocals"])
+    if not wav_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+        
+    return FileResponse(str(wav_path), media_type="audio/wav")
+
+@app.post("/midi-orchestrator/play/{job_id}", dependencies=[Depends(verify_auth)])
+async def play_midi_orchestrator(job_id: str):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    job = midi_orchestrator.status[job_id]
+    if job["status"] != "completed" or not job["midi"]:
+        raise HTTPException(status_code=400, detail="Job not completed")
+        
+    midi_path = Path(job["midi"])
+    if not midi_path.exists():
+        raise HTTPException(status_code=404, detail="Midi file not found on disk")
+        
+    if not (utils._ble_handle and utils._ble_handle.connected):
+        raise HTTPException(status_code=400, detail="Piano not connected")
+        
+    try:
+        utils.start_play_async(str(midi_path))
+        return {"status": "playing"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == '__main__':
     uvicorn.run('app.main:app', host='0.0.0.0', port=8000, reload=False)

@@ -29,6 +29,8 @@ storage/backups/
 storage/mp3_uploads/
 storage/separated/
 storage/mp3_jobs.json
+storage/*.sf2
+storage/midi_orchestrator/
 
 # Legacy output folder from older scripts
 Midi-Projects/Output-Midi/

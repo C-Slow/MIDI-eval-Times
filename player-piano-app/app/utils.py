@@ -70,6 +70,38 @@ def render_midi_to_wav(midi_path: str) -> str:
         raise e
 
 
+def render_midi_to_wav_with_soundfont(midi_path: str, soundfont_path: str, out_wav_path: str) -> str:
+    """Render MIDI to WAV using FluidSynth and a specific SoundFont."""
+    import subprocess
+    
+    if not os.path.exists(FLUIDSYNTH_BIN):
+        raise FileNotFoundError(f"FluidSynth not found at {FLUIDSYNTH_BIN}")
+    if not os.path.exists(soundfont_path):
+        raise FileNotFoundError(f"SoundFont not found at {soundfont_path}")
+        
+    cmd = [
+        FLUIDSYNTH_BIN,
+        '-ni',
+        '-g', '3.0',
+        '-F', out_wav_path,
+        '-r', '44100',
+        soundfont_path,
+        midi_path
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            _log(f"FluidSynth error: {result.stderr}")
+            raise RuntimeError(f"FluidSynth failed: {result.stderr}")
+            
+        _log(f"Render complete: {out_wav_path}")
+        return out_wav_path
+    except Exception as e:
+        _log(f"Rendering failed: {str(e)}")
+        raise e
+
+
 def _log(msg):
     print(f"LOG: {msg}")
     try:

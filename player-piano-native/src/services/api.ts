@@ -282,6 +282,56 @@ export const mp3Api = {
   }
 };
 
+export const midiOrchestratorApi = {
+  upload: async (uri: string, name: string) => {
+    const formData = new FormData();
+    // @ts-ignore
+    formData.append('file', {
+      uri,
+      name: name || 'input.mid',
+      type: 'audio/midi'
+    });
+    const res = await api.post('/midi-orchestrator/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data;
+  },
+  getNotes: async (jobId: string) => {
+    const res = await api.get(`/midi-orchestrator/notes/${jobId}`);
+    return res.data;
+  },
+  process: async (jobId: string, pianoTracks: number[], speakerTracks: number[], pedalPreset: string = 'light', rhythmFactor: number = 1.0, melodyFactor: number = 1.0) => {
+    const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
+      piano_tracks: pianoTracks,
+      speaker_tracks: speakerTracks,
+      pedal_preset: pedalPreset,
+      rhythm_factor: rhythmFactor,
+      melody_factor: melodyFactor
+    });
+    return res.data;
+  },
+  listJobs: async () => {
+    const res = await api.get('/midi-orchestrator/jobs');
+    return res.data;
+  },
+  getJob: async (jobId: string) => {
+    const res = await api.get(`/midi-orchestrator/jobs/${jobId}`);
+    return res.data;
+  },
+  deleteJob: async (jobId: string) => {
+    const res = await api.delete(`/midi-orchestrator/jobs/${jobId}`);
+    return res.data;
+  },
+  getBackingAudioUrl: (jobId: string) => {
+    const token = getToken();
+    return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
+  },
+  playMidi: async (jobId: string) => {
+    const res = await api.post(`/midi-orchestrator/play/${jobId}`);
+    return res.data;
+  }
+};
+
 export const systemApi = {
   createBackup: async () => {
     const res = await api.post('/system/backup');
