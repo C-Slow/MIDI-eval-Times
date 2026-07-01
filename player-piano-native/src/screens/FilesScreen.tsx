@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Platform, Modal, ScrollView, Switch } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, Alert, Platform, Modal, ScrollView, Switch, InteractionManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { useStore } from '../store/useStore';
@@ -194,8 +194,11 @@ export const FilesScreen = () => {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchFiles().finally(() => setLoading(false));
+    const task = InteractionManager.runAfterInteractions(() => {
+      setLoading(true);
+      fetchFiles().finally(() => setLoading(false));
+    });
+    return () => task.cancel();
   }, []);
 
   const onRefresh = async () => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, FlatList, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, FlatList, Modal, TextInput, Platform, InteractionManager } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -76,7 +76,10 @@ export const Mp3OrchestrateScreen = () => {
   };
 
   useEffect(() => {
-    fetchLibrary();
+    const task = InteractionManager.runAfterInteractions(() => {
+      fetchLibrary();
+    });
+    return () => task.cancel();
   }, []);
 
   // Poll for status if jobId is set and not completed
