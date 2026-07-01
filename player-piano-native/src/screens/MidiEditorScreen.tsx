@@ -24,6 +24,116 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PIXELS_PER_SECOND = 40; // Timeline scale
 const LANE_HEIGHT = 80;
 
+interface NoteGridProps {
+  lanesData: any[];
+  pianoTracks: Set<number>;
+  speakerTracks: Set<number>;
+  themeColors: any;
+  durationSec: number;
+  timelineWidth: number;
+  totalHeight: number;
+}
+
+const NoteGrid = React.memo(({
+  lanesData,
+  pianoTracks,
+  speakerTracks,
+  themeColors,
+  durationSec,
+  timelineWidth,
+  totalHeight,
+}: NoteGridProps) => {
+  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean) => {
+    if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
+    if (isSpeaker) return '#a29bfe'; // Light purple for strings/speakers
+    return themeColors.textMuted;
+  };
+
+  const verticalPadding = 8;
+  const usableLaneHeight = LANE_HEIGHT - (verticalPadding * 2);
+
+  return (
+    <View style={{ width: timelineWidth, height: totalHeight, position: 'absolute', top: 0, left: 0 }}>
+      {/* Consolidated parent vertical grid lines */}
+      {Array.from({ length: Math.ceil(durationSec / 5) }).map((_, i) => (
+        <View 
+          key={`grid-${i}`} 
+          style={[
+            styles.gridLine, 
+            { 
+              left: i * 5 * PIXELS_PER_SECOND, 
+              borderColor: themeColors.border, 
+              height: totalHeight 
+            }
+          ]} 
+        />
+      ))}
+
+      {lanesData.map((lane: any, laneIdx: number) => {
+        const isPiano = pianoTracks.has(lane.index);
+        const isSpeaker = speakerTracks.has(lane.index);
+        const color = getTrackColor(lane.index, isPiano, isSpeaker);
+
+        return (
+          <View 
+            key={lane.index} 
+            style={[
+              styles.laneTimeline, 
+              { 
+                height: LANE_HEIGHT, 
+                top: laneIdx * LANE_HEIGHT, 
+                borderBottomColor: themeColors.border 
+              }
+            ]}
+          >
+            {/* Note Blocks */}
+            {lane.notes.map((note: any, noteIdx: number) => {
+              const noteWidth = Math.max(2, (note.end - note.start) * PIXELS_PER_SECOND);
+              const noteLeft = note.start * PIXELS_PER_SECOND;
+              const normalizedPitch = (note.pitch - lane.minPitch) / lane.pitchRange;
+              const noteTop = verticalPadding + (usableLaneHeight * (1 - normalizedPitch));
+
+              return (
+                <View
+                  key={noteIdx}
+                  style={[
+                    styles.note,
+                    {
+                      left: noteLeft,
+                      width: noteWidth,
+                      top: noteTop,
+                      height: 4,
+                      backgroundColor: color,
+                    }
+                  ]}
+                />
+              );
+            })}
+          </View>
+        );
+      })}
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  if (prevProps.timelineWidth !== nextProps.timelineWidth) return false;
+  if (prevProps.totalHeight !== nextProps.totalHeight) return false;
+  if (prevProps.durationSec !== nextProps.durationSec) return false;
+  if (prevProps.themeColors !== nextProps.themeColors) return false;
+  if (prevProps.lanesData !== nextProps.lanesData) return false;
+  
+  if (prevProps.pianoTracks.size !== nextProps.pianoTracks.size) return false;
+  if (prevProps.speakerTracks.size !== nextProps.speakerTracks.size) return false;
+  
+  for (const item of prevProps.pianoTracks) {
+    if (!nextProps.pianoTracks.has(item)) return false;
+  }
+  for (const item of prevProps.speakerTracks) {
+    if (!nextProps.speakerTracks.has(item)) return false;
+  }
+  
+  return true;
+});
+
 export const MidiEditorScreen = () => {
   const theme = useStore(state => state.theme);
   const themeColors = Colors[theme];
@@ -32,8 +142,8 @@ export const MidiEditorScreen = () => {
   const setGlobalOffset = useStore(state => state.setMidiOrchestrateOffset);
   const setSystemBusy = useStore(state => state.setSystemBusy);
 
-  // Screen Stages: 'list' | 'config' | 'visualizer'
-  const [stage, setStage] = useState<'list' | 'config' | 'visualizer'>('list');
+  // Screen Stages: 'list' | 'visualizer'
+  const [stage, setStage] = useState<'list' | 'visualizer'>('list');
   const [loading, setLoading] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -44,6 +154,9 @@ export const MidiEditorScreen = () => {
   const [pedalPreset, setPedalPreset] = useState<'light' | 'medium' | 'full'>('light');
   const [rhythmFactor, setRhythmFactor] = useState(1.0);
   const [melodyFactor, setMelodyFactor] = useState(1.0);
+
+  // Settings Panel visibility
+  const [showSettings, setShowSettings] = useState(false);
 
   // Playback / Visualizer State
   const [notes, setNotes] = useState<Record<string, any[]>>({});
@@ -64,6 +177,98 @@ export const MidiEditorScreen = () => {
   const currentJob = useMemo(() => {
     return jobs.find(j => j.job_id === selectedJobId) || null;
   }, [jobs, selectedJobId]);
+
+  const hasChanges = useMemo(() => {
+    if (!currentJob) return false;
+    const savedPiano = new Set(currentJob.piano_tracks || []);
+    const savedSpeaker = new Set(currentJob.speaker_tracks || []);
+    
+    if (pianoTracks.size !== savedPiano.size) return true;
+    if (speakerTracks.size !== savedSpeaker.size) return true;
+    
+    for (const id of pianoTracks) {
+      if (!savedPiano.has(id)) return true;
+    }
+    for (const id of speakerTracks) {
+      if (!savedSpeaker.has(id)) return true;
+    }
+    
+    if (pedalPreset !== currentJob.pedal_preset) return true;
+    if (rhythmFactor !== currentJob.rhythm_factor) return true;
+    if (melodyFactor !== currentJob.melody_factor) return true;
+    
+    return false;
+  }, [currentJob, pianoTracks, speakerTracks, pedalPreset, rhythmFactor, melodyFactor]);
+
+  const openUnifiedWorkspace = async (jobId: string) => {
+    const job = jobs.find(j => j.job_id === jobId);
+    if (!job) return;
+
+    setSelectedJobId(jobId);
+    setPianoTracks(new Set(job.piano_tracks || []));
+    setSpeakerTracks(new Set(job.speaker_tracks || []));
+    setPedalPreset(job.pedal_preset || 'light');
+    setRhythmFactor(job.rhythm_factor ?? 1.0);
+    setMelodyFactor(job.melody_factor ?? 1.0);
+
+    setLoading(true);
+    try {
+      // 1. Fetch note events for the lanes
+      const noteData = await midiOrchestratorApi.getNotes(jobId);
+      setNotes(noteData);
+
+      // 2. Clear old sound refs
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+      if (previewSoundRef.current) {
+        await previewSoundRef.current.unloadAsync();
+        previewSoundRef.current = null;
+      }
+
+      // 3. If job is completed, pre-load backing audio for performance play
+      if (job.status === 'completed') {
+        const url = midiOrchestratorApi.getBackingAudioUrl(jobId);
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: url },
+          { shouldPlay: false, progressUpdateIntervalMillis: 100 },
+          onPlaybackStatusUpdate
+        );
+        soundRef.current = sound;
+      }
+
+      setStage('visualizer');
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Workspace Error', 'Failed to load visualizer workspace.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'mute') => {
+    if (isPreviewPlaying) {
+      stopPreview();
+    }
+    if (isPlaying) {
+      stopPlayback();
+    }
+
+    setPianoTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'piano') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+
+    setSpeakerTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'speakers') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+  };
 
   // Load jobs list
   const fetchJobs = async () => {
@@ -119,11 +324,8 @@ export const MidiEditorScreen = () => {
       await fetchJobs();
       Alert.alert('Upload Success', 'MIDI track extracted. Select it to configure track allocation.');
       
-      // Auto-open config stage for the newly uploaded job
-      setSelectedJobId(data.job_id);
-      setPianoTracks(new Set());
-      setSpeakerTracks(new Set());
-      setStage('config');
+      // Auto-open workspace stage for the newly uploaded job
+      await openUnifiedWorkspace(data.job_id);
     } catch (e: any) {
       console.error(e);
       Alert.alert('Upload Failed', e.message || 'Could not upload MIDI file.');
@@ -131,22 +333,14 @@ export const MidiEditorScreen = () => {
       setLoading(false);
     }
   };
-
-  // Open job in proper stage
+ 
+  // Open job in workspace
   const handleJobSelect = (job: any) => {
-    setSelectedJobId(job.job_id);
-    if (job.status === 'completed') {
-      openVisualizer(job.job_id);
-    } else if (job.status === 'uploaded' || job.status === 'failed') {
-      setPianoTracks(new Set(job.piano_tracks || []));
-      setSpeakerTracks(new Set(job.speaker_tracks || []));
-      setPedalPreset(job.pedal_preset || 'light');
-      setRhythmFactor(job.rhythm_factor ?? 1.0);
-      setMelodyFactor(job.melody_factor ?? 1.0);
-      setStage('config');
-    } else {
+    if (job.status === 'processing' || job.status === 'synthesizing') {
       Alert.alert('Processing', 'This file is currently being processed. Please wait...');
+      return;
     }
+    openUnifiedWorkspace(job.job_id);
   };
 
   // Delete Job
@@ -229,8 +423,9 @@ export const MidiEditorScreen = () => {
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: url },
-        { shouldPlay: true },
+        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
         (status: any) => {
+          onPlaybackStatusUpdate(status);
           if (status.didJustFinish) {
             stopPreview();
           }
@@ -276,36 +471,6 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  // Open Visualizer/Player
-  const openVisualizer = async (jobId: string) => {
-    setLoading(true);
-    try {
-      // 1. Fetch note events for the lanes
-      const noteData = await midiOrchestratorApi.getNotes(jobId);
-      setNotes(noteData);
-
-      // 2. Setup Expo Audio Sound for backing track
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-      }
-      const url = midiOrchestratorApi.getBackingAudioUrl(jobId);
-      
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: url },
-        { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-        onPlaybackStatusUpdate
-      );
-      soundRef.current = sound;
-
-      setStage('visualizer');
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert('Visualizer Error', 'Failed to load visual note events or backing audio.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Sound Playback Updates
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
@@ -327,35 +492,41 @@ export const MidiEditorScreen = () => {
 
   // Sync Playback Controllers
   const startPlayback = async () => {
-    if (!soundRef.current || !selectedJobId) return;
+    if (!soundRef.current || !selectedJobId) {
+      Alert.alert('Playback Error', 'Backing audio is not loaded or ready.');
+      return;
+    }
 
     try {
       setSystemBusy(true);
       setIsPlaying(true);
 
-      // Apply Global Delay setting
-      // positive = delay MIDI (Audio plays first)
-      // negative = delay Audio (MIDI plays first)
+      const playPianoMidi = async () => {
+        if (isPianoConnected && pianoTracks.size > 0) {
+          try {
+            await midiOrchestratorApi.playMidi(selectedJobId);
+          } catch (e: any) {
+            console.error('Disklavier play failed', e);
+            const msg = e.response?.data?.detail || e.message || 'Unknown error';
+            Alert.alert('Piano Playback Error', `Failed to play on the Disklavier piano: ${msg}. Playing backing audio locally.`);
+          }
+        }
+      };
+
       if (globalOffset >= 0) {
         // Play local backing audio immediately
         await soundRef.current.playAsync();
         
-        if (globalOffset > 0 && isPianoConnected) {
+        if (globalOffset > 0) {
           playbackTimerRef.current = setTimeout(async () => {
-            try {
-              await midiOrchestratorApi.playMidi(selectedJobId);
-            } catch (e) {
-              console.error('Disklavier play failed', e);
-            }
+            await playPianoMidi();
           }, globalOffset);
-        } else if (isPianoConnected) {
-          await midiOrchestratorApi.playMidi(selectedJobId);
+        } else {
+          await playPianoMidi();
         }
       } else {
         // Play disklavier MIDI immediately
-        if (isPianoConnected) {
-          await midiOrchestratorApi.playMidi(selectedJobId);
-        }
+        await playPianoMidi();
         
         // Delay backing audio
         playbackTimerRef.current = setTimeout(async () => {
@@ -364,11 +535,12 @@ export const MidiEditorScreen = () => {
           }
         }, Math.abs(globalOffset));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setIsPlaying(false);
       setSystemBusy(false);
-      Alert.alert('Playback Error', 'Failed to start synchronized playback.');
+      const msg = e.response?.data?.detail || e.message || 'Unknown error';
+      Alert.alert('Playback Error', `Failed to start synchronized playback: ${msg}`);
     }
   };
 
@@ -452,41 +624,57 @@ export const MidiEditorScreen = () => {
       <ScrollView 
         style={[styles.verticalLanesScrollView, { backgroundColor: themeColors.background }]}
         contentContainerStyle={{ flexGrow: 1 }}
+        removeClippedSubviews={true}
       >
         <View style={styles.visualizerContainer}>
           {/* Left Track Names Sidebar */}
           <View style={[styles.sidebar, { borderRightColor: themeColors.border, backgroundColor: themeColors.surface, height: totalHeight }]}>
-            {getLanesData.map((lane: any) => {
-              const isPiano = currentJob?.piano_tracks?.includes(lane.index);
-              const isSpeaker = currentJob?.speaker_tracks?.includes(lane.index);
-              
-              return (
-                <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
-                  <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
-                    {lane.name}
-                  </Text>
-                  <View style={styles.sidebarBadges}>
-                    {isPiano && (
-                      <View style={[styles.badge, { backgroundColor: themeColors.accentLight }]}>
-                        <Ionicons name="musical-notes" size={10} color={themeColors.accent} />
-                        <Text style={[styles.badgeText, { color: themeColors.accent }]}>Piano</Text>
-                      </View>
-                    )}
-                    {isSpeaker && (
-                      <View style={[styles.badge, { backgroundColor: 'rgba(162, 155, 254, 0.2)' }]}>
-                        <Ionicons name="volume-high" size={10} color="#a29bfe" />
-                        <Text style={[styles.badgeText, { color: '#a29bfe' }]}>Speakers</Text>
-                      </View>
-                    )}
-                    {!isPiano && !isSpeaker && (
-                      <View style={[styles.badge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                        <Text style={[styles.badgeText, { color: themeColors.textMuted }]}>Muted</Text>
-                      </View>
-                    )}
-                  </View>
+          {getLanesData.map((lane: any) => {
+            const isPiano = pianoTracks.has(lane.index);
+            const isSpeaker = speakerTracks.has(lane.index);
+            const isMuted = !isPiano && !isSpeaker;
+            
+            return (
+              <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
+                <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
+                  {lane.name}
+                </Text>
+                
+                {/* 3-Way Live Toggle Row */}
+                <View style={styles.allocationRow}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isPiano && { backgroundColor: themeColors.accent }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'piano')}
+                  >
+                    <Ionicons name="musical-notes" size={12} color={isPiano ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isSpeaker && { backgroundColor: '#a29bfe' }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'speakers')}
+                  >
+                    <Ionicons name="volume-high" size={12} color={isSpeaker ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isMuted && { backgroundColor: themeColors.border }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'mute')}
+                  >
+                    <Ionicons name="volume-mute" size={12} color={isMuted ? themeColors.text : themeColors.textMuted} />
+                  </TouchableOpacity>
                 </View>
-              );
-            })}
+              </View>
+            );
+          })}
           </View>
 
           {/* Scrollable Lanes Grid */}
@@ -495,73 +683,18 @@ export const MidiEditorScreen = () => {
             ref={scrollRef}
             showsHorizontalScrollIndicator={true}
             style={[styles.lanesScrollView, { backgroundColor: themeColors.background, height: totalHeight }]}
+            removeClippedSubviews={true}
           >
             <View style={{ width: timelineWidth, height: totalHeight }}>
-            {getLanesData.map((lane: any, laneIdx: number) => {
-              const isPiano = currentJob?.piano_tracks?.includes(lane.index);
-              const isSpeaker = currentJob?.speaker_tracks?.includes(lane.index);
-              const color = getTrackColor(lane.index, isPiano, isSpeaker);
-
-              return (
-                <View 
-                  key={lane.index} 
-                  style={[
-                    styles.laneTimeline, 
-                    { 
-                      height: LANE_HEIGHT, 
-                      top: laneIdx * LANE_HEIGHT, 
-                      borderBottomColor: themeColors.border 
-                    }
-                  ]}
-                >
-                  {/* Grid Lines per second */}
-                  {Array.from({ length: Math.ceil(durationSec / 5) }).map((_, i) => (
-                    <View 
-                      key={i} 
-                      style={[
-                        styles.gridLine, 
-                        { 
-                          left: i * 5 * PIXELS_PER_SECOND, 
-                          borderColor: themeColors.border, 
-                          height: LANE_HEIGHT 
-                        }
-                      ]} 
-                    />
-                  ))}
-
-                  {/* Render Notes */}
-                  {lane.notes.map((note: any, noteIdx: number) => {
-                    const noteWidth = Math.max(2, (note.end - note.start) * PIXELS_PER_SECOND);
-                    const noteLeft = note.start * PIXELS_PER_SECOND;
-                    
-                    // Pitch scaling: higher pitch = closer to top of the lane
-                    const verticalPadding = 8;
-                    const usableLaneHeight = LANE_HEIGHT - (verticalPadding * 2);
-                    const normalizedPitch = (note.pitch - lane.minPitch) / lane.pitchRange;
-                    const noteTop = verticalPadding + (usableLaneHeight * (1 - normalizedPitch));
-
-                    return (
-                      <View
-                        key={noteIdx}
-                        style={[
-                          styles.note,
-                          {
-                            left: noteLeft,
-                            width: noteWidth,
-                            top: noteTop,
-                            height: 4,
-                            backgroundColor: color,
-                            shadowColor: color,
-                            shadowRadius: isPlaying ? 2 : 0,
-                            shadowOpacity: isPlaying ? 0.5 : 0
-                          }
-                        ]}
-                      />
-                    );
-                  })}
-                </View>
-              );
-            })}
+            <NoteGrid
+              lanesData={getLanesData}
+              pianoTracks={pianoTracks}
+              speakerTracks={speakerTracks}
+              themeColors={themeColors}
+              durationSec={durationSec}
+              timelineWidth={timelineWidth}
+              totalHeight={totalHeight}
+            />
 
             {/* Glowing Vertical Playhead */}
             <View 
@@ -581,14 +714,8 @@ export const MidiEditorScreen = () => {
     );
   };
 
-  // Back visualizer handler
-  const handleExitVisualizer = () => {
+  const handleExitWorkspace = () => {
     stopPlayback();
-    setStage('list');
-  };
-
-  // Exit config
-  const handleExitConfig = () => {
     stopPreview();
     setStage('list');
   };
@@ -682,201 +809,32 @@ export const MidiEditorScreen = () => {
         </View>
       )}
 
-      {/* 2. CONFIGURATION STAGE */}
-      {stage === 'config' && currentJob && (
-        <View style={styles.configContainer}>
-          <View style={[styles.configHeader, { borderBottomColor: themeColors.border }]}>
-            <TouchableOpacity onPress={handleExitConfig}>
-              <Ionicons name="arrow-back" size={24} color={themeColors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.configTitle, { color: themeColors.text }]} numberOfLines={1}>
-              Allocate Instruments
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
-
-          <ScrollView contentContainerStyle={{ padding: 15, paddingBottom: 50 }}>
-            <Text style={[styles.sectionSubtitle, { color: themeColors.text }]}>
-              File: {currentJob.filename}
-            </Text>
-
-            {/* List of Tracks */}
-            <Text style={[styles.sectionHeaderTitle, { color: themeColors.textMuted, marginTop: 15 }]}>Tracks Allocation</Text>
-            {currentJob.tracks.map((track: any) => {
-              const isPiano = pianoTracks.has(track.index);
-              const isSpeaker = speakerTracks.has(track.index);
-              const isMute = !isPiano && !isSpeaker;
-
-              return (
-                <View key={track.index} style={[styles.trackCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-                  <View style={styles.trackInfoText}>
-                    <Text style={[styles.trackName, { color: themeColors.text }]}>
-                      {track.name}
-                    </Text>
-                    <Text style={[styles.trackInstrument, { color: themeColors.textMuted }]}>
-                      {track.instrument_name} • {track.note_count} notes
-                    </Text>
-                  </View>
-
-                  <View style={styles.roleToggles}>
-                    {/* Piano Button */}
-                    <TouchableOpacity 
-                      style={[
-                        styles.toggleBtn, 
-                        isPiano && { backgroundColor: themeColors.accentLight, borderColor: themeColors.accent }
-                      ]}
-                      onPress={() => handleTrackRoleToggle(track.index, 'piano')}
-                    >
-                      <Ionicons name="musical-notes" size={16} color={isPiano ? themeColors.accent : themeColors.textMuted} />
-                      <Text style={[styles.toggleText, { color: isPiano ? themeColors.accent : themeColors.textMuted }]}>Piano</Text>
-                    </TouchableOpacity>
-
-                    {/* Speaker Button */}
-                    <TouchableOpacity 
-                      style={[
-                        styles.toggleBtn, 
-                        isSpeaker && { backgroundColor: 'rgba(162, 155, 254, 0.15)', borderColor: '#a29bfe' }
-                      ]}
-                      onPress={() => handleTrackRoleToggle(track.index, 'speakers')}
-                    >
-                      <Ionicons name="volume-high" size={16} color={isSpeaker ? '#a29bfe' : themeColors.textMuted} />
-                      <Text style={[styles.toggleText, { color: isSpeaker ? '#a29bfe' : themeColors.textMuted }]}>Speakers</Text>
-                    </TouchableOpacity>
-
-                    {/* Mute Button */}
-                    <TouchableOpacity 
-                      style={[
-                        styles.toggleBtn, 
-                        isMute && { backgroundColor: themeColors.surfaceSecondary, borderColor: themeColors.border }
-                      ]}
-                      onPress={() => handleTrackRoleToggle(track.index, 'mute')}
-                    >
-                      <Ionicons name="volume-mute" size={16} color={isMute ? themeColors.text : themeColors.textMuted} />
-                      <Text style={[styles.toggleText, { color: isMute ? themeColors.text : themeColors.textMuted }]}>Mute</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-
-            {/* Cleaning Settings */}
-            <Text style={[styles.sectionHeaderTitle, { color: themeColors.textMuted, marginTop: 25 }]}>Piano Clean Settings</Text>
-            
-            <View style={[styles.settingsPanel, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-              {/* Presets */}
-              <Text style={[styles.settingLabel, { color: themeColors.text }]}>Pedal Preset</Text>
-              <View style={styles.presetGroup}>
-                {['light', 'medium', 'full'].map(preset => (
-                  <TouchableOpacity 
-                    key={preset}
-                    style={[
-                      styles.presetBtn, 
-                      { borderColor: themeColors.border },
-                      pedalPreset === preset && { backgroundColor: themeColors.accent, borderColor: themeColors.accent }
-                    ]}
-                    onPress={() => setPedalPreset(preset as any)}
-                  >
-                    <Text style={[styles.presetText, { color: pedalPreset === preset ? '#fff' : themeColors.text }]}>
-                      {preset.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Rhythm Slider */}
-              <View style={styles.sliderRow}>
-                <Text style={[styles.settingLabel, { color: themeColors.text }]}>
-                  Rhythm Velocity Factor ({rhythmFactor.toFixed(2)}x)
-                </Text>
-                <Slider
-                  style={{ width: '100%', height: 40 }}
-                  minimumValue={0.2}
-                  maximumValue={2.0}
-                  value={rhythmFactor}
-                  onValueChange={setRhythmFactor}
-                  minimumTrackTintColor={themeColors.accent}
-                  maximumTrackTintColor={themeColors.border}
-                  thumbTintColor={themeColors.accent}
-                />
-              </View>
-
-              {/* Melody Slider */}
-              <View style={styles.sliderRow}>
-                <Text style={[styles.settingLabel, { color: themeColors.text }]}>
-                  Melody Velocity Factor ({melodyFactor.toFixed(2)}x)
-                </Text>
-                <Slider
-                  style={{ width: '100%', height: 40 }}
-                  minimumValue={0.2}
-                  maximumValue={2.0}
-                  value={melodyFactor}
-                  onValueChange={setMelodyFactor}
-                  minimumTrackTintColor={themeColors.accent}
-                  maximumTrackTintColor={themeColors.border}
-                  thumbTintColor={themeColors.accent}
-                />
-              </View>
-            </View>
-
-            <View style={styles.actionButtonsRow}>
-              <TouchableOpacity 
-                style={[styles.previewBtn, { borderColor: themeColors.accent, borderWidth: 1.5 }]}
-                onPress={handleTogglePreview}
-                disabled={loading || isPreviewLoading}
-              >
-                {isPreviewLoading ? (
-                  <ActivityIndicator color={themeColors.accent} />
-                ) : (
-                  <>
-                    <Ionicons 
-                      name={isPreviewPlaying ? "stop" : "volume-high"} 
-                      size={20} 
-                      color={isPreviewPlaying ? "#ff5252" : themeColors.accent} 
-                      style={{ marginRight: 8 }} 
-                    />
-                    <Text style={[styles.previewBtnText, { color: isPreviewPlaying ? "#ff5252" : themeColors.accent }]}>
-                      {isPreviewPlaying ? "Stop Preview" : "Preview Mix"}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.processBtn, { backgroundColor: themeColors.accent, flex: 1, marginLeft: 12, marginTop: 0 }]}
-                onPress={handleProcess}
-                disabled={loading || isPreviewPlaying}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="color-wand" size={20} color="#fff" style={{ marginRight: 8 }} />
-                    <Text style={styles.processBtnText}>Process & Synthesize</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-
-          </ScrollView>
-        </View>
-      )}
-
-      {/* 3. VISUALIZER & PLAYBACK STAGE */}
+      {/* 2. VISUALIZER & PLAYBACK STAGE */}
       {stage === 'visualizer' && currentJob && (
         <View style={styles.visualizerStage}>
           {/* Header */}
           <View style={[styles.visualizerHeader, { borderBottomColor: themeColors.border, backgroundColor: themeColors.surface }]}>
-            <TouchableOpacity onPress={handleExitVisualizer}>
+            <TouchableOpacity onPress={handleExitWorkspace}>
               <Ionicons name="arrow-back" size={24} color={themeColors.text} />
             </TouchableOpacity>
+            
             <View style={{ flex: 1, marginLeft: 15 }}>
               <Text style={[styles.visualizerFilename, { color: themeColors.text }]} numberOfLines={1}>
                 {currentJob.filename}
               </Text>
               <Text style={[styles.visualizerStateSub, { color: themeColors.textMuted }]}>
-                {isPlaying ? 'Playing synced playback' : 'Playback stopped'}
+                {isPlaying ? 'Playing synced playback' : isPreviewPlaying ? 'Playing preview' : 'Playback stopped'}
               </Text>
             </View>
+
+            {/* Settings Toggle Button */}
+            <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={{ marginRight: 15 }}>
+              <Ionicons 
+                name={showSettings ? "options" : "options-outline"} 
+                size={24} 
+                color={showSettings ? themeColors.accent : themeColors.text} 
+              />
+            </TouchableOpacity>
             
             {/* Sync Delay Controls */}
             <View style={styles.delayControls}>
@@ -901,6 +859,66 @@ export const MidiEditorScreen = () => {
             </View>
           </View>
 
+          {/* Collapsible Settings Panel */}
+          {showSettings && (
+            <View style={[styles.settingsPanel, { backgroundColor: themeColors.surfaceSecondary, borderBottomColor: themeColors.border }]}>
+              {/* Pedal presets */}
+              <View style={styles.settingItemRow}>
+                <Text style={[styles.settingItemLabel, { color: themeColors.text }]}>Pedal Preset</Text>
+                <View style={styles.presetsGroup}>
+                  {['light', 'medium', 'full'].map(preset => (
+                    <TouchableOpacity
+                      key={preset}
+                      style={[
+                        styles.presetBadge,
+                        pedalPreset === preset ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
+                      ]}
+                      onPress={() => setPedalPreset(preset as any)}
+                    >
+                      <Text style={[styles.presetBadgeText, { color: pedalPreset === preset ? '#fff' : themeColors.text }]}>
+                        {preset.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Rhythm Factor */}
+              <View style={styles.settingItemRow}>
+                <Text style={[styles.settingItemLabel, { color: themeColors.text, marginRight: 10 }]}>
+                  Rhythm Velocity ({rhythmFactor.toFixed(2)}x)
+                </Text>
+                <Slider
+                  style={{ flex: 1, height: 40 }}
+                  minimumValue={0.2}
+                  maximumValue={2.0}
+                  value={rhythmFactor}
+                  onValueChange={setRhythmFactor}
+                  minimumTrackTintColor={themeColors.accent}
+                  maximumTrackTintColor={themeColors.border}
+                  thumbTintColor={themeColors.accent}
+                />
+              </View>
+
+              {/* Melody Factor */}
+              <View style={styles.settingItemRow}>
+                <Text style={[styles.settingItemLabel, { color: themeColors.text, marginRight: 10 }]}>
+                  Melody Velocity ({melodyFactor.toFixed(2)}x)
+                </Text>
+                <Slider
+                  style={{ flex: 1, height: 40 }}
+                  minimumValue={0.2}
+                  maximumValue={2.0}
+                  value={melodyFactor}
+                  onValueChange={setMelodyFactor}
+                  minimumTrackTintColor={themeColors.accent}
+                  maximumTrackTintColor={themeColors.border}
+                  thumbTintColor={themeColors.accent}
+                />
+              </View>
+            </View>
+          )}
+
           {/* Timeline Visualizer lanes rendering */}
           {renderVisualizerTimeline()}
 
@@ -909,26 +927,69 @@ export const MidiEditorScreen = () => {
             {/* Time progress */}
             <View style={styles.timeRow}>
               <Text style={{ color: themeColors.text, fontSize: 12 }}>{formatTime(playbackPos)}</Text>
+              <Text style={[styles.modeIndicatorText, { color: (currentJob.status !== 'completed' || hasChanges) ? '#a29bfe' : themeColors.accent }]}>
+                {(currentJob.status !== 'completed' || hasChanges) ? 'Preview Mode' : 'Performance Mode'}
+              </Text>
               <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>{formatTime(playbackDuration)}</Text>
             </View>
 
             {/* Main Buttons */}
             <View style={styles.buttonsRow}>
-              <TouchableOpacity 
-                style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
-                onPress={stopPlayback}
-              >
-                <Ionicons name="square" size={24} color={themeColors.text} />
-              </TouchableOpacity>
+              {(currentJob.status !== 'completed' || hasChanges) ? (
+                // PREVIEW PLAY BUTTON
+                <>
+                  <TouchableOpacity 
+                    style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
+                    onPress={stopPreview}
+                  >
+                    <Ionicons name="square" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.playbackPlayBtn, { backgroundColor: themeColors.accent }]}
-                onPress={isPlaying ? pausePlayback : startPlayback}
-              >
-                <Ionicons name={isPlaying ? "pause" : "play"} size={36} color="#fff" />
-              </TouchableOpacity>
-              
-              <View style={{ width: 48 }} /> {/* spacer */}
+                  <TouchableOpacity 
+                    style={[styles.playbackPlayBtn, { backgroundColor: '#a29bfe' }]}
+                    onPress={handleTogglePreview}
+                    disabled={isPreviewLoading}
+                  >
+                    {isPreviewLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Ionicons name={isPreviewPlaying ? "pause" : "play"} size={36} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.miniProcessBtn, { backgroundColor: themeColors.accent }]}
+                    onPress={handleProcess}
+                    disabled={loading || isPreviewPlaying}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="color-wand" size={16} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={styles.miniProcessBtnText}>Synthesize</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // PERFORMANCE PLAY BUTTON
+                <>
+                  <TouchableOpacity 
+                    style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
+                    onPress={stopPlayback}
+                  >
+                    <Ionicons name="square" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.playbackPlayBtn, { backgroundColor: themeColors.accent }]}
+                    onPress={isPlaying ? pausePlayback : startPlayback}
+                  >
+                    <Ionicons name={isPlaying ? "pause" : "play"} size={36} color="#fff" />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
@@ -1034,131 +1095,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // CONFIGURATION STAGE
-  configContainer: {
-    flex: 1,
-  },
-  configHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-  },
-  configTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    maxWidth: SCREEN_WIDTH * 0.6,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    opacity: 0.8,
-  },
-  sectionHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  trackCard: {
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  trackInfoText: {
-    marginBottom: 8,
-  },
-  trackName: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  trackInstrument: {
-    fontSize: 11,
-  },
-  roleToggles: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  toggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    gap: 4,
-  },
-  toggleText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  settingsPanel: {
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 15,
-  },
-  settingLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  presetGroup: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 15,
-  },
-  presetBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  presetText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sliderRow: {
-    marginBottom: 15,
-  },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  previewBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  previewBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  processBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  processBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  // CONFIGURATION STAGE STYLES REMOVED (CONSOLIDATED INTO WORKSPACE)
 
   // VISUALIZER STAGE
   visualizerStage: {
@@ -1248,6 +1185,68 @@ const styles = StyleSheet.create({
   },
   lanesScrollView: {
     flex: 1,
+  },
+  settingsPanel: {
+    padding: 15,
+    borderBottomWidth: 1,
+  },
+  settingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  settingItemLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  presetsGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  presetBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  presetBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  allocationRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+    gap: 6,
+  },
+  allocToggleBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  miniProcessBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 15,
+  },
+  miniProcessBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modeIndicatorText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   laneTimeline: {
     position: 'absolute',
