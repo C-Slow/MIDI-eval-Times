@@ -1339,6 +1339,7 @@ async def get_midi_orchestrator_preview(
     s_tracks = [int(x) for x in speaker_tracks.split(",") if x.strip()]
     
     try:
+        import pretty_midi
         temp_dir = Path(tempfile.mkdtemp())
         temp_midi = temp_dir / "preview.mid"
         temp_wav = temp_dir / "preview.wav"
