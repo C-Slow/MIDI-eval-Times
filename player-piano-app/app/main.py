@@ -1387,6 +1387,8 @@ async def get_midi_orchestrator_preview(
             
         return FileResponse(str(temp_wav), media_type="audio/wav")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
