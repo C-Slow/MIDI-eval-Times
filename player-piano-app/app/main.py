@@ -39,7 +39,7 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
     master_password = settings.get('password', 'piano')
     
     actual_token = None
-    if authorization and authorization.startswith("Bearer "):
+    if authorization and isinstance(authorization, str) and authorization.startswith("Bearer "):
         actual_token = authorization.split(" ")[1]
     elif token:
         actual_token = token
@@ -1295,8 +1295,8 @@ async def delete_midi_orchestrator_job(job_id: str):
     return {"status": "deleted"}
 
 @app.get("/midi-orchestrator/backing-audio/{job_id}")
-async def get_midi_orchestrator_backing_audio(job_id: str, token: Optional[str] = None):
-    await verify_auth(token=token)
+async def get_midi_orchestrator_backing_audio(job_id: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    await verify_auth(authorization=authorization, token=token)
     if job_id not in midi_orchestrator.status:
         raise HTTPException(status_code=404, detail="Job not found")
     
