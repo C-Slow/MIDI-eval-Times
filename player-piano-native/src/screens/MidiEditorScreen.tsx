@@ -446,52 +446,57 @@ export const MidiEditorScreen = () => {
   const renderVisualizerTimeline = () => {
     const durationSec = playbackDuration / 1000 || currentJob?.tracks[0]?.duration || 180;
     const timelineWidth = durationSec * PIXELS_PER_SECOND;
+    const totalHeight = getLanesData.length * LANE_HEIGHT;
 
     return (
-      <View style={styles.visualizerContainer}>
-        {/* Left Track Names Sidebar */}
-        <View style={[styles.sidebar, { borderRightColor: themeColors.border, backgroundColor: themeColors.surface }]}>
-          {getLanesData.map((lane: any) => {
-            const isPiano = currentJob?.piano_tracks?.includes(lane.index);
-            const isSpeaker = currentJob?.speaker_tracks?.includes(lane.index);
-            
-            return (
-              <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
-                <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
-                  {lane.name}
-                </Text>
-                <View style={styles.sidebarBadges}>
-                  {isPiano && (
-                    <View style={[styles.badge, { backgroundColor: themeColors.accentLight }]}>
-                      <Ionicons name="musical-notes" size={10} color={themeColors.accent} />
-                      <Text style={[styles.badgeText, { color: themeColors.accent }]}>Piano</Text>
-                    </View>
-                  )}
-                  {isSpeaker && (
-                    <View style={[styles.badge, { backgroundColor: 'rgba(162, 155, 254, 0.2)' }]}>
-                      <Ionicons name="volume-high" size={10} color="#a29bfe" />
-                      <Text style={[styles.badgeText, { color: '#a29bfe' }]}>Speakers</Text>
-                    </View>
-                  )}
-                  {!isPiano && !isSpeaker && (
-                    <View style={[styles.badge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                      <Text style={[styles.badgeText, { color: themeColors.textMuted }]}>Muted</Text>
-                    </View>
-                  )}
+      <ScrollView 
+        style={[styles.verticalLanesScrollView, { backgroundColor: themeColors.background }]}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={styles.visualizerContainer}>
+          {/* Left Track Names Sidebar */}
+          <View style={[styles.sidebar, { borderRightColor: themeColors.border, backgroundColor: themeColors.surface, height: totalHeight }]}>
+            {getLanesData.map((lane: any) => {
+              const isPiano = currentJob?.piano_tracks?.includes(lane.index);
+              const isSpeaker = currentJob?.speaker_tracks?.includes(lane.index);
+              
+              return (
+                <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
+                  <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
+                    {lane.name}
+                  </Text>
+                  <View style={styles.sidebarBadges}>
+                    {isPiano && (
+                      <View style={[styles.badge, { backgroundColor: themeColors.accentLight }]}>
+                        <Ionicons name="musical-notes" size={10} color={themeColors.accent} />
+                        <Text style={[styles.badgeText, { color: themeColors.accent }]}>Piano</Text>
+                      </View>
+                    )}
+                    {isSpeaker && (
+                      <View style={[styles.badge, { backgroundColor: 'rgba(162, 155, 254, 0.2)' }]}>
+                        <Ionicons name="volume-high" size={10} color="#a29bfe" />
+                        <Text style={[styles.badgeText, { color: '#a29bfe' }]}>Speakers</Text>
+                      </View>
+                    )}
+                    {!isPiano && !isSpeaker && (
+                      <View style={[styles.badge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                        <Text style={[styles.badgeText, { color: themeColors.textMuted }]}>Muted</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
 
-        {/* Scrollable Lanes Grid */}
-        <ScrollView 
-          horizontal 
-          ref={scrollRef}
-          showsHorizontalScrollIndicator={true}
-          style={[styles.lanesScrollView, { backgroundColor: themeColors.background }]}
-        >
-          <View style={{ width: timelineWidth, height: getLanesData.length * LANE_HEIGHT }}>
+          {/* Scrollable Lanes Grid */}
+          <ScrollView 
+            horizontal 
+            ref={scrollRef}
+            showsHorizontalScrollIndicator={true}
+            style={[styles.lanesScrollView, { backgroundColor: themeColors.background, height: totalHeight }]}
+          >
+            <View style={{ width: timelineWidth, height: totalHeight }}>
             {getLanesData.map((lane: any, laneIdx: number) => {
               const isPiano = currentJob?.piano_tracks?.includes(lane.index);
               const isSpeaker = currentJob?.speaker_tracks?.includes(lane.index);
@@ -564,7 +569,7 @@ export const MidiEditorScreen = () => {
                 styles.playheadLine, 
                 { 
                   left: (playbackPos / 1000) * PIXELS_PER_SECOND, 
-                  height: getLanesData.length * LANE_HEIGHT,
+                  height: totalHeight,
                   backgroundColor: themeColors.accent
                 }
               ]} 
@@ -572,6 +577,7 @@ export const MidiEditorScreen = () => {
           </View>
         </ScrollView>
       </View>
+      </ScrollView>
     );
   };
 
@@ -1236,6 +1242,9 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 8,
     fontWeight: '700',
+  },
+  verticalLanesScrollView: {
+    flex: 1,
   },
   lanesScrollView: {
     flex: 1,
