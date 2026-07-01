@@ -44,6 +44,48 @@ class AudioProcessor:
         except Exception as e:
             print(f"Error saving jobs DB: {e}")
 
+    def cleanup_stale_data_and_jobs(self):
+        """
+        Clean up stale background jobs and files on startup:
+        1. Resets any stuck jobs (queued, separating, transcribing, cleaning) to failed.
+        2. Deletes all files in the uploads directory.
+        3. Deletes any orphaned directories in the separated directory that aren't in the database.
+        """
+        # 1. Reset stale jobs
+        updated = False
+        for job_id, job in list(self.status.items()):
+            if job.get("status") in ["queued", "separating", "transcribing", "cleaning"]:
+                job["status"] = "failed"
+                job["error"] = "Process interrupted by server restart."
+                updated = True
+        if updated:
+            self._save_db()
+            print("Reset stale in-progress jobs to failed.")
+
+        # 2. Clean up uploads directory
+        if self.uploads_dir.exists():
+            import shutil
+            for f in self.uploads_dir.iterdir():
+                try:
+                    if f.is_file():
+                        f.unlink()
+                    elif f.is_dir():
+                        shutil.rmtree(f)
+                except Exception as e:
+                    print(f"Failed to delete stale upload file/dir {f.name}: {e}")
+
+        # 3. Clean up orphaned separated directories
+        if self.separated_dir.exists():
+            import shutil
+            for d in self.separated_dir.iterdir():
+                if d.is_dir():
+                    if d.name not in self.status:
+                        try:
+                            shutil.rmtree(d)
+                            print(f"Cleaned up orphaned separated directory: {d.name}")
+                        except Exception as e:
+                            print(f"Failed to delete orphaned directory {d.name}: {e}")
+
     def _get_demucs(self) -> Separator:
         if self._demucs_separator is None:
             print(f"Loading Demucs 6-Stem Pro Model on {self.device}...")
@@ -91,7 +133,15 @@ class AudioProcessor:
             separator = self._get_demucs()
             
             # Load with librosa to bypass the common ID3/AlbumArt bug
-            wav, _ = librosa.load(str(mp3_path), sr=separator.samplerate, mono=False)
+            try:
+                wav, _ = librosa.load(str(mp3_path), sr=separator.samplerate, mono=False)
+            finally:
+                try:
+                    if mp3_path.exists():
+                        mp3_path.unlink()
+                        print(f"Removed original uploaded file: {mp3_path.name}")
+                except Exception as unlink_e:
+                    print(f"Warning: Failed to delete upload file {mp3_path}: {unlink_e}")
             
             # Robust Trimming
             try:

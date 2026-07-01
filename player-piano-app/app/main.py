@@ -59,20 +59,20 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Automated Backup on Startup
+# Startup Tasks & Cleanup
 @app.on_event("startup")
 async def startup_event():
-    # Run a backup cycle on start
-    try:
-        backup.run_backup_cycle(str(BASE_DIR / 'storage'))
-    except Exception as e:
-        print(f"Startup backup failed: {e}")
-
     # Clean up obsolete render cache files on startup
     try:
         utils.cleanup_render_cache()
     except Exception as e:
         print(f"Startup render cache cleanup failed: {e}")
+
+    # Clean up stale upload/job data on startup
+    try:
+        processor.cleanup_stale_data_and_jobs()
+    except Exception as e:
+        print(f"Startup processor data cleanup failed: {e}")
     
     # Start background thread for daily backups
     import threading

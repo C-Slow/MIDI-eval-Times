@@ -42,7 +42,7 @@ def create_backup(storage_dir: Path, backup_dir: Path):
         print(f"Backup failed: {e}")
         return None
 
-def rotate_backups(backup_dir: Path, max_backups: int = 10):
+def rotate_backups(backup_dir: Path, max_backups: int = 30):
     """
     Deletes oldest backups if more than max_backups exist.
     """
@@ -68,7 +68,7 @@ def rotate_backups(backup_dir: Path, max_backups: int = 10):
     
     return deleted_count
 
-def run_backup_cycle(storage_dir: str, max_backups: int = 10):
+def run_backup_cycle(storage_dir: str, max_backups: int = 30):
     s_path = Path(storage_dir)
     b_path = s_path / 'backups'
     

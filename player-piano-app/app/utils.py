@@ -20,6 +20,8 @@ SOUNDFONT = os.path.join(PROJECT_ROOT, 'storage', 'Salamander.sf2')
 # Prefer environment variable for portability
 FLUIDSYNTH_BIN = os.environ.get('FLUIDSYNTH_BIN', r'C:\fluidsynth\bin\fluidsynth.exe')
 RENDER_CACHE = os.path.join(PROJECT_ROOT, 'storage', 'render_cache')
+STORAGE_RAW = os.path.join(PROJECT_ROOT, 'storage', 'raw')
+STORAGE_PROCESSED = os.path.join(PROJECT_ROOT, 'storage', 'processed')
 
 def render_midi_to_wav(midi_path: str) -> str:
     """Render MIDI to WAV using FluidSynth and the Salamander SoundFont."""
