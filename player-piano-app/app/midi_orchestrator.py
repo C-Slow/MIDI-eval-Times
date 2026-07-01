@@ -241,10 +241,10 @@ class MidiOrchestrator:
             tracks = []
             for i, inst in enumerate(pm.instruments):
                 tracks.append({
-                    "index": i,
+                    "index": int(i),
                     "name": inst.name.strip() or f"Track {i+1}",
-                    "program": inst.program,
-                    "instrument_name": get_instrument_name(inst.program),
+                    "program": int(inst.program),
+                    "instrument_name": get_instrument_name(int(inst.program)),
                     "is_drum": inst.is_drum,
                     "note_count": len(inst.notes),
                     "duration": float(inst.get_end_time()) if inst.notes else 0.0
@@ -275,10 +275,10 @@ class MidiOrchestrator:
                 sorted_notes = sorted(inst.notes, key=lambda n: n.start)
                 for n in sorted_notes:
                     notes.append({
-                        "pitch": n.pitch,
+                        "pitch": int(n.pitch),
                         "start": float(n.start),
                         "end": float(n.end),
-                        "velocity": n.velocity
+                        "velocity": int(n.velocity)
                     })
                 track_notes[str(i)] = notes
             return track_notes
