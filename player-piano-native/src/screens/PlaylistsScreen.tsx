@@ -108,6 +108,22 @@ export const PlaylistsScreen = () => {
     return map;
   }, [files]);
 
+  const flattenedData = useMemo(() => {
+    const result: any[] = [];
+    const sortedPlaylistNames = Object.keys(playlists).sort((a, b) => a.localeCompare(b));
+    sortedPlaylistNames.forEach(name => {
+      const t = playlists[name] || [];
+      const tracks = Array.isArray(t) ? [...t].sort((a, b) => a.localeCompare(b)) : [];
+      result.push({ type: 'header', name, count: tracks.length });
+      if (expanded === name) {
+        tracks.forEach((track, index) => {
+          result.push({ type: 'track', playlistName: name, track, index });
+        });
+      }
+    });
+    return result;
+  }, [playlists, expanded]);
+
   const getDisplayName = (filename: string) => {
     return filename.replace(/\.midi?$/i, '');
   };
@@ -257,26 +273,6 @@ export const PlaylistsScreen = () => {
     }
   };
 
-  const renderTrackItem = (track: string, playlistName: string, index: number) => {
-    // Find metadata for artist
-    const found = [...files.processed, ...files.raw].find(f => f.name === track);
-    const artist = found?.metadata?.artist;
-
-    return (
-      <TrackListItem 
-        key={`${track}-${index}`}
-        track={track}
-        index={index}
-        isSelected={selectedTracks.has(track)}
-        themeColors={themeColors}
-        onPlay={() => selectedTracks.size > 0 ? toggleSelect(track) : play(track)}
-        onSelect={() => toggleSelect(track)}
-        getDisplayName={getDisplayName}
-        artist={artist}
-      />
-    );
-  };
-
   const getPlaylistColor = (name: string) => {
     const colors = [
       '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#E91E63', 
@@ -289,80 +285,96 @@ export const PlaylistsScreen = () => {
     return colors[Math.abs(hash) % colors.length];
   };
 
-  const renderPlaylistItem = ({ item: name }: { item: string }) => {
-    const isExpanded = expanded === name;
-    const t = playlists[name] || [];
-    const tracks = Array.isArray(t) ? [...t].sort((a, b) => a.localeCompare(b)) : [];
-    const isSmart = !!smartRules[name];
+  const renderItem = React.useCallback(({ item }: { item: any }) => {
+    if (item.type === 'header') {
+      const name = item.name;
+      const isExpanded = expanded === name;
+      const isSmart = !!smartRules[name];
+      const count = item.count;
 
-    return (
-      <View style={[styles.playlistContainer, { borderBottomColor: themeColors.border }]}>
-        <View style={[styles.playlistHeaderRow, { backgroundColor: themeColors.background, paddingVertical: 10, paddingHorizontal: 10, gap: 8, alignItems: 'center' }]}>
-          {/* Color Tab */}
-          <View style={{ width: 6, backgroundColor: getPlaylistColor(name), borderRadius: 3, alignSelf: 'stretch' }} />
-          
-          {isSmart && (
+      return (
+        <View style={[styles.playlistContainer, { borderBottomColor: themeColors.border }]}>
+          <View style={[styles.playlistHeaderRow, { backgroundColor: themeColors.background, paddingVertical: 10, paddingHorizontal: 10, gap: 8, alignItems: 'center' }]}>
+            {/* Color Tab */}
+            <View style={{ width: 6, backgroundColor: getPlaylistColor(name), borderRadius: 3, alignSelf: 'stretch' }} />
+            
+            {isSmart && (
+              <TouchableOpacity 
+                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
+                onPress={() => handleRefreshSmart(name)}
+              >
+                <Ionicons name="refresh-outline" size={18} color={themeColors.accent} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity 
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }} 
+              onPress={() => {
+                setExpanded(isExpanded ? null : name);
+                clearSelection();
+              }}
+              onLongPress={() => isSmart && handleEditSmart(name)}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={[styles.playlistName, { color: themeColors.text, fontSize: 16 }]} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  {isSmart && <Ionicons name="sparkles" size={12} color={themeColors.accent} />}
+                </View>
+                <Text style={[styles.trackCount, { color: themeColors.textMuted, fontSize: 11, marginTop: 2 }]}>
+                  {count} tracks
+                </Text>
+              </View>
+              <Ionicons name={isExpanded ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.accent} />
+            </TouchableOpacity>
+            
+            {/* Action Buttons: Play, Shuffle, Delete */}
+            <TouchableOpacity 
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.accent, alignItems: 'center', justifyContent: 'center' }} 
+              onPress={() => handlePlayPlaylist(name)}
+            >
+              <Ionicons name="play" size={18} color="#fff" />
+            </TouchableOpacity>
+            
             <TouchableOpacity 
               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
-              onPress={() => handleRefreshSmart(name)}
+              onPress={() => handlePlayPlaylist(name, true)}
             >
-              <Ionicons name="refresh-outline" size={18} color={themeColors.accent} />
+              <Ionicons name="shuffle" size={18} color={themeColors.text} />
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity 
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }} 
-            onPress={() => {
-              setExpanded(isExpanded ? null : name);
-              clearSelection();
-            }}
-            onLongPress={() => isSmart && handleEditSmart(name)}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={[styles.playlistName, { color: themeColors.text, fontSize: 16 }]} numberOfLines={1}>
-                  {name}
-                </Text>
-                {isSmart && <Ionicons name="sparkles" size={12} color={themeColors.accent} />}
-              </View>
-              <Text style={[styles.trackCount, { color: themeColors.textMuted, fontSize: 11, marginTop: 2 }]}>
-                {Array.isArray(tracks) ? tracks.length : 0} tracks
-              </Text>
-            </View>
-            <Ionicons name={isExpanded ? "chevron-down" : "chevron-forward"} size={18} color={themeColors.accent} />
-          </TouchableOpacity>
-          
-          {/* Action Buttons: Play, Shuffle, Delete */}
-          <TouchableOpacity 
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.accent, alignItems: 'center', justifyContent: 'center' }} 
-            onPress={() => handlePlayPlaylist(name)}
-          >
-            <Ionicons name="play" size={18} color="#fff" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
-            onPress={() => handlePlayPlaylist(name, true)}
-          >
-            <Ionicons name="shuffle" size={18} color={themeColors.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
-            onPress={() => handleDeletePlaylist(name)}
-          >
-            <Ionicons name="trash-outline" size={18} color={themeColors.textMuted} />
-          </TouchableOpacity>
-        </View>
-
-        {isExpanded && (
-          <View style={[styles.expandedContent, { backgroundColor: themeColors.surface }]}>
-            {Array.isArray(tracks) && tracks.map((track, idx) => renderTrackItem(track, name, idx))}
+            
+            <TouchableOpacity 
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: themeColors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }} 
+              onPress={() => handleDeletePlaylist(name)}
+            >
+              <Ionicons name="trash-outline" size={18} color={themeColors.textMuted} />
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
+      );
+    }
+
+    // type === 'track'
+    const { track, playlistName, index } = item;
+    const found = [...files.processed, ...files.raw].find(f => f.name === track);
+    const artist = found?.metadata?.artist;
+
+    return (
+      <View style={{ backgroundColor: themeColors.surface, paddingLeft: 16 }}>
+        <TrackListItem 
+          track={track}
+          index={index}
+          isSelected={selectedTracks.has(track)}
+          themeColors={themeColors}
+          onPlay={() => selectedTracks.size > 0 ? toggleSelect(track) : play(track)}
+          onSelect={() => toggleSelect(track)}
+          getDisplayName={getDisplayName}
+          artist={artist}
+        />
       </View>
     );
-  };
+  }, [expanded, smartRules, themeColors, files, selectedTracks, play, toggleSelect, getDisplayName]);
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -425,9 +437,9 @@ export const PlaylistsScreen = () => {
         <ActivityIndicator size="large" color={themeColors.accent} style={{ marginTop: 50 }} />
       ) : (
         <FlatList
-          data={Object.keys(playlists).sort((a, b) => a.localeCompare(b))}
-          keyExtractor={item => item}
-          renderItem={renderPlaylistItem}
+          data={flattenedData}
+          keyExtractor={(item, index) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}-${index}`}
+          renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, alignItems: 'center' }}>

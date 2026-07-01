@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert, Switch, TextInput, Linking, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Alert, Switch, TextInput, Linking, ScrollView, Platform, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useStore } from '../store/useStore';
@@ -64,10 +64,36 @@ export const SettingsScreen = () => {
   };
 
   useEffect(() => {
-    checkStatus();
+    let interval: any;
+    
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        checkStatus();
+        if (!interval) {
+          interval = setInterval(checkStatus, 5000);
+        }
+      } else {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    // Initial fetch and start interval if active
+    if (AppState.currentState === 'active') {
+      checkStatus();
+      interval = setInterval(checkStatus, 5000);
+    }
+    
     fetchGeminiKey();
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
+
+    return () => {
+      subscription.remove();
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const handleScan = async () => {

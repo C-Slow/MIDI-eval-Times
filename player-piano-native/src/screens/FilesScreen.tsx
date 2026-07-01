@@ -148,7 +148,7 @@ export const FilesScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'artist' | 'rating' | 'created' | 'length'>('name');
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['processed', 'raw']));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['processed']));
   
   const { play } = useAudioPlayer();
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());

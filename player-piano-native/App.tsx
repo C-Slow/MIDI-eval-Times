@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Text, Platform, Image } from 'react-native';
+import { View, StyleSheet, Text, Platform, Image, AppState } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -134,6 +134,17 @@ export default function App() {
   const [showManualSplash, setShowManualSplash] = React.useState(true);
 
   const pollTimer = React.useRef<any>(null);
+  const [appStateVisible, setAppStateVisible] = React.useState(AppState.currentState);
+
+  // AppState Listener
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setAppStateVisible(nextAppState);
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const fetchPianoStatus = React.useCallback(async () => {
     try {
@@ -153,6 +164,26 @@ export default function App() {
     } catch (e) {}
   }, [setPianoPlayback]);
 
+  // Start/stop polling based on app visibility and login state
+  React.useEffect(() => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+
+    if (isLoggedIn && appStateVisible === 'active') {
+      fetchPianoStatus();
+      pollTimer.current = setInterval(fetchPianoStatus, 2000);
+    }
+
+    return () => {
+      if (pollTimer.current) {
+        clearInterval(pollTimer.current);
+        pollTimer.current = null;
+      }
+    };
+  }, [isLoggedIn, appStateVisible, fetchPianoStatus]);
+
   const showRemote = React.useCallback(async () => {
     try {
       await Notifications.scheduleNotificationAsync({
@@ -168,7 +199,7 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  // Main Initialization
+  // Main Initialization (Notifications setup)
   React.useEffect(() => {
     async function prepare() {
       try {
@@ -193,10 +224,6 @@ export default function App() {
             options: { opensAppToForeground: false },
           },
         ]);
-
-        // Start polling
-        fetchPianoStatus();
-        pollTimer.current = setInterval(fetchPianoStatus, 2000);
 
         // Artificial delay for the "Full Splash Experience"
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -226,9 +253,8 @@ export default function App() {
 
     return () => {
       subscription.remove();
-      if (pollTimer.current) clearInterval(pollTimer.current);
     };
-  }, [initialize, fetchPianoStatus, stopAll]);
+  }, [initialize, stopAll]);
 
   // Show remote notification when playing
   React.useEffect(() => {
