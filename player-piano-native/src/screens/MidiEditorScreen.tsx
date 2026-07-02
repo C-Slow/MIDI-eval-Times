@@ -421,29 +421,47 @@ export const MidiEditorScreen = () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['audio/midi', 'audio/x-midi', 'audio/mid', '*/*'],
-        copyToCacheDirectory: true
+        copyToCacheDirectory: true,
+        multiple: true
       });
       if (res.canceled || !res.assets || res.assets.length === 0) return;
 
-      const asset = res.assets[0];
-      if (!asset.name.toLowerCase().endsWith('.mid') && !asset.name.toLowerCase().endsWith('.midi')) {
-        Alert.alert('Invalid File', 'Please choose a standard MIDI (.mid or .midi) file.');
-        return;
-      }
-
       setLoading(true);
       
-      // Read file content as Base64 to guarantee 100% network upload stability on Android
-      const base64Data = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: 'base64'
-      });
+      const uploadedJobs = [];
+      let lastJobId = null;
 
-      const data = await midiOrchestratorApi.uploadBase64(asset.name, base64Data);
+      for (const asset of res.assets) {
+        if (!asset.name.toLowerCase().endsWith('.mid') && !asset.name.toLowerCase().endsWith('.midi')) {
+          continue;
+        }
+
+        try {
+          // Read file content as Base64 to guarantee 100% network upload stability on Android
+          const base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: 'base64'
+          });
+
+          const data = await midiOrchestratorApi.uploadBase64(asset.name, base64Data);
+          uploadedJobs.push(data);
+          lastJobId = data.job_id;
+        } catch (err) {
+          console.error(`Failed to upload ${asset.name}:`, err);
+        }
+      }
+
       await fetchJobs();
-      Alert.alert('Upload Success', 'MIDI track extracted. Select it to configure track allocation.');
-      
-      // Auto-open workspace stage for the newly uploaded job
-      await openUnifiedWorkspace(data.job_id);
+
+      if (uploadedJobs.length === 0) {
+        Alert.alert('Upload Failed', 'No valid MIDI files were successfully uploaded.');
+      } else {
+        if (uploadedJobs.length === 1 && lastJobId) {
+          Alert.alert('Upload Success', 'MIDI track extracted. Opening configuration workspace...');
+          await openUnifiedWorkspace(lastJobId);
+        } else {
+          Alert.alert('Upload Success', `Successfully uploaded ${uploadedJobs.length} MIDI files.`);
+        }
+      }
     } catch (e: any) {
       console.error(e);
       Alert.alert('Upload Failed', e.message || 'Could not upload MIDI file.');
