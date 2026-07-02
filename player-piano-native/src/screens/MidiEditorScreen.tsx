@@ -192,7 +192,19 @@ export const MidiEditorScreen = () => {
   const [detailsMood, setDetailsMood] = useState('');
   const [detailsSource, setDetailsSource] = useState('');
   const [detailsDnu, setDetailsDnu] = useState(false);
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const previewSoundRef = useRef<Audio.Sound | null>(null);
+
+  const toggleSelect = (jobId: string) => {
+    setSelectedJobs(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedJobs(new Set());
 
   const getCleanTitle = (filename: string) => {
     if (!filename) return '';
@@ -408,6 +420,41 @@ export const MidiEditorScreen = () => {
             try {
               setLoading(true);
               await midiOrchestratorApi.deleteJob(jobId);
+              setSelectedJobs(prev => {
+                const next = new Set(prev);
+                next.delete(jobId);
+                return next;
+              });
+              await fetchJobs();
+            } catch (e) {
+              console.error(e);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedJobs.size === 0) return;
+    Alert.alert(
+      'Bulk Delete',
+      `Delete ${selectedJobs.size} MIDI Orchestration jobs?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const list = Array.from(selectedJobs);
+              for (const id of list) {
+                await midiOrchestratorApi.deleteJob(id);
+              }
+              setSelectedJobs(new Set());
               await fetchJobs();
             } catch (e) {
               console.error(e);
@@ -468,7 +515,8 @@ export const MidiEditorScreen = () => {
       setSystemBusy(true);
       const meta = await midiOrchestratorApi.getMetadata(job.job_id);
       setContextJob(job);
-      setDetailsTitle(meta.filename || job.filename || '');
+      const displayTitle = getCleanTitle(meta.filename || job.filename || '');
+      setDetailsTitle(displayTitle);
       setDetailsArtist(meta.artist || job.artist || '');
       setDetailsComments(meta.comments || job.comments || '');
       setDetailsRating(meta.rating || job.rating || 0);
@@ -491,10 +539,12 @@ export const MidiEditorScreen = () => {
       setSystemBusy(true);
       setDetailsVisible(false);
 
-      const oldTitle = contextJob.filename || '';
+      const oldTitle = getCleanTitle(contextJob.filename || '');
       const newTitle = detailsTitle.trim();
       if (newTitle && newTitle !== oldTitle) {
-        await midiOrchestratorApi.rename(contextJob.job_id, newTitle);
+        const originalExt = (contextJob.filename || '').split('.').pop() || 'mid';
+        const finalName = newTitle.endsWith('.' + originalExt) ? newTitle : `${newTitle}.${originalExt}`;
+        await midiOrchestratorApi.rename(contextJob.job_id, finalName);
       }
 
       await midiOrchestratorApi.updateMetadata(contextJob.job_id, {
@@ -875,6 +925,62 @@ export const MidiEditorScreen = () => {
       {/* 1. LIST STAGE */}
       {stage === 'list' && (
         <View style={styles.listContainer}>
+          {/* Action Bar for multi-select */}
+          {selectedJobs.size > 0 && (
+            <View style={[styles.actionBar, { backgroundColor: themeColors.accent }]}>
+              <TouchableOpacity style={styles.actionCount} onPress={clearSelection}>
+                <Ionicons name="close-circle" size={24} color="#fff" />
+                <Text style={styles.actionCountText}>{selectedJobs.size}</Text>
+              </TouchableOpacity>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionButtons}>
+                {selectedJobs.size === 1 && (
+                  <>
+                    <TouchableOpacity style={styles.barBtn} onPress={() => {
+                      const jobId = Array.from(selectedJobs)[0];
+                      const job = jobs.find(j => j.job_id === jobId);
+                      if (job) {
+                        clearSelection();
+                        handleJobSelect(job);
+                      }
+                    }}>
+                      <Ionicons name="create-outline" size={20} color="#fff" />
+                      <Text style={styles.barBtnText}>Workspace</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.barBtn} onPress={() => {
+                      const jobId = Array.from(selectedJobs)[0];
+                      const job = jobs.find(j => j.job_id === jobId);
+                      if (job) {
+                        clearSelection();
+                        handleOpenReclean(job);
+                      }
+                    }}>
+                      <Ionicons name="sparkles-outline" size={20} color="#fff" />
+                      <Text style={styles.barBtnText}>Re-clean</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.barBtn} onPress={() => {
+                      const jobId = Array.from(selectedJobs)[0];
+                      const job = jobs.find(j => j.job_id === jobId);
+                      if (job) {
+                        clearSelection();
+                        handleOpenDetails(job);
+                      }
+                    }}>
+                      <Ionicons name="information-circle-outline" size={20} color="#fff" />
+                      <Text style={styles.barBtnText}>Details</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <TouchableOpacity style={styles.barBtn} onPress={handleBulkDelete}>
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                  <Text style={[styles.barBtnText, { color: '#fff' }]}>Delete</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          )}
+
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { color: themeColors.text }]}>MIDI Orchestrator</Text>
             <TouchableOpacity 
@@ -894,97 +1000,118 @@ export const MidiEditorScreen = () => {
               data={jobs}
               keyExtractor={item => item.job_id}
               contentContainerStyle={{ padding: 15 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={[styles.jobCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
-                  onPress={() => handleJobSelect(item)}
-                  onLongPress={() => handleOpenContextActions(item)}
-                >
-                  <View style={styles.jobInfo}>
-                    {/* Row 1: Title & Playlist tags */}
-                    <View style={styles.titleRow}>
-                      <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
-                        {getCleanTitle(item.filename)}
-                      </Text>
-                      {/* Playlists / tags future display */}
-                      <View style={{ flexDirection: 'row', gap: 4 }}>
-                        {item.playlists?.map((pl: string) => (
-                          <View key={pl} style={[styles.cleanBadge, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                            <Text style={[styles.cleanBadgeText, { color: '#4CAF50' }]}>{pl.toUpperCase()}</Text>
-                          </View>
-                        ))}
-                      </View>
+              extraData={selectedJobs}
+              renderItem={({ item }) => {
+                const isSelected = selectedJobs.has(item.job_id);
+                return (
+                  <TouchableOpacity 
+                    style={[
+                      styles.jobCard, 
+                      isSelected && { backgroundColor: themeColors.accentLight }, 
+                      { backgroundColor: themeColors.surface, borderColor: themeColors.border }
+                    ]}
+                    onPress={() => {
+                      if (selectedJobs.size > 0) {
+                        toggleSelect(item.job_id);
+                      } else {
+                        handleJobSelect(item);
+                      }
+                    }}
+                    onLongPress={() => toggleSelect(item.job_id)}
+                  >
+                    <View style={styles.selectionIndicator}>
+                      <Ionicons 
+                        name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
+                        size={22} 
+                        color={isSelected ? themeColors.accent : themeColors.textMuted} 
+                      />
                     </View>
 
-                    {/* Row 2: Artist */}
-                    <Text style={{ fontSize: 12, color: item.artist ? themeColors.accent : themeColors.textMuted, fontWeight: '600', marginTop: 1, marginBottom: 4 }} numberOfLines={1}>
-                      {item.artist || 'Unknown Artist'}
-                    </Text>
-
-                    {/* Row 3: Length, Date, dynamic velocity/pedal settings, and rating stars */}
-                    <View style={styles.metaRow}>
-                      <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
-                        {getSongLength(item) ? `${getSongLength(item)} • ` : ''}
-                        {new Date(item.timestamp * 1000).toLocaleDateString()}
-                      </Text>
-
-                      {item.status === 'completed' && (
-                        <>
-                          {item.melody_factor !== undefined && (
-                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>M:{Math.round(item.melody_factor * 100)}%</Text>
-                            </View>
-                          )}
-                          {item.rhythm_factor !== undefined && (
-                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>R:{Math.round(item.rhythm_factor * 100)}%</Text>
-                            </View>
-                          )}
-                          {item.pedal_preset && (
-                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>P:{item.pedal_preset.charAt(0).toUpperCase()}</Text>
-                            </View>
-                          )}
-                        </>
-                      )}
-
-                      {/* Stars */}
-                      {renderStars(item.rating)}
-
-                      {/* DNU Badge */}
-                      {item.dnu && (
-                        <View style={[styles.statBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
-                          <Text style={[styles.statBadgeText, { color: '#e74c3c' }]}>DNU</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Progress details */}
-                    {(item.status === 'processing' || item.status === 'synthesizing') && (
-                      <View style={styles.progressContainer}>
-                        <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
-                          <View style={[styles.progressBarFill, { width: `${item.progress}%`, backgroundColor: themeColors.accent }]} />
-                        </View>
-                        <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
-                          {item.status === 'synthesizing' ? 'Rendering Strings...' : `Processing ${item.progress}%`}
+                    <View style={styles.jobInfo}>
+                      {/* Row 1: Title & Playlist tags */}
+                      <View style={styles.titleRow}>
+                        <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
+                          {getCleanTitle(item.filename)}
                         </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {item.playlists?.map((pl: string) => (
+                            <View key={pl} style={[styles.cleanBadge, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                              <Text style={[styles.cleanBadgeText, { color: '#4CAF50' }]}>{pl.toUpperCase()}</Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
-                    )}
 
-                    {/* Failed Badge */}
-                    {item.status === 'failed' && (
-                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)', marginTop: 5 }]}>
-                        <Ionicons name="alert-circle" size={12} color="#e74c3c" />
-                        <Text style={[styles.statusText, { color: '#e74c3c' }]}>Failed: {item.error}</Text>
+                      {/* Row 2: Artist */}
+                      <Text style={{ fontSize: 12, color: item.artist ? themeColors.accent : themeColors.textMuted, fontWeight: '600', marginTop: 1, marginBottom: 4 }} numberOfLines={1}>
+                        {item.artist || 'Unknown Artist'}
+                      </Text>
+
+                      {/* Row 3: Length, Date, dynamic velocity/pedal settings, and rating stars */}
+                      <View style={styles.metaRow}>
+                        <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
+                          {getSongLength(item) ? `${getSongLength(item)} • ` : ''}
+                          {new Date(item.timestamp * 1000).toLocaleDateString()}
+                        </Text>
+
+                        {item.status === 'completed' && (
+                          <>
+                            {item.melody_factor !== undefined && (
+                              <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                                <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>M:{Math.round(item.melody_factor * 100)}%</Text>
+                              </View>
+                            )}
+                            {item.rhythm_factor !== undefined && (
+                              <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                                <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>R:{Math.round(item.rhythm_factor * 100)}%</Text>
+                              </View>
+                            )}
+                            {item.pedal_preset && (
+                              <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                                <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>P:{item.pedal_preset.charAt(0).toUpperCase()}</Text>
+                              </View>
+                            )}
+                          </>
+                        )}
+
+                        {/* Stars */}
+                        {renderStars(item.rating)}
+
+                        {/* DNU Badge */}
+                        {item.dnu && (
+                          <View style={[styles.statBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
+                            <Text style={[styles.statBadgeText, { color: '#e74c3c' }]}>DNU</Text>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
 
-                  <View style={styles.cardActions}>
-                    <Ionicons name="chevron-forward" size={20} color={themeColors.accent} />
-                  </View>
-                </TouchableOpacity>
-              )}
+                      {/* Progress details */}
+                      {(item.status === 'processing' || item.status === 'synthesizing') && (
+                        <View style={styles.progressContainer}>
+                          <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
+                            <View style={[styles.progressBarFill, { width: `${item.progress}%`, backgroundColor: themeColors.accent }]} />
+                          </View>
+                          <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
+                            {item.status === 'synthesizing' ? 'Rendering Strings...' : `Processing ${item.progress}%`}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Failed Badge */}
+                      {item.status === 'failed' && (
+                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)', marginTop: 5 }]}>
+                          <Ionicons name="alert-circle" size={12} color="#e74c3c" />
+                          <Text style={[styles.statusText, { color: '#e74c3c' }]}>Failed: {item.error}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.cardActions}>
+                      <Ionicons name="chevron-forward" size={20} color={themeColors.accent} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', marginTop: 80 }}>
                   <Ionicons name="musical-notes-outline" size={60} color={themeColors.textMuted} style={{ marginBottom: 15 }} />
@@ -1573,7 +1700,8 @@ const styles = StyleSheet.create({
   },
   jobCard: {
     flexDirection: 'row',
-    padding: 15,
+    padding: 8,
+    paddingHorizontal: 15,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
@@ -1583,13 +1711,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   jobFilename: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     marginBottom: 4,
   },
   jobMeta: {
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 11,
   },
   progressContainer: {
     marginTop: 5,
@@ -2061,5 +2188,49 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     minHeight: 80,
+  },
+  actionBar: { 
+    flexDirection: 'row', 
+    padding: 10, 
+    alignItems: 'center', 
+    position: 'absolute', 
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    zIndex: 100, 
+    elevation: 10, 
+    height: 75, 
+    paddingTop: Platform.OS === 'ios' ? 30 : 10 
+  },
+  actionCount: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 15, 
+    borderRightWidth: 1, 
+    borderRightColor: 'rgba(255,255,255,0.2)' 
+  },
+  actionCountText: { 
+    color: '#fff', 
+    fontWeight: '700', 
+    marginLeft: 5 
+  },
+  actionButtons: { 
+    paddingHorizontal: 10, 
+    gap: 20, 
+    alignItems: 'center',
+    flexDirection: 'row'
+  },
+  barBtn: { 
+    alignItems: 'center', 
+    minWidth: 50 
+  },
+  barBtnText: { 
+    fontSize: 10, 
+    color: '#fff', 
+    fontWeight: '600', 
+    marginTop: 2 
+  },
+  selectionIndicator: { 
+    marginRight: 12 
   }
 });
