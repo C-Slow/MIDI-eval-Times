@@ -1259,6 +1259,7 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
         if api_key:
             temp_midi_path = midi_orchestrator.uploads_dir / f"{job_id}.mid"
             midi_info = gemini.extract_midi_info(str(temp_midi_path))
+            midi_info["filename"] = file.filename  # Override UUID with original filename so Gemini can identify it!
             gemini_data = await gemini.GeminiService(api_key).analyze_midi(midi_info)
             clean_suggested = gemini_data.get('suggested_clean', {})
             profile = clean_suggested.get('profile', 'light')
@@ -1268,6 +1269,7 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
             artist = gemini_data.get('artist', '')
             genre = gemini_data.get('genre', '')
             mood = gemini_data.get('mood', '')
+            source = gemini_data.get('source', '')
             clean_title = gemini_data.get('clean_title', '')
             
             # If AI returned a clean title, use it to update the displayed filename
@@ -1283,7 +1285,8 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
                 "melody_factor": melody,
                 "artist": artist,
                 "genre": genre,
-                "mood": mood
+                "mood": mood,
+                "source": source
             })
             midi_orchestrator._save_db()
             print(f"MIDI Orchestrator AI clean settings & metadata applied for {job_id}: Title={updated_filename}, Profile={profile}, Rhythm={rhythm}, Melody={melody}")
@@ -1322,6 +1325,8 @@ class MidiOrchestratorMetadataUpdate(BaseModel):
     rating: Optional[int] = None
     genre: Optional[str] = None
     mood: Optional[str] = None
+    source: Optional[str] = None
+    dnu: Optional[bool] = None
     playlists: Optional[List[str]] = None
 
 @app.get("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
@@ -1336,6 +1341,8 @@ async def get_midi_orchestrator_metadata(job_id: str):
         "rating": job.get("rating", 0),
         "genre": job.get("genre", ""),
         "mood": job.get("mood", ""),
+        "source": job.get("source", ""),
+        "dnu": job.get("dnu", False),
         "playlists": job.get("playlists", [])
     }
 
@@ -1350,6 +1357,8 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     if req.rating is not None: updates["rating"] = req.rating
     if req.genre is not None: updates["genre"] = req.genre
     if req.mood is not None: updates["mood"] = req.mood
+    if req.source is not None: updates["source"] = req.source
+    if req.dnu is not None: updates["dnu"] = req.dnu
     if req.playlists is not None: updates["playlists"] = req.playlists
     
     midi_orchestrator.status[job_id].update(updates)

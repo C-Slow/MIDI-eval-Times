@@ -226,6 +226,8 @@ class MidiOrchestrator:
             "artist": "",
             "genre": "",
             "mood": "",
+            "source": "",
+            "dnu": False,
             "rating": 0,
             "playlists": [],
             "rhythm_factor": 1.0,
