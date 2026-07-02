@@ -1029,7 +1029,7 @@ export const MidiEditorScreen = () => {
             </View>
           )}
 
-          <View style={[styles.header, { borderBottomColor: themeColors.border, borderBottomWidth: 1, paddingBottom: 15, paddingTop: 10 }]}>
+          <View style={[styles.header, { borderBottomColor: themeColors.border, borderBottomWidth: 1, paddingBottom: 15, paddingTop: 10, flexDirection: 'column', alignItems: 'stretch' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <TextInput 
                 style={[styles.searchBar, { flex: 1, backgroundColor: themeColors.surface, color: themeColors.text, marginBottom: 0 }]} 
