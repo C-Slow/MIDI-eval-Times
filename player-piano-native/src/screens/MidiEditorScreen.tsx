@@ -19,6 +19,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
 import { midiOrchestratorApi, pianoApi } from '../services/api';
@@ -431,7 +432,13 @@ export const MidiEditorScreen = () => {
       }
 
       setLoading(true);
-      const data = await midiOrchestratorApi.upload(asset.uri, asset.name);
+      
+      // Read file content as Base64 to guarantee 100% network upload stability on Android
+      const base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: 'base64'
+      });
+
+      const data = await midiOrchestratorApi.uploadBase64(asset.name, base64Data);
       await fetchJobs();
       Alert.alert('Upload Success', 'MIDI track extracted. Select it to configure track allocation.');
       

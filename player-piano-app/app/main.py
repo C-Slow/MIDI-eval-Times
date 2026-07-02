@@ -1244,6 +1244,66 @@ class ProcessMidiRequest(BaseModel):
     rhythm_factor: Optional[float] = 1.0
     melody_factor: Optional[float] = 1.0
 
+class Base64MidiUploadRequest(BaseModel):
+    filename: str
+    data: str
+
+@app.post("/midi-orchestrator/upload_base64", dependencies=[Depends(verify_auth)])
+async def upload_midi_orchestrator_base64(req: Base64MidiUploadRequest):
+    import base64
+    if not req.filename.endswith(('.mid', '.midi')):
+        raise HTTPException(status_code=400, detail="Only .mid or .midi files are accepted.")
+    
+    try:
+        contents = base64.b64decode(req.data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid base64 encoding.")
+        
+    job_id = midi_orchestrator.upload_midi(contents, req.filename)
+    
+    # Run Gemini AI Analysis for auto-cleaning suggestion and metadata
+    try:
+        settings = get_settings_data()
+        api_key = settings.get('gemini_api_key')
+        if api_key:
+            temp_midi_path = midi_orchestrator.uploads_dir / f"{job_id}.mid"
+            midi_info = gemini.extract_midi_info(str(temp_midi_path))
+            midi_info["filename"] = req.filename  # Override UUID with original filename so Gemini can identify it!
+            gemini_data = await gemini.GeminiService(api_key).analyze_midi(midi_info)
+            clean_suggested = gemini_data.get('suggested_clean', {})
+            profile = clean_suggested.get('profile', 'light')
+            rhythm = clean_suggested.get('rhythm_factor', 1.0)
+            melody = clean_suggested.get('melody_factor', 1.0)
+            
+            artist = gemini_data.get('artist', '')
+            genre = gemini_data.get('genre', '')
+            mood = gemini_data.get('mood', '')
+            source = gemini_data.get('source', '')
+            clean_title = gemini_data.get('clean_title', '')
+            
+            # If AI returned a clean title, use it to update the displayed filename
+            updated_filename = req.filename
+            if clean_title:
+                _, ext = os.path.splitext(req.filename)
+                updated_filename = f"{clean_title}{ext}"
+            
+            midi_orchestrator.status[job_id].update({
+                "filename": updated_filename,
+                "pedal_preset": profile,
+                "rhythm_factor": rhythm,
+                "melody_factor": melody,
+                "artist": artist,
+                "genre": genre,
+                "mood": mood,
+                "source": source
+            })
+            midi_orchestrator._save_db()
+            print(f"MIDI Orchestrator AI clean settings & metadata applied for {job_id}: Title={updated_filename}, Profile={profile}, Rhythm={rhythm}, Melody={melody}")
+    except Exception as e:
+        print(f"MIDI Orchestrator AI clean settings extraction failed: {e}")
+        
+    return {"job_id": job_id, "tracks": midi_orchestrator.status[job_id]["tracks"]}
+
 @app.post("/midi-orchestrator/upload", dependencies=[Depends(verify_auth)])
 async def upload_midi_orchestrator(file: UploadFile = File(...)):
     if not file.filename.endswith(('.mid', '.midi')):

@@ -296,6 +296,13 @@ export const midiOrchestratorApi = {
     });
     return res.data;
   },
+  uploadBase64: async (filename: string, base64Data: string) => {
+    const res = await api.post('/midi-orchestrator/upload_base64', {
+      filename,
+      data: base64Data
+    });
+    return res.data;
+  },
   getNotes: async (jobId: string) => {
     const res = await api.get(`/midi-orchestrator/notes/${jobId}`);
     return res.data;
