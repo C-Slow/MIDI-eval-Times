@@ -1251,6 +1251,30 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
     
     contents = await file.read()
     job_id = midi_orchestrator.upload_midi(contents, file.filename)
+    
+    # Run Gemini AI Analysis for auto-cleaning suggestion
+    try:
+        settings = get_settings_data()
+        api_key = settings.get('gemini_api_key')
+        if api_key:
+            temp_midi_path = midi_orchestrator.uploads_dir / f"{job_id}.mid"
+            midi_info = gemini.extract_midi_info(str(temp_midi_path))
+            gemini_data = await gemini.GeminiService(api_key).analyze_midi(midi_info)
+            clean_suggested = gemini_data.get('suggested_clean', {})
+            profile = clean_suggested.get('profile', 'light')
+            rhythm = clean_suggested.get('rhythm_factor', 1.0)
+            melody = clean_suggested.get('melody_factor', 1.0)
+            
+            midi_orchestrator.status[job_id].update({
+                "pedal_preset": profile,
+                "rhythm_factor": rhythm,
+                "melody_factor": melody
+            })
+            midi_orchestrator._save_db()
+            print(f"MIDI Orchestrator AI clean settings applied: Profile={profile}, Rhythm={rhythm}, Melody={melody}")
+    except Exception as e:
+        print(f"MIDI Orchestrator AI clean settings extraction failed: {e}")
+        
     return {"job_id": job_id, "tracks": midi_orchestrator.status[job_id]["tracks"]}
 
 @app.get("/midi-orchestrator/notes/{job_id}", dependencies=[Depends(verify_auth)])

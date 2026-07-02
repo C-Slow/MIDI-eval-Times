@@ -310,14 +310,16 @@ class MidiOrchestrator:
             job_dir = self.jobs_dir / job_id
             job_dir.mkdir(parents=True, exist_ok=True)
             
+            original_midi = job_dir / "original.mid"
             src_midi = self.uploads_dir / f"{job_id}.mid"
-            if not src_midi.exists():
-                raise FileNotFoundError("Uploaded original MIDI not found.")
-                
-            # Copy original to job folder
-            shutil.copy(src_midi, job_dir / "original.mid")
             
-            pm = pretty_midi.PrettyMIDI(str(src_midi))
+            if src_midi.exists():
+                # First run: copy uploaded file to original.mid
+                shutil.copy(src_midi, original_midi)
+            elif not original_midi.exists():
+                raise FileNotFoundError("Original MIDI file not found.")
+                
+            pm = pretty_midi.PrettyMIDI(str(original_midi))
             
             # Find global min_start time across all chosen tracks (to shift silence together)
             all_selected_insts = [pm.instruments[i] for i in (piano_tracks + speaker_tracks) if i < len(pm.instruments)]
