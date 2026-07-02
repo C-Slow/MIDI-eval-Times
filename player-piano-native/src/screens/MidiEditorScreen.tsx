@@ -885,36 +885,54 @@ export const MidiEditorScreen = () => {
 
               {/* Rhythm Factor */}
               <View style={styles.settingItemRow}>
-                <Text style={[styles.settingItemLabel, { color: themeColors.text, marginRight: 10 }]}>
+                <Text style={[styles.settingItemLabel, { color: themeColors.text }]}>
                   Rhythm Velocity ({rhythmFactor.toFixed(2)}x)
                 </Text>
-                <Slider
-                  style={{ flex: 1, height: 40 }}
-                  minimumValue={0.2}
-                  maximumValue={2.0}
-                  value={rhythmFactor}
-                  onValueChange={setRhythmFactor}
-                  minimumTrackTintColor={themeColors.accent}
-                  maximumTrackTintColor={themeColors.border}
-                  thumbTintColor={themeColors.accent}
-                />
+                <View style={styles.stepButtonsContainer}>
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setRhythmFactor(prev => Math.max(0.2, Number((prev - 0.05).toFixed(2))))}
+                  >
+                    <Ionicons name="remove" size={16} color={themeColors.text} />
+                  </TouchableOpacity>
+                  
+                  <Text style={[styles.stepValueText, { color: themeColors.text }]}>
+                    {rhythmFactor.toFixed(2)}x
+                  </Text>
+                  
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setRhythmFactor(prev => Math.min(2.0, Number((prev + 0.05).toFixed(2))))}
+                  >
+                    <Ionicons name="add" size={16} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Melody Factor */}
               <View style={styles.settingItemRow}>
-                <Text style={[styles.settingItemLabel, { color: themeColors.text, marginRight: 10 }]}>
+                <Text style={[styles.settingItemLabel, { color: themeColors.text }]}>
                   Melody Velocity ({melodyFactor.toFixed(2)}x)
                 </Text>
-                <Slider
-                  style={{ flex: 1, height: 40 }}
-                  minimumValue={0.2}
-                  maximumValue={2.0}
-                  value={melodyFactor}
-                  onValueChange={setMelodyFactor}
-                  minimumTrackTintColor={themeColors.accent}
-                  maximumTrackTintColor={themeColors.border}
-                  thumbTintColor={themeColors.accent}
-                />
+                <View style={styles.stepButtonsContainer}>
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setMelodyFactor(prev => Math.max(0.2, Number((prev - 0.05).toFixed(2))))}
+                  >
+                    <Ionicons name="remove" size={16} color={themeColors.text} />
+                  </TouchableOpacity>
+                  
+                  <Text style={[styles.stepValueText, { color: themeColors.text }]}>
+                    {melodyFactor.toFixed(2)}x
+                  </Text>
+                  
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, { backgroundColor: themeColors.surface }]}
+                    onPress={() => setMelodyFactor(prev => Math.min(2.0, Number((prev + 0.05).toFixed(2))))}
+                  >
+                    <Ionicons name="add" size={16} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
@@ -1311,5 +1329,25 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  stepButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  stepValueText: {
+    fontSize: 14,
+    fontWeight: '700',
+    minWidth: 45,
+    textAlign: 'center',
   }
 });
