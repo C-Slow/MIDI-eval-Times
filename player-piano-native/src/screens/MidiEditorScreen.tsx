@@ -999,7 +999,7 @@ export const MidiEditorScreen = () => {
             <FlatList
               data={jobs}
               keyExtractor={item => item.job_id}
-              contentContainerStyle={{ padding: 15 }}
+              contentContainerStyle={{ paddingBottom: 100 }}
               extraData={selectedJobs}
               renderItem={({ item }) => {
                 const isSelected = selectedJobs.has(item.job_id);
@@ -1008,7 +1008,7 @@ export const MidiEditorScreen = () => {
                     style={[
                       styles.jobCard, 
                       isSelected && { backgroundColor: themeColors.accentLight }, 
-                      { backgroundColor: themeColors.surface, borderColor: themeColors.border }
+                      { borderBottomColor: themeColors.border }
                     ]}
                     onPress={() => {
                       if (selectedJobs.size > 0) {
@@ -1702,9 +1702,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 8,
     paddingHorizontal: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 10,
+    borderBottomWidth: 1,
     alignItems: 'center',
   },
   jobInfo: {
