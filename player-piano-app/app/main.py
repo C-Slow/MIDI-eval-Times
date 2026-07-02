@@ -1252,7 +1252,7 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
     contents = await file.read()
     job_id = midi_orchestrator.upload_midi(contents, file.filename)
     
-    # Run Gemini AI Analysis for auto-cleaning suggestion
+    # Run Gemini AI Analysis for auto-cleaning suggestion and metadata
     try:
         settings = get_settings_data()
         api_key = settings.get('gemini_api_key')
@@ -1265,13 +1265,28 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
             rhythm = clean_suggested.get('rhythm_factor', 1.0)
             melody = clean_suggested.get('melody_factor', 1.0)
             
+            artist = gemini_data.get('artist', '')
+            genre = gemini_data.get('genre', '')
+            mood = gemini_data.get('mood', '')
+            clean_title = gemini_data.get('clean_title', '')
+            
+            # If AI returned a clean title, use it to update the displayed filename
+            updated_filename = file.filename
+            if clean_title:
+                _, ext = os.path.splitext(file.filename)
+                updated_filename = f"{clean_title}{ext}"
+            
             midi_orchestrator.status[job_id].update({
+                "filename": updated_filename,
                 "pedal_preset": profile,
                 "rhythm_factor": rhythm,
-                "melody_factor": melody
+                "melody_factor": melody,
+                "artist": artist,
+                "genre": genre,
+                "mood": mood
             })
             midi_orchestrator._save_db()
-            print(f"MIDI Orchestrator AI clean settings applied: Profile={profile}, Rhythm={rhythm}, Melody={melody}")
+            print(f"MIDI Orchestrator AI clean settings & metadata applied for {job_id}: Title={updated_filename}, Profile={profile}, Rhythm={rhythm}, Melody={melody}")
     except Exception as e:
         print(f"MIDI Orchestrator AI clean settings extraction failed: {e}")
         
@@ -1300,6 +1315,62 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class MidiOrchestratorMetadataUpdate(BaseModel):
+    artist: Optional[str] = None
+    comments: Optional[str] = None
+    rating: Optional[int] = None
+    genre: Optional[str] = None
+    mood: Optional[str] = None
+    playlists: Optional[List[str]] = None
+
+@app.get("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
+async def get_midi_orchestrator_metadata(job_id: str):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = midi_orchestrator.status[job_id]
+    return {
+        "filename": job.get("filename", ""),
+        "artist": job.get("artist", ""),
+        "comments": job.get("comments", ""),
+        "rating": job.get("rating", 0),
+        "genre": job.get("genre", ""),
+        "mood": job.get("mood", ""),
+        "playlists": job.get("playlists", [])
+    }
+
+@app.post("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
+async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMetadataUpdate):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    updates = {}
+    if req.artist is not None: updates["artist"] = req.artist
+    if req.comments is not None: updates["comments"] = req.comments
+    if req.rating is not None: updates["rating"] = req.rating
+    if req.genre is not None: updates["genre"] = req.genre
+    if req.mood is not None: updates["mood"] = req.mood
+    if req.playlists is not None: updates["playlists"] = req.playlists
+    
+    midi_orchestrator.status[job_id].update(updates)
+    midi_orchestrator._save_db()
+    return {"status": "success", "metadata": midi_orchestrator.status[job_id]}
+
+class MidiOrchestratorRenameRequest(BaseModel):
+    new_filename: str
+
+@app.post("/midi-orchestrator/rename/{job_id}", dependencies=[Depends(verify_auth)])
+async def rename_midi_orchestrator(job_id: str, req: MidiOrchestratorRenameRequest):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    new_name = req.new_filename.strip()
+    if not new_name.lower().endswith(('.mid', '.midi')):
+        new_name += ".mid"
+        
+    midi_orchestrator.status[job_id]["filename"] = new_name
+    midi_orchestrator._save_db()
+    return {"status": "success", "filename": new_name}
 
 @app.get("/midi-orchestrator/jobs", dependencies=[Depends(verify_auth)])
 async def list_midi_orchestrator_jobs():
