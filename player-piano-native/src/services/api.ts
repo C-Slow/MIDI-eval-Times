@@ -335,6 +335,18 @@ export const midiOrchestratorApi = {
   playMidi: async (jobId: string) => {
     const res = await api.post(`/midi-orchestrator/play/${jobId}`);
     return res.data;
+  },
+  getMetadata: async (jobId: string) => {
+    const res = await api.get(`/midi-orchestrator/metadata/${jobId}`);
+    return res.data;
+  },
+  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; playlists?: string[] }) => {
+    const res = await api.post(`/midi-orchestrator/metadata/${jobId}`, metadata);
+    return res.data;
+  },
+  rename: async (jobId: string, newFilename: string) => {
+    const res = await api.post(`/midi-orchestrator/rename/${jobId}`, { new_filename: newFilename });
+    return res.data;
   }
 };
 
