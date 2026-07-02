@@ -12,7 +12,9 @@ import {
   TextInput,
   InteractionManager,
   Modal,
-  Platform
+  Platform,
+  KeyboardAvoidingView,
+  Switch
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -188,7 +190,39 @@ export const MidiEditorScreen = () => {
   const [detailsRating, setDetailsRating] = useState(0);
   const [detailsGenre, setDetailsGenre] = useState('');
   const [detailsMood, setDetailsMood] = useState('');
+  const [detailsSource, setDetailsSource] = useState('');
+  const [detailsDnu, setDetailsDnu] = useState(false);
   const previewSoundRef = useRef<Audio.Sound | null>(null);
+
+  const getCleanTitle = (filename: string) => {
+    if (!filename) return '';
+    return filename.replace(/\.midi?$/i, '');
+  };
+
+  const getSongLength = (item: any) => {
+    if (!item.tracks || item.tracks.length === 0) return '';
+    const maxDuration = Math.max(...item.tracks.map((t: any) => t.duration || 0));
+    if (maxDuration <= 0) return '';
+    const mins = Math.floor(maxDuration / 60);
+    const secs = Math.floor(maxDuration % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
+  const renderStars = (count: number) => {
+    if (!count || count <= 0) return null;
+    return (
+      <View style={{ flexDirection: 'row', marginLeft: 6 }}>
+        {[1, 2, 3, 4, 5].map(i => (
+          <Ionicons 
+            key={i} 
+            name={i <= count ? "star" : "star-outline"} 
+            size={10} 
+            color={i <= count ? "#FFD700" : themeColors.textMuted} 
+          />
+        ))}
+      </View>
+    );
+  };
 
   // Selected job details
   const currentJob = useMemo(() => {
@@ -440,6 +474,8 @@ export const MidiEditorScreen = () => {
       setDetailsRating(meta.rating || job.rating || 0);
       setDetailsGenre(meta.genre || job.genre || '');
       setDetailsMood(meta.mood || job.mood || '');
+      setDetailsSource(meta.source || job.source || '');
+      setDetailsDnu(meta.dnu || job.dnu || false);
       setDetailsVisible(true);
     } catch (e: any) {
       console.error(e);
@@ -466,7 +502,9 @@ export const MidiEditorScreen = () => {
         comments: detailsComments.trim(),
         rating: detailsRating,
         genre: detailsGenre.trim(),
-        mood: detailsMood.trim()
+        mood: detailsMood.trim(),
+        source: detailsSource.trim(),
+        dnu: detailsDnu
       });
 
       Alert.alert('Success', 'Song metadata updated successfully.');
@@ -863,84 +901,63 @@ export const MidiEditorScreen = () => {
                   onLongPress={() => handleOpenContextActions(item)}
                 >
                   <View style={styles.jobInfo}>
+                    {/* Row 1: Title & Playlist tags */}
                     <View style={styles.titleRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
-                          {item.filename}
-                        </Text>
-                        {item.artist ? (
-                          <Text style={{ fontSize: 11, color: themeColors.accent, fontWeight: '600', marginTop: -2 }} numberOfLines={1}>
-                            {item.artist}
-                          </Text>
-                        ) : null}
-                      </View>
-                      
-                      {/* Rating Stars */}
-                      {item.rating > 0 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Ionicons 
-                              key={s} 
-                              name="star" 
-                              size={12} 
-                              color={s <= item.rating ? '#FFD700' : themeColors.border} 
-                              style={{ marginRight: 1 }} 
-                            />
-                          ))}
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Metadata Row */}
-                    <View style={styles.metaRow}>
-                      <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
-                        {new Date(item.timestamp * 1000).toLocaleDateString()}
+                      <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
+                        {getCleanTitle(item.filename)}
                       </Text>
-                      
-                      {/* Configuration track count badges */}
-                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
-                          🎹 {item.piano_tracks?.length || 0}
-                        </Text>
-                      </View>
-                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
-                          🔊 {item.speaker_tracks?.length || 0}
-                        </Text>
-                      </View>
-                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
-                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
-                          🔇 {Math.max(0, (item.tracks?.length || 0) - (item.piano_tracks?.length || 0) - (item.speaker_tracks?.length || 0))}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Cleaner settings row */}
-                    {item.status === 'completed' && (
-                      <View style={styles.settingsBadgeRow}>
-                        {item.melody_factor !== undefined && (
-                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                            <Text style={[styles.cleanBadgeText, { color: '#2196F3' }]}>M: {Math.round(item.melody_factor * 100)}%</Text>
-                          </View>
-                        )}
-                        {item.rhythm_factor !== undefined && (
-                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                            <Text style={[styles.cleanBadgeText, { color: '#2196F3' }]}>R: {Math.round(item.rhythm_factor * 100)}%</Text>
-                          </View>
-                        )}
-                        {item.pedal_preset && (
-                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
-                            <Text style={[styles.cleanBadgeText, { color: '#9C27B0' }]}>Pedal: {item.pedal_preset.toUpperCase()}</Text>
-                          </View>
-                        )}
-                        {/* Playlists */}
+                      {/* Playlists / tags future display */}
+                      <View style={{ flexDirection: 'row', gap: 4 }}>
                         {item.playlists?.map((pl: string) => (
                           <View key={pl} style={[styles.cleanBadge, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
                             <Text style={[styles.cleanBadgeText, { color: '#4CAF50' }]}>{pl.toUpperCase()}</Text>
                           </View>
                         ))}
                       </View>
-                    )}
+                    </View>
+
+                    {/* Row 2: Artist */}
+                    <Text style={{ fontSize: 12, color: item.artist ? themeColors.accent : themeColors.textMuted, fontWeight: '600', marginTop: 1, marginBottom: 4 }} numberOfLines={1}>
+                      {item.artist || 'Unknown Artist'}
+                    </Text>
+
+                    {/* Row 3: Length, Date, dynamic velocity/pedal settings, and rating stars */}
+                    <View style={styles.metaRow}>
+                      <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
+                        {getSongLength(item) ? `${getSongLength(item)} • ` : ''}
+                        {new Date(item.timestamp * 1000).toLocaleDateString()}
+                      </Text>
+
+                      {item.status === 'completed' && (
+                        <>
+                          {item.melody_factor !== undefined && (
+                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>M:{Math.round(item.melody_factor * 100)}%</Text>
+                            </View>
+                          )}
+                          {item.rhythm_factor !== undefined && (
+                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>R:{Math.round(item.rhythm_factor * 100)}%</Text>
+                            </View>
+                          )}
+                          {item.pedal_preset && (
+                            <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                              <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>P:{item.pedal_preset.charAt(0).toUpperCase()}</Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+
+                      {/* Stars */}
+                      {renderStars(item.rating)}
+
+                      {/* DNU Badge */}
+                      {item.dnu && (
+                        <View style={[styles.statBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
+                          <Text style={[styles.statBadgeText, { color: '#e74c3c' }]}>DNU</Text>
+                        </View>
+                      )}
+                    </View>
 
                     {/* Progress details */}
                     {(item.status === 'processing' || item.status === 'synthesizing') && (
@@ -993,7 +1010,7 @@ export const MidiEditorScreen = () => {
               <View style={[styles.bottomSheetContent, { backgroundColor: themeColors.surface }]}>
                 <View style={[styles.bottomSheetHeader, { borderBottomColor: themeColors.border }]}>
                   <Text style={[styles.bottomSheetTitle, { color: themeColors.text }]} numberOfLines={1}>
-                    {contextJob?.filename}
+                    {getCleanTitle(contextJob?.filename)}
                   </Text>
                   <Text style={[styles.bottomSheetSub, { color: themeColors.textMuted }]}>
                     Select an action
@@ -1069,7 +1086,7 @@ export const MidiEditorScreen = () => {
               <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
                 <Text style={[styles.modalTitle, { color: themeColors.text }]}>Quick Re-clean</Text>
                 <Text style={[styles.modalSubtitle, { color: themeColors.textMuted }]}>
-                  Adjust velocity dynamics & pedals for {contextJob?.filename}
+                  Adjust velocity dynamics & pedals for {getCleanTitle(contextJob?.filename)}
                 </Text>
 
                 {/* Pedal Preset badge */}
@@ -1159,92 +1176,158 @@ export const MidiEditorScreen = () => {
           <Modal
             visible={detailsVisible}
             transparent
-            animationType="fade"
+            animationType="slide"
             onRequestClose={() => { setDetailsVisible(false); setContextJob(null); }}
           >
-            <View style={styles.modalOverlay}>
-              <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', width: SCREEN_WIDTH - 40 }}>
-                <View style={[styles.modalContent, { backgroundColor: themeColors.surface, width: '100%' }]}>
-                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>Edit Details</Text>
-                  
-                  {/* Star Rating Selection */}
-                  <View style={{ alignItems: 'center', marginBottom: 15 }}>
-                    <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 5 }}>Tap to Rate</Text>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <TouchableOpacity key={s} onPress={() => setDetailsRating(s)}>
-                          <Ionicons 
-                            name={s <= detailsRating ? "star" : "star-outline"} 
-                            size={32} 
-                            color={s <= detailsRating ? '#FFD700' : themeColors.textMuted} 
-                          />
-                        </TouchableOpacity>
-                      ))}
+            <View style={[styles.modalOverlay, { justifyContent: 'flex-end' }]}>
+              <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 60}
+                style={{ width: '100%' }}
+              >
+                <View style={[styles.modalContent, { 
+                  backgroundColor: themeColors.surface, 
+                  borderBottomLeftRadius: 0, 
+                  borderBottomRightRadius: 0,
+                  maxHeight: '90%',
+                  width: '100%',
+                  paddingBottom: 30
+                }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <Text style={[styles.modalTitle, { color: themeColors.text }]}>Song Details</Text>
+                    <TouchableOpacity onPress={() => { setDetailsVisible(false); setContextJob(null); }}>
+                      <Ionicons name="close" size={24} color={themeColors.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView 
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: 40 }}
+                  >
+                    {/* Star Rating Section */}
+                    <View style={[styles.detailRow, { marginBottom: 20 }]}>
+                      <View>
+                        <Text style={{ color: themeColors.text, fontWeight: '600' }}>Rating</Text>
+                        <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>Rate this performance</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 5 }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <TouchableOpacity key={star} onPress={() => setDetailsRating(detailsRating === star ? 0 : star)}>
+                            <Ionicons 
+                              name={star <= detailsRating ? "star" : "star-outline"} 
+                              size={24} 
+                              color={star <= detailsRating ? '#FFD700' : themeColors.textMuted} 
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </View>
-                  </View>
 
-                  {/* Title / Filename Field */}
-                  <View style={styles.inputContainer}>
-                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Title / Filename</Text>
-                    <TextInput
-                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border }]}
-                      value={detailsTitle}
-                      onChangeText={setDetailsTitle}
-                      placeholder="Song title"
-                      placeholderTextColor={themeColors.textMuted}
-                    />
-                  </View>
-
-                  {/* Artist Field */}
-                  <View style={styles.inputContainer}>
-                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Artist</Text>
-                    <TextInput
-                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border }]}
-                      value={detailsArtist}
-                      onChangeText={setDetailsArtist}
-                      placeholder="Artist/Composer"
-                      placeholderTextColor={themeColors.textMuted}
-                    />
-                  </View>
-
-                  {/* AI Returned Info Read-only Display */}
-                  {(detailsGenre || detailsMood) ? (
-                    <View style={[styles.aiInfoBlock, { backgroundColor: themeColors.surfaceSecondary }]}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.accent, marginBottom: 5 }}>AI RECOGNIZED METADATA</Text>
-                      {detailsGenre ? <Text style={{ fontSize: 12, color: themeColors.text }}>Genre: <Text style={{ fontWeight: '600' }}>{detailsGenre}</Text></Text> : null}
-                      {detailsMood ? <Text style={{ fontSize: 12, color: themeColors.text }}>Mood: <Text style={{ fontWeight: '600' }}>{detailsMood}</Text></Text> : null}
+                    {/* Do Not Use Switch */}
+                    <View style={[styles.detailRow, { marginBottom: 20 }]}>
+                      <View>
+                        <Text style={{ color: themeColors.text, fontWeight: '600' }}>Do Not Use (DNU)</Text>
+                        <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>Mark as unsafe or poor quality</Text>
+                      </View>
+                      <Switch 
+                        value={detailsDnu} 
+                        onValueChange={setDetailsDnu} 
+                        trackColor={{ false: themeColors.border, true: '#ff5252' }} 
+                      />
                     </View>
-                  ) : null}
 
-                  {/* Comments Field */}
-                  <View style={styles.inputContainer}>
-                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Comments / Notes</Text>
-                    <TextInput
-                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border, height: 60, textAlignVertical: 'top' }]}
-                      value={detailsComments}
-                      onChangeText={setDetailsComments}
-                      placeholder="Add notes..."
-                      placeholderTextColor={themeColors.textMuted}
-                      multiline
-                    />
-                  </View>
+                    {/* Title / Filename Field */}
+                    <View style={styles.metaField}>
+                      <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Title / Filename</Text>
+                      <TextInput
+                        style={[styles.metaInput, { color: themeColors.text, borderBottomColor: themeColors.border }]}
+                        value={detailsTitle}
+                        onChangeText={setDetailsTitle}
+                        placeholder="Song title"
+                        placeholderTextColor={themeColors.textMuted}
+                      />
+                    </View>
 
-                  <View style={styles.modalActions}>
+                    {/* Artist Field */}
+                    <View style={styles.metaField}>
+                      <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Artist</Text>
+                      <TextInput
+                        style={[styles.metaInput, { color: themeColors.text, borderBottomColor: themeColors.border }]}
+                        value={detailsArtist}
+                        onChangeText={setDetailsArtist}
+                        placeholder="Unknown Artist"
+                        placeholderTextColor={themeColors.textMuted}
+                      />
+                    </View>
+
+                    {/* Genre and Mood Row */}
+                    <View style={{ flexDirection: 'row', gap: 15, marginBottom: 15 }}>
+                      <View style={[styles.metaField, { flex: 1 }]}>
+                        <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Genre</Text>
+                        <TextInput 
+                          style={[styles.metaInput, { color: themeColors.text, borderBottomColor: themeColors.border }]} 
+                          value={detailsGenre} 
+                          onChangeText={setDetailsGenre}
+                          placeholder="None"
+                          placeholderTextColor={themeColors.textMuted}
+                        />
+                      </View>
+                      <View style={[styles.metaField, { flex: 1 }]}>
+                        <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Mood</Text>
+                        <TextInput 
+                          style={[styles.metaInput, { color: themeColors.text, borderBottomColor: themeColors.border }]} 
+                          value={detailsMood} 
+                          onChangeText={setDetailsMood}
+                          placeholder="None"
+                          placeholderTextColor={themeColors.textMuted}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Source Field */}
+                    <View style={styles.metaField}>
+                      <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Source (Game/Movie)</Text>
+                      <TextInput 
+                        style={[styles.metaInput, { color: themeColors.text, borderBottomColor: themeColors.border }]} 
+                        value={detailsSource} 
+                        onChangeText={setDetailsSource}
+                        placeholder="None"
+                        placeholderTextColor={themeColors.textMuted}
+                      />
+                    </View>
+
+                    {/* Comments Field */}
+                    <View style={[styles.metaField, { marginTop: 10 }]}>
+                      <Text style={[styles.metaLabel, { color: themeColors.textMuted }]}>Comments / Notes</Text>
+                      <TextInput
+                        style={[styles.textArea, { borderColor: themeColors.border, backgroundColor: themeColors.background, color: themeColors.text, textAlignVertical: 'top', marginTop: 5 }]}
+                        value={detailsComments}
+                        onChangeText={setDetailsComments}
+                        placeholder="Add notes..."
+                        placeholderTextColor={themeColors.textMuted}
+                        multiline
+                        numberOfLines={3}
+                      />
+                    </View>
+                  </ScrollView>
+
+                  <View style={styles.modalButtons}>
                     <TouchableOpacity 
-                      style={[styles.modalBtn, { borderColor: themeColors.border, borderWidth: 1 }]}
+                      style={[styles.modalBtn, styles.modalBtnFlex, { backgroundColor: themeColors.surfaceSecondary }]} 
                       onPress={() => { setDetailsVisible(false); setContextJob(null); }}
                     >
                       <Text style={{ color: themeColors.text }}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
-                      style={[styles.modalBtn, { backgroundColor: themeColors.accent }]}
+                      style={[styles.modalBtn, styles.modalBtnFlex, { backgroundColor: themeColors.accent }]} 
                       onPress={handleSaveDetails}
                     >
-                      <Text style={{ color: '#fff', fontWeight: '600' }}>Save Changes</Text>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              </ScrollView>
+              </KeyboardAvoidingView>
             </View>
           </Modal>
         </View>
@@ -1941,5 +2024,42 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  metaField: {
+    marginBottom: 12,
+    width: '100%',
+  },
+  metaLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  metaInput: {
+    fontSize: 15,
+    borderBottomWidth: 1,
+    paddingVertical: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    marginTop: 20,
+  },
+  modalBtnFlex: {
+    flex: 1,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
   }
 });

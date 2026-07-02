@@ -340,7 +340,7 @@ export const midiOrchestratorApi = {
     const res = await api.get(`/midi-orchestrator/metadata/${jobId}`);
     return res.data;
   },
-  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; playlists?: string[] }) => {
+  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; source?: string; dnu?: boolean; playlists?: string[] }) => {
     const res = await api.post(`/midi-orchestrator/metadata/${jobId}`, metadata);
     return res.data;
   },
