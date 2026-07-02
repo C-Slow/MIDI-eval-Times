@@ -1029,19 +1029,7 @@ export const MidiEditorScreen = () => {
             </View>
           )}
 
-          <View style={[styles.header, { borderBottomColor: themeColors.border, borderBottomWidth: 1, paddingBottom: 15 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={[styles.headerTitle, { color: themeColors.text, marginBottom: 0 }]}>MIDI Orchestrator</Text>
-              <TouchableOpacity 
-                style={[styles.uploadBtn, { backgroundColor: themeColors.accent }]} 
-                onPress={handleUpload}
-                disabled={loading}
-              >
-                <Ionicons name="cloud-upload" size={16} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.uploadBtnText}>Upload MIDI</Text>
-              </TouchableOpacity>
-            </View>
-
+          <View style={[styles.header, { borderBottomColor: themeColors.border, borderBottomWidth: 1, paddingBottom: 15, paddingTop: 10 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <TextInput 
                 style={[styles.searchBar, { flex: 1, backgroundColor: themeColors.surface, color: themeColors.text, marginBottom: 0 }]} 
@@ -1060,6 +1048,14 @@ export const MidiEditorScreen = () => {
                 ) : (
                   <Ionicons name="refresh" size={24} color={themeColors.accent} />
                 )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.uploadBtn, { backgroundColor: themeColors.accent, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, height: 42 }]} 
+                onPress={handleUpload}
+                disabled={loading}
+              >
+                <Ionicons name="cloud-upload" size={16} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={[styles.uploadBtnText, { color: '#fff', fontSize: 13, fontWeight: '600' }]}>Upload</Text>
               </TouchableOpacity>
             </View>
 
