@@ -194,6 +194,8 @@ export const MidiEditorScreen = () => {
   const [detailsDnu, setDetailsDnu] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [playbackMode, setPlaybackMode] = useState<'preview' | 'performance'>('preview');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'artist' | 'rating' | 'created' | 'length'>('created');
   const previewSoundRef = useRef<Audio.Sound | null>(null);
 
   const toggleSelect = (jobId: string) => {
@@ -241,6 +243,42 @@ export const MidiEditorScreen = () => {
   const currentJob = useMemo(() => {
     return jobs.find(j => j.job_id === selectedJobId) || null;
   }, [jobs, selectedJobId]);
+
+  const filteredJobs = useMemo(() => {
+    let result = [...jobs];
+    
+    // 1. Search Filter (treat dashes and underscores as spaces)
+    if (search.trim()) {
+      const query = search.toLowerCase().replace(/[-_]/g, ' ');
+      result = result.filter(j => {
+        const title = (j.filename || '').toLowerCase().replace(/[-_]/g, ' ');
+        const artist = (j.artist || '').toLowerCase().replace(/[-_]/g, ' ');
+        return title.includes(query) || artist.includes(query);
+      });
+    }
+
+    // 2. Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'name') {
+        const aTitle = getCleanTitle(a.filename || '');
+        const bTitle = getCleanTitle(b.filename || '');
+        return aTitle.localeCompare(bTitle);
+      } else if (sortBy === 'artist') {
+        return (a.artist || '').localeCompare(b.artist || '');
+      } else if (sortBy === 'rating') {
+        return (b.rating || 0) - (a.rating || 0);
+      } else if (sortBy === 'created') {
+        return (b.timestamp || 0) - (a.timestamp || 0);
+      } else if (sortBy === 'length') {
+        const aLen = a.tracks && a.tracks.length > 0 ? Math.max(...a.tracks.map((t: any) => t.duration || 0)) : 0;
+        const bLen = b.tracks && b.tracks.length > 0 ? Math.max(...b.tracks.map((t: any) => t.duration || 0)) : 0;
+        return bLen - aLen;
+      }
+      return 0;
+    });
+
+    return result;
+  }, [jobs, search, sortBy]);
 
   const hasChanges = useMemo(() => {
     if (!currentJob) return false;
@@ -991,23 +1029,60 @@ export const MidiEditorScreen = () => {
             </View>
           )}
 
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: themeColors.text }]}>MIDI Orchestrator</Text>
-            <TouchableOpacity 
-              style={[styles.uploadBtn, { backgroundColor: themeColors.accent }]} 
-              onPress={handleUpload}
-              disabled={loading}
-            >
-              <Ionicons name="cloud-upload" size={16} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.uploadBtnText}>Upload MIDI</Text>
-            </TouchableOpacity>
+          <View style={[styles.header, { borderBottomColor: themeColors.border, borderBottomWidth: 1, paddingBottom: 15 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[styles.headerTitle, { color: themeColors.text, marginBottom: 0 }]}>MIDI Orchestrator</Text>
+              <TouchableOpacity 
+                style={[styles.uploadBtn, { backgroundColor: themeColors.accent }]} 
+                onPress={handleUpload}
+                disabled={loading}
+              >
+                <Ionicons name="cloud-upload" size={16} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.uploadBtnText}>Upload MIDI</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <TextInput 
+                style={[styles.searchBar, { flex: 1, backgroundColor: themeColors.surface, color: themeColors.text, marginBottom: 0 }]} 
+                placeholder="Search jobs..." 
+                placeholderTextColor={themeColors.textMuted} 
+                value={search} 
+                onChangeText={setSearch} 
+              />
+              <TouchableOpacity 
+                onPress={fetchJobs} 
+                disabled={loading}
+                style={{ padding: 5 }}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={themeColors.accent} />
+                ) : (
+                  <Ionicons name="refresh" size={24} color={themeColors.accent} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sortBar}>
+              {['name', 'artist', 'rating', 'created', 'length'].map((s) => (
+                <TouchableOpacity 
+                  key={s} 
+                  onPress={() => setSortBy(s as any)} 
+                  style={[styles.sortBtn, sortBy === s ? { backgroundColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }]}
+                >
+                  <Text style={[styles.sortBtnText, sortBy === s ? { color: '#fff' } : { color: themeColors.text }]}>
+                    {s === 'created' ? 'Date' : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          {loading ? (
+          {loading && jobs.length === 0 ? (
             <ActivityIndicator size="large" color={themeColors.accent} style={{ marginTop: 50 }} />
           ) : (
             <FlatList
-              data={jobs}
+              data={filteredJobs}
               keyExtractor={item => item.job_id}
               contentContainerStyle={{ paddingBottom: 100 }}
               extraData={selectedJobs}
@@ -1481,7 +1556,7 @@ export const MidiEditorScreen = () => {
             
             <View style={{ flex: 1, marginLeft: 15 }}>
               <Text style={[styles.visualizerFilename, { color: themeColors.text }]} numberOfLines={1}>
-                {currentJob.filename}
+                {getCleanTitle(currentJob.filename)}
               </Text>
               <Text style={[styles.visualizerStateSub, { color: themeColors.textMuted }]}>
                 {isPlaying ? 'Playing synced playback' : isPreviewPlaying ? 'Playing preview' : 'Playback stopped'}
@@ -2257,5 +2332,24 @@ const styles = StyleSheet.create({
   },
   selectionIndicator: { 
     marginRight: 12 
+  },
+  searchBar: { 
+    padding: 10, 
+    borderRadius: 8, 
+    fontSize: 16, 
+    marginBottom: 10 
+  },
+  sortBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  sortBtn: { 
+    paddingHorizontal: 10, 
+    paddingVertical: 5, 
+    borderRadius: 15, 
+    marginRight: 5 
+  },
+  sortBtnText: { 
+    fontSize: 12 
   }
 });
