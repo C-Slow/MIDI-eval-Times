@@ -193,6 +193,7 @@ export const MidiEditorScreen = () => {
   const [detailsSource, setDetailsSource] = useState('');
   const [detailsDnu, setDetailsDnu] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [playbackMode, setPlaybackMode] = useState<'preview' | 'performance'>('preview');
   const previewSoundRef = useRef<Audio.Sound | null>(null);
 
   const toggleSelect = (jobId: string) => {
@@ -262,6 +263,15 @@ export const MidiEditorScreen = () => {
     
     return false;
   }, [currentJob, pianoTracks, speakerTracks, pedalPreset, rhythmFactor, melodyFactor]);
+
+  useEffect(() => {
+    if (!currentJob) return;
+    if (currentJob.status !== 'completed' || hasChanges) {
+      setPlaybackMode('preview');
+    } else {
+      setPlaybackMode('performance');
+    }
+  }, [currentJob?.status, hasChanges]);
 
   const openUnifiedWorkspace = async (jobId: string) => {
     const job = jobs.find(j => j.job_id === jobId);
@@ -1043,7 +1053,7 @@ export const MidiEditorScreen = () => {
                       </View>
 
                       {/* Row 2: Artist */}
-                      <Text style={{ fontSize: 12, color: item.artist ? themeColors.accent : themeColors.textMuted, fontWeight: '600', marginTop: 1, marginBottom: 4 }} numberOfLines={1}>
+                      <Text style={{ fontSize: 11, color: item.artist ? themeColors.accent : themeColors.textMuted, fontWeight: '600', marginTop: -2 }} numberOfLines={1}>
                         {item.artist || 'Unknown Artist'}
                       </Text>
 
@@ -1596,16 +1606,34 @@ export const MidiEditorScreen = () => {
             {/* Time progress */}
             <View style={styles.timeRow}>
               <Text style={{ color: themeColors.text, fontSize: 12 }}>{formatTime(playbackPos)}</Text>
-              <Text style={[styles.modeIndicatorText, { color: (currentJob.status !== 'completed' || hasChanges) ? '#a29bfe' : themeColors.accent }]}>
-                {(currentJob.status !== 'completed' || hasChanges) ? 'Preview Mode' : 'Performance Mode'}
-              </Text>
+              
+              {currentJob.status === 'completed' && !hasChanges ? (
+                <TouchableOpacity 
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: themeColors.surfaceSecondary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}
+                  onPress={() => setPlaybackMode(prev => prev === 'preview' ? 'performance' : 'preview')}
+                >
+                  <Ionicons 
+                    name={playbackMode === 'preview' ? "volume-medium" : "musical-notes"} 
+                    size={14} 
+                    color={playbackMode === 'preview' ? '#a29bfe' : themeColors.accent} 
+                  />
+                  <Text style={[styles.modeIndicatorText, { color: playbackMode === 'preview' ? '#a29bfe' : themeColors.accent, fontSize: 11 }]}>
+                    {playbackMode === 'preview' ? 'Phone Speakers' : 'Disklavier Piano'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={[styles.modeIndicatorText, { color: '#a29bfe' }]}>
+                  Preview Mode
+                </Text>
+              )}
+              
               <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>{formatTime(playbackDuration)}</Text>
             </View>
 
             {/* Main Buttons */}
             <View style={styles.buttonsRow}>
-              {(currentJob.status !== 'completed' || hasChanges) ? (
-                // PREVIEW PLAY BUTTON
+              {playbackMode === 'preview' ? (
+                // PREVIEW PLAY BUTTONS
                 <>
                   <TouchableOpacity 
                     style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
@@ -1626,23 +1654,25 @@ export const MidiEditorScreen = () => {
                     )}
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={[styles.miniProcessBtn, { backgroundColor: themeColors.accent }]}
-                    onPress={handleProcess}
-                    disabled={loading || isPreviewPlaying}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="color-wand" size={16} color="#fff" style={{ marginRight: 6 }} />
-                        <Text style={styles.miniProcessBtnText}>Synthesize</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  {(currentJob.status !== 'completed' || hasChanges) && (
+                    <TouchableOpacity 
+                      style={[styles.miniProcessBtn, { backgroundColor: themeColors.accent }]}
+                      onPress={handleProcess}
+                      disabled={loading || isPreviewPlaying}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="color-wand" size={16} color="#fff" style={{ marginRight: 6 }} />
+                          <Text style={styles.miniProcessBtnText}>Synthesize</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
                 </>
               ) : (
-                // PERFORMANCE PLAY BUTTON
+                // PERFORMANCE PLAY BUTTONS
                 <>
                   <TouchableOpacity 
                     style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
@@ -1711,7 +1741,6 @@ const styles = StyleSheet.create({
   jobFilename: {
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 4,
   },
   jobMeta: {
     fontSize: 11,
@@ -2003,14 +2032,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 4,
-    marginBottom: 6,
+    marginTop: 2,
   },
   statBadge: {
     paddingHorizontal: 6,
