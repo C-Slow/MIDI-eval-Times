@@ -10,7 +10,9 @@ import {
   ScrollView, 
   Dimensions,
   TextInput,
-  InteractionManager
+  InteractionManager,
+  Modal,
+  Platform
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -171,6 +173,21 @@ export const MidiEditorScreen = () => {
   // Preview State
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+
+  // Context Actions Bottom Sheet & Modals State
+  const [contextJob, setContextJob] = useState<any | null>(null);
+  const [recleanVisible, setRecleanVisible] = useState(false);
+  const [recleanRhythm, setRecleanRhythm] = useState(1.0);
+  const [recleanMelody, setRecleanMelody] = useState(1.0);
+  const [recleanPedal, setRecleanPedal] = useState<'light' | 'medium' | 'full'>('light');
+
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [detailsTitle, setDetailsTitle] = useState('');
+  const [detailsArtist, setDetailsArtist] = useState('');
+  const [detailsComments, setDetailsComments] = useState('');
+  const [detailsRating, setDetailsRating] = useState(0);
+  const [detailsGenre, setDetailsGenre] = useState('');
+  const [detailsMood, setDetailsMood] = useState('');
   const previewSoundRef = useRef<Audio.Sound | null>(null);
 
   // Selected job details
@@ -367,6 +384,100 @@ export const MidiEditorScreen = () => {
         }
       ]
     );
+  };
+
+  // Context Actions Handlers
+  const handleOpenContextActions = (job: any) => {
+    setContextJob(job);
+  };
+
+  const handleCloseContextActions = () => {
+    setContextJob(null);
+  };
+
+  const handleOpenReclean = (job: any) => {
+    setContextJob(job);
+    setRecleanRhythm(job.rhythm_factor || 1.0);
+    setRecleanMelody(job.melody_factor || 1.0);
+    setRecleanPedal(job.pedal_preset || 'light');
+    setRecleanVisible(true);
+  };
+
+  const handleRunQuickReclean = async () => {
+    if (!contextJob) return;
+    try {
+      setSystemBusy(true);
+      setRecleanVisible(false);
+      
+      await midiOrchestratorApi.process(
+        contextJob.job_id,
+        contextJob.piano_tracks || [],
+        contextJob.speaker_tracks || [],
+        recleanPedal,
+        recleanRhythm,
+        recleanMelody
+      );
+      
+      Alert.alert('Processing Started', 'The MIDI job is being re-synthesized in the background.');
+      fetchJobs();
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', e.message || 'Failed to start processing.');
+    } finally {
+      setSystemBusy(false);
+      setContextJob(null);
+    }
+  };
+
+  const handleOpenDetails = async (job: any) => {
+    try {
+      setSystemBusy(true);
+      const meta = await midiOrchestratorApi.getMetadata(job.job_id);
+      setContextJob(job);
+      setDetailsTitle(meta.filename || job.filename || '');
+      setDetailsArtist(meta.artist || job.artist || '');
+      setDetailsComments(meta.comments || job.comments || '');
+      setDetailsRating(meta.rating || job.rating || 0);
+      setDetailsGenre(meta.genre || job.genre || '');
+      setDetailsMood(meta.mood || job.mood || '');
+      setDetailsVisible(true);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to fetch job metadata.');
+    } finally {
+      setSystemBusy(false);
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    if (!contextJob) return;
+    try {
+      setSystemBusy(true);
+      setDetailsVisible(false);
+
+      const oldTitle = contextJob.filename || '';
+      const newTitle = detailsTitle.trim();
+      if (newTitle && newTitle !== oldTitle) {
+        await midiOrchestratorApi.rename(contextJob.job_id, newTitle);
+      }
+
+      await midiOrchestratorApi.updateMetadata(contextJob.job_id, {
+        artist: detailsArtist.trim(),
+        comments: detailsComments.trim(),
+        rating: detailsRating,
+        genre: detailsGenre.trim(),
+        mood: detailsMood.trim()
+      });
+
+      Alert.alert('Success', 'Song metadata updated successfully.');
+      fetchJobs();
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', e.message || 'Failed to save metadata.');
+    } finally {
+      setSystemBusy(false);
+      setContextJob(null);
+    }
   };
 
   // Toggle track role
@@ -749,15 +860,87 @@ export const MidiEditorScreen = () => {
                 <TouchableOpacity 
                   style={[styles.jobCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}
                   onPress={() => handleJobSelect(item)}
+                  onLongPress={() => handleOpenContextActions(item)}
                 >
                   <View style={styles.jobInfo}>
-                    <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
-                      {item.filename}
-                    </Text>
-                    
-                    <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
-                      {new Date(item.timestamp * 1000).toLocaleDateString()} • {item.tracks?.length || 0} tracks
-                    </Text>
+                    <View style={styles.titleRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.jobFilename, { color: themeColors.text }]} numberOfLines={1}>
+                          {item.filename}
+                        </Text>
+                        {item.artist ? (
+                          <Text style={{ fontSize: 11, color: themeColors.accent, fontWeight: '600', marginTop: -2 }} numberOfLines={1}>
+                            {item.artist}
+                          </Text>
+                        ) : null}
+                      </View>
+                      
+                      {/* Rating Stars */}
+                      {item.rating > 0 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Ionicons 
+                              key={s} 
+                              name="star" 
+                              size={12} 
+                              color={s <= item.rating ? '#FFD700' : themeColors.border} 
+                              style={{ marginRight: 1 }} 
+                            />
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Metadata Row */}
+                    <View style={styles.metaRow}>
+                      <Text style={[styles.jobMeta, { color: themeColors.textMuted }]}>
+                        {new Date(item.timestamp * 1000).toLocaleDateString()}
+                      </Text>
+                      
+                      {/* Configuration track count badges */}
+                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
+                          🎹 {item.piano_tracks?.length || 0}
+                        </Text>
+                      </View>
+                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
+                          🔊 {item.speaker_tracks?.length || 0}
+                        </Text>
+                      </View>
+                      <View style={[styles.statBadge, { backgroundColor: themeColors.surfaceSecondary }]}>
+                        <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>
+                          🔇 {Math.max(0, (item.tracks?.length || 0) - (item.piano_tracks?.length || 0) - (item.speaker_tracks?.length || 0))}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Cleaner settings row */}
+                    {item.status === 'completed' && (
+                      <View style={styles.settingsBadgeRow}>
+                        {item.melody_factor !== undefined && (
+                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                            <Text style={[styles.cleanBadgeText, { color: '#2196F3' }]}>M: {Math.round(item.melody_factor * 100)}%</Text>
+                          </View>
+                        )}
+                        {item.rhythm_factor !== undefined && (
+                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                            <Text style={[styles.cleanBadgeText, { color: '#2196F3' }]}>R: {Math.round(item.rhythm_factor * 100)}%</Text>
+                          </View>
+                        )}
+                        {item.pedal_preset && (
+                          <View style={[styles.cleanBadge, { backgroundColor: 'rgba(156, 39, 176, 0.1)' }]}>
+                            <Text style={[styles.cleanBadgeText, { color: '#9C27B0' }]}>Pedal: {item.pedal_preset.toUpperCase()}</Text>
+                          </View>
+                        )}
+                        {/* Playlists */}
+                        {item.playlists?.map((pl: string) => (
+                          <View key={pl} style={[styles.cleanBadge, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                            <Text style={[styles.cleanBadgeText, { color: '#4CAF50' }]}>{pl.toUpperCase()}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
 
                     {/* Progress details */}
                     {(item.status === 'processing' || item.status === 'synthesizing') && (
@@ -771,15 +954,9 @@ export const MidiEditorScreen = () => {
                       </View>
                     )}
 
-                    {/* Status Badges */}
-                    {item.status === 'completed' && (
-                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)' }]}>
-                        <Ionicons name="checkmark-circle" size={12} color="#2ecc71" />
-                        <Text style={[styles.statusText, { color: '#2ecc71' }]}>Ready Playback</Text>
-                      </View>
-                    )}
+                    {/* Failed Badge */}
                     {item.status === 'failed' && (
-                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)', marginTop: 5 }]}>
                         <Ionicons name="alert-circle" size={12} color="#e74c3c" />
                         <Text style={[styles.statusText, { color: '#e74c3c' }]}>Failed: {item.error}</Text>
                       </View>
@@ -787,12 +964,6 @@ export const MidiEditorScreen = () => {
                   </View>
 
                   <View style={styles.cardActions}>
-                    <TouchableOpacity 
-                      style={styles.deleteCardBtn}
-                      onPress={() => handleDeleteJob(item.job_id)}
-                    >
-                      <Ionicons name="trash-outline" size={20} color={themeColors.textMuted} />
-                    </TouchableOpacity>
                     <Ionicons name="chevron-forward" size={20} color={themeColors.accent} />
                   </View>
                 </TouchableOpacity>
@@ -806,6 +977,276 @@ export const MidiEditorScreen = () => {
               }
             />
           )}
+
+          {/* Context Actions Bottom Sheet */}
+          <Modal
+            visible={contextJob !== null && !recleanVisible && !detailsVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={handleCloseContextActions}
+          >
+            <TouchableOpacity 
+              style={styles.modalOverlay} 
+              activeOpacity={1} 
+              onPress={handleCloseContextActions}
+            >
+              <View style={[styles.bottomSheetContent, { backgroundColor: themeColors.surface }]}>
+                <View style={[styles.bottomSheetHeader, { borderBottomColor: themeColors.border }]}>
+                  <Text style={[styles.bottomSheetTitle, { color: themeColors.text }]} numberOfLines={1}>
+                    {contextJob?.filename}
+                  </Text>
+                  <Text style={[styles.bottomSheetSub, { color: themeColors.textMuted }]}>
+                    Select an action
+                  </Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.bottomSheetItem, { borderBottomColor: themeColors.border }]} 
+                  onPress={() => {
+                    const job = contextJob;
+                    handleCloseContextActions();
+                    handleJobSelect(job);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={22} color={themeColors.accent} />
+                  <Text style={[styles.bottomSheetItemText, { color: themeColors.text }]}>Edit Allocations (Workspace)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.bottomSheetItem, { borderBottomColor: themeColors.border }]} 
+                  onPress={() => {
+                    const job = contextJob;
+                    handleCloseContextActions();
+                    handleOpenReclean(job);
+                  }}
+                >
+                  <Ionicons name="sparkles-outline" size={22} color={themeColors.accent} />
+                  <Text style={[styles.bottomSheetItemText, { color: themeColors.text }]}>Quick Re-clean Settings</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.bottomSheetItem, { borderBottomColor: themeColors.border }]} 
+                  onPress={() => {
+                    const job = contextJob;
+                    handleCloseContextActions();
+                    handleOpenDetails(job);
+                  }}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color={themeColors.accent} />
+                  <Text style={[styles.bottomSheetItemText, { color: themeColors.text }]}>Edit Details & Rename</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.bottomSheetItem, { borderBottomColor: themeColors.border }]} 
+                  onPress={() => {
+                    const job = contextJob;
+                    handleCloseContextActions();
+                    handleDeleteJob(job.job_id);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={22} color="#ff4d4d" />
+                  <Text style={[styles.bottomSheetItemText, { color: '#ff4d4d' }]}>Delete Job</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.bottomSheetCancel, { backgroundColor: themeColors.surfaceSecondary }]} 
+                  onPress={handleCloseContextActions}
+                >
+                  <Text style={[styles.bottomSheetCancelText, { color: themeColors.text }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Quick Re-clean Modal */}
+          <Modal
+            visible={recleanVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => { setRecleanVisible(false); setContextJob(null); }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
+                <Text style={[styles.modalTitle, { color: themeColors.text }]}>Quick Re-clean</Text>
+                <Text style={[styles.modalSubtitle, { color: themeColors.textMuted }]}>
+                  Adjust velocity dynamics & pedals for {contextJob?.filename}
+                </Text>
+
+                {/* Pedal Preset badge */}
+                <View style={{ marginBottom: 20, width: '100%' }}>
+                  <Text style={[styles.label, { color: themeColors.text, marginBottom: 10 }]}>Pedal Intensity</Text>
+                  <View style={styles.presetBadgesRow}>
+                    {['light', 'medium', 'full'].map((preset) => (
+                      <TouchableOpacity
+                        key={preset}
+                        style={[
+                          styles.presetBadge,
+                          recleanPedal === preset ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
+                        ]}
+                        onPress={() => setRecleanPedal(preset as any)}
+                      >
+                        <Text style={[styles.presetBadgeText, { color: recleanPedal === preset ? '#fff' : themeColors.text }]}>
+                          {preset.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Rhythm factor steppers */}
+                <View style={styles.sliderContainer}>
+                  <Text style={[styles.label, { color: themeColors.text, marginBottom: 10 }]}>Rhythm Velocity</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.surfaceSecondary, borderRadius: 8, padding: 5 }}>
+                    <TouchableOpacity 
+                      onPress={() => setRecleanRhythm(prev => Math.max(0.2, Number((prev - 0.05).toFixed(2))))}
+                      style={{ padding: 10 }}
+                    >
+                      <Ionicons name="remove-circle-outline" size={32} color={themeColors.accent} />
+                    </TouchableOpacity>
+                    <Text style={{ color: themeColors.accent, fontWeight: '700', fontSize: 18, minWidth: 60, textAlign: 'center' }}>
+                      {Math.round(recleanRhythm * 100)}%
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => setRecleanRhythm(prev => Math.min(2.0, Number((prev + 0.05).toFixed(2))))}
+                      style={{ padding: 10 }}
+                    >
+                      <Ionicons name="add-circle-outline" size={32} color={themeColors.accent} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Melody factor steppers */}
+                <View style={styles.sliderContainer}>
+                  <Text style={[styles.label, { color: themeColors.text, marginBottom: 10 }]}>Melody Velocity</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.surfaceSecondary, borderRadius: 8, padding: 5 }}>
+                    <TouchableOpacity 
+                      onPress={() => setRecleanMelody(prev => Math.max(0.2, Number((prev - 0.05).toFixed(2))))}
+                      style={{ padding: 10 }}
+                    >
+                      <Ionicons name="remove-circle-outline" size={32} color={themeColors.accent} />
+                    </TouchableOpacity>
+                    <Text style={{ color: themeColors.accent, fontWeight: '700', fontSize: 18, minWidth: 60, textAlign: 'center' }}>
+                      {Math.round(recleanMelody * 100)}%
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => setRecleanMelody(prev => Math.min(2.0, Number((prev + 0.05).toFixed(2))))}
+                      style={{ padding: 10 }}
+                    >
+                      <Ionicons name="add-circle-outline" size={32} color={themeColors.accent} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity 
+                    style={[styles.modalBtn, { borderColor: themeColors.border, borderWidth: 1 }]}
+                    onPress={() => { setRecleanVisible(false); setContextJob(null); }}
+                  >
+                    <Text style={{ color: themeColors.text }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.modalBtn, { backgroundColor: themeColors.accent }]}
+                    onPress={handleRunQuickReclean}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Save & Synthesize</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Edit Details & Rename Modal */}
+          <Modal
+            visible={detailsVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => { setDetailsVisible(false); setContextJob(null); }}
+          >
+            <View style={styles.modalOverlay}>
+              <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', width: SCREEN_WIDTH - 40 }}>
+                <View style={[styles.modalContent, { backgroundColor: themeColors.surface, width: '100%' }]}>
+                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>Edit Details</Text>
+                  
+                  {/* Star Rating Selection */}
+                  <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                    <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 5 }}>Tap to Rate</Text>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <TouchableOpacity key={s} onPress={() => setDetailsRating(s)}>
+                          <Ionicons 
+                            name={s <= detailsRating ? "star" : "star-outline"} 
+                            size={32} 
+                            color={s <= detailsRating ? '#FFD700' : themeColors.textMuted} 
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Title / Filename Field */}
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Title / Filename</Text>
+                    <TextInput
+                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border }]}
+                      value={detailsTitle}
+                      onChangeText={setDetailsTitle}
+                      placeholder="Song title"
+                      placeholderTextColor={themeColors.textMuted}
+                    />
+                  </View>
+
+                  {/* Artist Field */}
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Artist</Text>
+                    <TextInput
+                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border }]}
+                      value={detailsArtist}
+                      onChangeText={setDetailsArtist}
+                      placeholder="Artist/Composer"
+                      placeholderTextColor={themeColors.textMuted}
+                    />
+                  </View>
+
+                  {/* AI Returned Info Read-only Display */}
+                  {(detailsGenre || detailsMood) ? (
+                    <View style={[styles.aiInfoBlock, { backgroundColor: themeColors.surfaceSecondary }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.accent, marginBottom: 5 }}>AI RECOGNIZED METADATA</Text>
+                      {detailsGenre ? <Text style={{ fontSize: 12, color: themeColors.text }}>Genre: <Text style={{ fontWeight: '600' }}>{detailsGenre}</Text></Text> : null}
+                      {detailsMood ? <Text style={{ fontSize: 12, color: themeColors.text }}>Mood: <Text style={{ fontWeight: '600' }}>{detailsMood}</Text></Text> : null}
+                    </View>
+                  ) : null}
+
+                  {/* Comments Field */}
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.inputLabel, { color: themeColors.text }]}>Comments / Notes</Text>
+                    <TextInput
+                      style={[styles.textInput, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, borderColor: themeColors.border, height: 60, textAlignVertical: 'top' }]}
+                      value={detailsComments}
+                      onChangeText={setDetailsComments}
+                      placeholder="Add notes..."
+                      placeholderTextColor={themeColors.textMuted}
+                      multiline
+                    />
+                  </View>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity 
+                      style={[styles.modalBtn, { borderColor: themeColors.border, borderWidth: 1 }]}
+                      onPress={() => { setDetailsVisible(false); setContextJob(null); }}
+                    >
+                      <Text style={{ color: themeColors.text }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.modalBtn, { backgroundColor: themeColors.accent }]}
+                      onPress={handleSaveDetails}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>Save Changes</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
         </View>
       )}
 
@@ -1349,5 +1790,156 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 45,
     textAlign: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  statBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  settingsBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  cleanBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  cleanBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  bottomSheetContent: {
+    width: '100%',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    position: 'absolute',
+    bottom: 0,
+    elevation: 20,
+  },
+  bottomSheetHeader: {
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    marginBottom: 12,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  bottomSheetSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  bottomSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    gap: 12,
+  },
+  bottomSheetItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  bottomSheetCancel: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  bottomSheetCancelText: {
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  inputContainer: {
+    marginBottom: 12,
+    width: '100%',
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  aiInfoBlock: {
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 8,
+    width: '100%',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    width: '100%',
+  },
+  modalBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  presetBadgesRow: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  sliderContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
   }
 });
