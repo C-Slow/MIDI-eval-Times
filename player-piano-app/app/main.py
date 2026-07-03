@@ -1,4 +1,19 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Header, Query, BackgroundTasks
+import torchaudio
+import soundfile as sf
+import torch
+
+def patched_torchaudio_save(uri, src, sample_rate, channels_first=True, **kwargs):
+    if isinstance(src, torch.Tensor):
+        data = src.detach().cpu().numpy()
+    else:
+        data = src
+    if channels_first and data.ndim > 1:
+        data = data.T
+    sf.write(uri, data, sample_rate)
+
+torchaudio.save = patched_torchaudio_save
+
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict
