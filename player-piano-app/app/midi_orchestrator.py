@@ -400,6 +400,7 @@ class MidiOrchestrator:
 
     def _mix_wav_files(self, input_paths: List[Path], output_path: Path):
         from scipy.io import wavfile
+        import scipy.signal
         import numpy as np
         
         valid_paths = [p for p in input_paths if p and p.exists()]
@@ -418,7 +419,12 @@ class MidiOrchestrator:
                 r, d = wavfile.read(str(p))
                 if rate is None:
                     rate = r
-                tensors.append(d.astype(np.float32))
+                
+                d_float = d.astype(np.float32)
+                if r != rate:
+                    num_samples = int(len(d_float) * rate / r)
+                    d_float = scipy.signal.resample(d_float, num_samples, axis=0)
+                tensors.append(d_float)
             except Exception as e:
                 print(f"Error reading {p} for mixing: {e}")
                 
