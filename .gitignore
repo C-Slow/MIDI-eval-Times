@@ -41,3 +41,7 @@ Midi-Projects/Output-Midi/
 
 # Ignore entire Midi-Projects workspace (large data, environments)
 Midi-Projects/
+
+# Ignore large downloaded models and binaries
+storage/rvc_models/
+fluidsynth/

@@ -307,14 +307,31 @@ export const midiOrchestratorApi = {
     const res = await api.get(`/midi-orchestrator/notes/${jobId}`);
     return res.data;
   },
-  process: async (jobId: string, pianoTracks: number[], speakerTracks: number[], pedalPreset: string = 'light', rhythmFactor: number = 1.0, melodyFactor: number = 1.0) => {
+  process: async (
+    jobId: string, 
+    pianoTracks: number[], 
+    speakerTracks: number[], 
+    pedalPreset: string = 'light', 
+    rhythmFactor: number = 1.0, 
+    melodyFactor: number = 1.0,
+    vocalMaleTracks: number[] = [],
+    vocalFemaleTracks: number[] = [],
+    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number }
+  ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,
       speaker_tracks: speakerTracks,
+      vocal_male_tracks: vocalMaleTracks,
+      vocal_female_tracks: vocalFemaleTracks,
       pedal_preset: pedalPreset,
       rhythm_factor: rhythmFactor,
-      melody_factor: melodyFactor
+      melody_factor: melodyFactor,
+      imported_vocals: importedVocals
     });
+    return res.data;
+  },
+  getVocalsWaveform: async (mp3JobId: string) => {
+    const res = await api.get(`/midi-orchestrator/vocals-waveform/${mp3JobId}`);
     return res.data;
   },
   listJobs: async () => {
@@ -333,11 +350,13 @@ export const midiOrchestratorApi = {
     const token = getToken();
     return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
   },
-  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[]) => {
+  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[], vocalMaleTracks: number[] = [], vocalFemaleTracks: number[] = []) => {
     const token = getToken();
     const pStr = pianoTracks.join(',');
     const sStr = speakerTracks.join(',');
-    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&token=${encodeURIComponent(token || '')}`;
+    const mStr = vocalMaleTracks.join(',');
+    const fStr = vocalFemaleTracks.join(',');
+    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&vocal_male_tracks=${encodeURIComponent(mStr)}&vocal_female_tracks=${encodeURIComponent(fStr)}&token=${encodeURIComponent(token || '')}`;
   },
   playMidi: async (jobId: string) => {
     const res = await api.post(`/midi-orchestrator/play/${jobId}`);

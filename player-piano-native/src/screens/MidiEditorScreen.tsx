@@ -22,7 +22,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
-import { midiOrchestratorApi, pianoApi } from '../services/api';
+import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -33,24 +33,36 @@ interface NoteGridProps {
   lanesData: any[];
   pianoTracks: Set<number>;
   speakerTracks: Set<number>;
+  vocalMaleTracks: Set<number>;
+  vocalFemaleTracks: Set<number>;
   themeColors: any;
   durationSec: number;
   timelineWidth: number;
   totalHeight: number;
+  importedVocalsEnabled: boolean;
+  importedVocalsDelayMs: number;
+  vocalsWaveformEnvelope: number[] | null;
 }
 
 const NoteGrid = React.memo(({
   lanesData,
   pianoTracks,
   speakerTracks,
+  vocalMaleTracks,
+  vocalFemaleTracks,
   themeColors,
   durationSec,
   timelineWidth,
   totalHeight,
+  importedVocalsEnabled,
+  importedVocalsDelayMs,
+  vocalsWaveformEnvelope,
 }: NoteGridProps) => {
-  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean) => {
+  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
     if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
     if (isSpeaker) return '#a29bfe'; // Light purple for strings/speakers
+    if (isMale) return '#0984e3'; // Vibrant blue for male vocals
+    if (isFemale) return '#e84393'; // Vibrant pink for female vocals
     return themeColors.textMuted;
   };
 
@@ -75,9 +87,60 @@ const NoteGrid = React.memo(({
       ))}
 
       {lanesData.map((lane: any, laneIdx: number) => {
+        if (lane.index === -99) {
+          const delayOffsetPx = (importedVocalsDelayMs / 1000) * PIXELS_PER_SECOND;
+          const waveformColor = importedVocalsEnabled ? '#e84393' : 'rgba(120, 120, 120, 0.4)';
+          
+          return (
+            <View 
+              key={lane.index} 
+              style={[
+                styles.laneTimeline, 
+                { 
+                  height: LANE_HEIGHT, 
+                  top: laneIdx * LANE_HEIGHT, 
+                  borderBottomColor: themeColors.border,
+                  backgroundColor: 'rgba(232, 67, 147, 0.05)'
+                }
+              ]}
+            >
+              {vocalsWaveformEnvelope ? (
+                vocalsWaveformEnvelope.map((val: number, idx: number) => {
+                  const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
+                  if (left < -10 || left > timelineWidth + 10) return null;
+                  
+                  const barHeight = Math.max(2, val * usableLaneHeight);
+                  const barTop = verticalPadding + (usableLaneHeight - barHeight) / 2;
+                  
+                  return (
+                    <View
+                      key={idx}
+                      style={{
+                        position: 'absolute',
+                        left,
+                        width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
+                        top: barTop,
+                        height: barHeight,
+                        backgroundColor: waveformColor,
+                        borderRadius: 1
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <Text style={{ position: 'absolute', left: 20, top: 30, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
+                  No waveform data loaded
+                </Text>
+              )}
+            </View>
+          );
+        }
+
         const isPiano = pianoTracks.has(lane.index);
         const isSpeaker = speakerTracks.has(lane.index);
-        const color = getTrackColor(lane.index, isPiano, isSpeaker);
+        const isMale = vocalMaleTracks.has(lane.index);
+        const isFemale = vocalFemaleTracks.has(lane.index);
+        const color = getTrackColor(lane.index, isPiano, isSpeaker, isMale, isFemale);
 
         return (
           <View 
@@ -125,15 +188,26 @@ const NoteGrid = React.memo(({
   if (prevProps.durationSec !== nextProps.durationSec) return false;
   if (prevProps.themeColors !== nextProps.themeColors) return false;
   if (prevProps.lanesData !== nextProps.lanesData) return false;
+  if (prevProps.importedVocalsEnabled !== nextProps.importedVocalsEnabled) return false;
+  if (prevProps.importedVocalsDelayMs !== nextProps.importedVocalsDelayMs) return false;
+  if (prevProps.vocalsWaveformEnvelope !== nextProps.vocalsWaveformEnvelope) return false;
   
   if (prevProps.pianoTracks.size !== nextProps.pianoTracks.size) return false;
   if (prevProps.speakerTracks.size !== nextProps.speakerTracks.size) return false;
+  if (prevProps.vocalMaleTracks.size !== nextProps.vocalMaleTracks.size) return false;
+  if (prevProps.vocalFemaleTracks.size !== nextProps.vocalFemaleTracks.size) return false;
   
   for (const item of prevProps.pianoTracks) {
     if (!nextProps.pianoTracks.has(item)) return false;
   }
   for (const item of prevProps.speakerTracks) {
     if (!nextProps.speakerTracks.has(item)) return false;
+  }
+  for (const item of prevProps.vocalMaleTracks) {
+    if (!nextProps.vocalMaleTracks.has(item)) return false;
+  }
+  for (const item of prevProps.vocalFemaleTracks) {
+    if (!nextProps.vocalFemaleTracks.has(item)) return false;
   }
   
   return true;
@@ -156,9 +230,21 @@ export const MidiEditorScreen = () => {
   // Track configuration state
   const [pianoTracks, setPianoTracks] = useState<Set<number>>(new Set());
   const [speakerTracks, setSpeakerTracks] = useState<Set<number>>(new Set());
+  const [vocalMaleTracks, setVocalMaleTracks] = useState<Set<number>>(new Set());
+  const [vocalFemaleTracks, setVocalFemaleTracks] = useState<Set<number>>(new Set());
   const [pedalPreset, setPedalPreset] = useState<'light' | 'medium' | 'full'>('light');
   const [rhythmFactor, setRhythmFactor] = useState(1.0);
   const [melodyFactor, setMelodyFactor] = useState(1.0);
+
+  // Imported MP3 Vocals State
+  const [importedVocalsJobId, setImportedVocalsJobId] = useState<string | null>(null);
+  const [importedVocalsOriginalName, setImportedVocalsOriginalName] = useState<string | null>(null);
+  const [importedVocalsDelayMs, setImportedVocalsDelayMs] = useState<number>(0);
+  const [importedVocalsEnabled, setImportedVocalsEnabled] = useState<boolean>(true);
+  const [importedVocalsVolumeFactor, setImportedVocalsVolumeFactor] = useState<number>(1.0);
+  const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
+  const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
+  const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
 
   // Settings Panel visibility
   const [showSettings, setShowSettings] = useState(false);
@@ -285,9 +371,13 @@ export const MidiEditorScreen = () => {
     if (!currentJob) return false;
     const savedPiano = new Set(currentJob.piano_tracks || []);
     const savedSpeaker = new Set(currentJob.speaker_tracks || []);
+    const savedMale = new Set(currentJob.vocal_male_tracks || []);
+    const savedFemale = new Set(currentJob.vocal_female_tracks || []);
     
     if (pianoTracks.size !== savedPiano.size) return true;
     if (speakerTracks.size !== savedSpeaker.size) return true;
+    if (vocalMaleTracks.size !== savedMale.size) return true;
+    if (vocalFemaleTracks.size !== savedFemale.size) return true;
     
     for (const id of pianoTracks) {
       if (!savedPiano.has(id)) return true;
@@ -295,13 +385,19 @@ export const MidiEditorScreen = () => {
     for (const id of speakerTracks) {
       if (!savedSpeaker.has(id)) return true;
     }
+    for (const id of vocalMaleTracks) {
+      if (!savedMale.has(id)) return true;
+    }
+    for (const id of vocalFemaleTracks) {
+      if (!savedFemale.has(id)) return true;
+    }
     
     if (pedalPreset !== currentJob.pedal_preset) return true;
     if (rhythmFactor !== currentJob.rhythm_factor) return true;
     if (melodyFactor !== currentJob.melody_factor) return true;
     
     return false;
-  }, [currentJob, pianoTracks, speakerTracks, pedalPreset, rhythmFactor, melodyFactor]);
+  }, [currentJob, pianoTracks, speakerTracks, vocalMaleTracks, vocalFemaleTracks, pedalPreset, rhythmFactor, melodyFactor]);
 
   useEffect(() => {
     if (!currentJob) return;
@@ -319,12 +415,29 @@ export const MidiEditorScreen = () => {
     setSelectedJobId(jobId);
     setPianoTracks(new Set(job.piano_tracks || []));
     setSpeakerTracks(new Set(job.speaker_tracks || []));
+    setVocalMaleTracks(new Set(job.vocal_male_tracks || []));
+    setVocalFemaleTracks(new Set(job.vocal_female_tracks || []));
     setPedalPreset(job.pedal_preset || 'light');
     setRhythmFactor(job.rhythm_factor ?? 1.0);
     setMelodyFactor(job.melody_factor ?? 1.0);
+    const impVoc = job.imported_vocals || null;
+    setImportedVocalsJobId(impVoc?.mp3_job_id || null);
+    setImportedVocalsOriginalName(impVoc?.original_name || null);
+    setImportedVocalsDelayMs(impVoc?.delay_ms || 0);
+    setImportedVocalsEnabled(impVoc?.enabled ?? true);
+    setImportedVocalsVolumeFactor(impVoc?.volume_factor ?? 1.0);
+    setVocalsWaveformEnvelope(null);
 
     setLoading(true);
     try {
+      if (impVoc?.mp3_job_id) {
+        try {
+          const waveData = await midiOrchestratorApi.getVocalsWaveform(impVoc.mp3_job_id);
+          setVocalsWaveformEnvelope(waveData.envelope || null);
+        } catch (waveErr) {
+          console.error("Failed to fetch vocals waveform:", waveErr);
+        }
+      }
       // 1. Fetch note events for the lanes
       const noteData = await midiOrchestratorApi.getNotes(jobId);
       setNotes(noteData);
@@ -359,7 +472,44 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'mute') => {
+  const handleOpenMp3ImportModal = async () => {
+    try {
+      setLoading(true);
+      const jobsList = await mp3Api.listJobs();
+      const completed = jobsList.filter((j: any) => j.status === 'completed' && j.vocals);
+      setMp3Jobs(completed);
+      setShowMp3ImportModal(true);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to fetch MP3 orchestrator library.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectMp3Vocals = async (mp3JobId: string) => {
+    try {
+      setLoading(true);
+      setShowMp3ImportModal(false);
+      const job = mp3Jobs.find(j => j.job_id === mp3JobId);
+      const origName = job?.original_name || job?.filename || 'Untitled MP3 Job';
+      setImportedVocalsJobId(mp3JobId);
+      setImportedVocalsOriginalName(origName);
+      setImportedVocalsEnabled(true);
+      setImportedVocalsDelayMs(0);
+      setImportedVocalsVolumeFactor(1.0);
+      
+      const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
+      setVocalsWaveformEnvelope(waveData.envelope || null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Waveform Error', 'Could not load vocal waveform details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'male_vocal' | 'female_vocal' | 'mute') => {
     if (isPreviewPlaying) {
       stopPreview();
     }
@@ -377,6 +527,20 @@ export const MidiEditorScreen = () => {
     setSpeakerTracks(prev => {
       const next = new Set(prev);
       if (role === 'speakers') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+
+    setVocalMaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'male_vocal') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+
+    setVocalFemaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'female_vocal') next.add(trackIndex);
       else next.delete(trackIndex);
       return next;
     });
@@ -569,7 +733,10 @@ export const MidiEditorScreen = () => {
         contextJob.speaker_tracks || [],
         recleanPedal,
         recleanRhythm,
-        recleanMelody
+        recleanMelody,
+        contextJob.vocal_male_tracks || [],
+        contextJob.vocal_female_tracks || [],
+        contextJob.imported_vocals
       );
       
       Alert.alert('Processing Started', 'The MIDI job is being re-synthesized in the background.');
@@ -642,7 +809,7 @@ export const MidiEditorScreen = () => {
   };
 
   // Toggle track role
-  const handleTrackRoleToggle = (trackIndex: number, role: 'piano' | 'speakers' | 'mute') => {
+  const handleTrackRoleToggle = (trackIndex: number, role: 'piano' | 'speakers' | 'male_vocal' | 'female_vocal' | 'mute') => {
     setPianoTracks(prev => {
       const next = new Set(prev);
       if (role === 'piano') next.add(trackIndex);
@@ -652,6 +819,18 @@ export const MidiEditorScreen = () => {
     setSpeakerTracks(prev => {
       const next = new Set(prev);
       if (role === 'speakers') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+    setVocalMaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'male_vocal') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+    setVocalFemaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'female_vocal') next.add(trackIndex);
       else next.delete(trackIndex);
       return next;
     });
@@ -690,7 +869,9 @@ export const MidiEditorScreen = () => {
       const url = midiOrchestratorApi.getPreviewUrl(
         selectedJobId, 
         Array.from(pianoTracks), 
-        Array.from(speakerTracks)
+        Array.from(speakerTracks),
+        Array.from(vocalMaleTracks),
+        Array.from(vocalFemaleTracks)
       );
 
       const { sound } = await Audio.Sound.createAsync(
@@ -717,8 +898,8 @@ export const MidiEditorScreen = () => {
   // Run Backend Split & Synthesize Process
   const handleProcess = async () => {
     if (!selectedJobId) return;
-    if (pianoTracks.size === 0 && speakerTracks.size === 0) {
-      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano or Speakers.');
+    if (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) {
+      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano, Speakers, or Vocals.');
       return;
     }
 
@@ -730,7 +911,16 @@ export const MidiEditorScreen = () => {
         Array.from(speakerTracks),
         pedalPreset,
         rhythmFactor,
-        melodyFactor
+        melodyFactor,
+        Array.from(vocalMaleTracks),
+        Array.from(vocalFemaleTracks),
+        importedVocalsJobId ? {
+          mp3_job_id: importedVocalsJobId,
+          original_name: importedVocalsOriginalName || undefined,
+          delay_ms: importedVocalsDelayMs,
+          enabled: importedVocalsEnabled,
+          volume_factor: importedVocalsVolumeFactor
+        } : undefined
       );
       await fetchJobs();
       setStage('list');
@@ -866,7 +1056,7 @@ export const MidiEditorScreen = () => {
     if (!currentJob || !notes) return [];
     
     // Build lanes only for tracks containing notes
-    return currentJob.tracks.filter((t: any) => {
+    const lanes = currentJob.tracks.filter((t: any) => {
       const trackNotes = notes[String(t.index)] || [];
       return trackNotes.length > 0;
     }).map((track: any) => {
@@ -884,7 +1074,25 @@ export const MidiEditorScreen = () => {
         pitchRange
       };
     });
-  }, [currentJob, notes]);
+
+    if (importedVocalsJobId) {
+      lanes.push({
+        index: -99,
+        name: "🎙️ MP3 Vocals",
+        program: -1,
+        instrument_name: "Audio Stems",
+        is_drum: false,
+        note_count: 0,
+        duration: 0.0,
+        notes: [],
+        minPitch: 0,
+        maxPitch: 0,
+        pitchRange: 1
+      });
+    }
+
+    return lanes;
+  }, [currentJob, notes, importedVocalsJobId]);
 
   // Timeline render item notes
   const renderVisualizerTimeline = () => {
@@ -904,16 +1112,61 @@ export const MidiEditorScreen = () => {
           {getLanesData.map((lane: any) => {
             const isPiano = pianoTracks.has(lane.index);
             const isSpeaker = speakerTracks.has(lane.index);
-            const isMuted = !isPiano && !isSpeaker;
+            const isMale = vocalMaleTracks.has(lane.index);
+            const isFemale = vocalFemaleTracks.has(lane.index);
+            const isMuted = !isPiano && !isSpeaker && !isMale && !isFemale;
             
+            if (lane.index === -99) {
+              return (
+                <View key="-99" style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border, paddingHorizontal: 10, justifyContent: 'center' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
+                      🎙️ MP3 Vocals
+                    </Text>
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        importedVocalsEnabled ? { backgroundColor: '#e84393' } : { backgroundColor: themeColors.border }
+                      ]}
+                      onPress={() => setImportedVocalsEnabled(!importedVocalsEnabled)}
+                    >
+                      <Ionicons name={importedVocalsEnabled ? "volume-high" : "volume-mute"} size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Delay controls */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <TouchableOpacity 
+                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      onPress={() => setImportedVocalsDelayMs(prev => prev - 50)}
+                    >
+                      <Text style={{ fontSize: 9, color: themeColors.text }}>-50</Text>
+                    </TouchableOpacity>
+                    
+                    <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>
+                      {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      onPress={() => setImportedVocalsDelayMs(prev => prev + 50)}
+                    >
+                      <Text style={{ fontSize: 9, color: themeColors.text }}>+50</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+
             return (
               <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
                 <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
                   {lane.name}
                 </Text>
                 
-                {/* 3-Way Live Toggle Row */}
+                {/* 5-Way Live Toggle Row */}
                 <View style={styles.allocationRow}>
+                  {/* Piano */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -924,6 +1177,7 @@ export const MidiEditorScreen = () => {
                     <Ionicons name="musical-notes" size={12} color={isPiano ? "#fff" : themeColors.textMuted} />
                   </TouchableOpacity>
 
+                  {/* Speakers (Instruments) */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -934,6 +1188,29 @@ export const MidiEditorScreen = () => {
                     <Ionicons name="volume-high" size={12} color={isSpeaker ? "#fff" : themeColors.textMuted} />
                   </TouchableOpacity>
 
+                  {/* Male Vocal */}
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isMale && { backgroundColor: '#0984e3' }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'male_vocal')}
+                  >
+                    <Ionicons name="man" size={12} color={isMale ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  {/* Female Vocal */}
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isFemale && { backgroundColor: '#e84393' }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'female_vocal')}
+                  >
+                    <Ionicons name="woman" size={12} color={isFemale ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  {/* Mute */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -962,10 +1239,15 @@ export const MidiEditorScreen = () => {
               lanesData={getLanesData}
               pianoTracks={pianoTracks}
               speakerTracks={speakerTracks}
+              vocalMaleTracks={vocalMaleTracks}
+              vocalFemaleTracks={vocalFemaleTracks}
               themeColors={themeColors}
               durationSec={durationSec}
               timelineWidth={timelineWidth}
               totalHeight={totalHeight}
+              importedVocalsEnabled={importedVocalsEnabled}
+              importedVocalsDelayMs={importedVocalsDelayMs}
+              vocalsWaveformEnvelope={vocalsWaveformEnvelope}
             />
 
             {/* Glowing Vertical Playhead */}
@@ -1691,6 +1973,113 @@ export const MidiEditorScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* MP3 Vocal Import Section */}
+              <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
+
+              <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
+                    🎙️ MP3 Vocal Stem
+                  </Text>
+                  {importedVocalsJobId ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Switch
+                        value={importedVocalsEnabled}
+                        onValueChange={setImportedVocalsEnabled}
+                        trackColor={{ false: themeColors.border, true: '#e84393' }}
+                        thumbColor="#fff"
+                      />
+                      <TouchableOpacity 
+                        onPress={() => {
+                          setImportedVocalsJobId(null);
+                          setImportedVocalsOriginalName(null);
+                          setVocalsWaveformEnvelope(null);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ff7675" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ backgroundColor: themeColors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                      onPress={handleOpenMp3ImportModal}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Link MP3 Vocals</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {importedVocalsJobId && (
+                  <View style={{ marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginBottom: 8 }} numberOfLines={1}>
+                      Linked: {importedVocalsOriginalName || `${importedVocalsJobId.slice(0, 18)}...`}
+                    </Text>
+                         {/* Delay buttons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 6 }}>
+                      <Text style={{ fontSize: 11, color: themeColors.text, width: 75 }}>Align Delay:</Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'space-between' }}>
+                        {/* Decrements */}
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {[-100, -50, -10].map(val => (
+                            <TouchableOpacity 
+                              key={`dec-${val}`}
+                              style={{ paddingHorizontal: 6, paddingVertical: 4, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                              onPress={() => setImportedVocalsDelayMs(prev => prev + val)}
+                            >
+                              <Text style={{ fontSize: 9, color: themeColors.text }}>{val}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        {/* Value Display */}
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold', minWidth: 55, textAlign: 'center' }}>
+                          {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
+                        </Text>
+
+                        {/* Increments */}
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {[10, 50, 100].map(val => (
+                            <TouchableOpacity 
+                              key={`inc-${val}`}
+                              style={{ paddingHorizontal: 6, paddingVertical: 4, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                              onPress={() => setImportedVocalsDelayMs(prev => prev + val)}
+                            >
+                              <Text style={{ fontSize: 9, color: themeColors.text }}>{`+${val}`}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Volume buttons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 6 }}>
+                      <Text style={{ fontSize: 11, color: themeColors.text, width: 75 }}>Vocal Volume:</Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity 
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: themeColors.surface, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                          onPress={() => setImportedVocalsVolumeFactor(prev => Math.max(0.0, Number((prev - 0.1).toFixed(1))))}
+                        >
+                          <Ionicons name="remove" size={12} color={themeColors.text} />
+                        </TouchableOpacity>
+
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold', minWidth: 45, textAlign: 'center' }}>
+                          {Math.round(importedVocalsVolumeFactor * 100)}%
+                        </Text>
+
+                        <TouchableOpacity 
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: themeColors.surface, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                          onPress={() => setImportedVocalsVolumeFactor(prev => Math.min(2.0, Number((prev + 0.1).toFixed(1))))}
+                        >
+                          <Ionicons name="add" size={12} color={themeColors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
@@ -1787,6 +2176,74 @@ export const MidiEditorScreen = () => {
               )}
             </View>
           </View>
+
+          {/* MP3 Vocal Stem Selection Modal */}
+          <Modal
+            visible={showMp3ImportModal}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowMp3ImportModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface, maxHeight: '80%' }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>Link MP3 Vocals</Text>
+                  <TouchableOpacity onPress={() => setShowMp3ImportModal(false)}>
+                    <Ionicons name="close" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {mp3Jobs.length === 0 ? (
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <Ionicons name="cloud-offline-outline" size={48} color={themeColors.textMuted} />
+                    <Text style={{ color: themeColors.textMuted, marginTop: 10, textAlign: 'center' }}>
+                      No completed MP3 separation jobs found.
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={mp3Jobs}
+                    keyExtractor={(item) => item.job_id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={{
+                          padding: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: themeColors.border,
+                          backgroundColor: themeColors.surfaceSecondary,
+                          borderRadius: 8,
+                          marginBottom: 8
+                        }}
+                        onPress={() => handleSelectMp3Vocals(item.job_id)}
+                      >
+                        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
+                          {item.original_name || item.filename || 'Untitled MP3 Job'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 15, marginTop: 4 }}>
+                          <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                            ID: {item.job_id.slice(0, 8)}
+                          </Text>
+                          {item.artist && (
+                            <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                              Artist: {item.artist}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    style={{ maxHeight: 350 }}
+                  />
+                )}
+
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { backgroundColor: themeColors.accent, marginTop: 15 }]} 
+                  onPress={() => setShowMp3ImportModal(false)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
         </View>
       )}
@@ -1941,7 +2398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   sidebar: {
-    width: 110,
+    width: 170,
     borderRightWidth: 1,
     zIndex: 10,
   },
