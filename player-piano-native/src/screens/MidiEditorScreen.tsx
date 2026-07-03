@@ -251,7 +251,7 @@ const NoteGrid = React.memo(({
                 onLongPress={(evt) => {
                   onLongPressVocals(evt.nativeEvent.locationX);
                 }}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70 }}
+                style={{ position: 'absolute', top: 0, left: 0, width: timelineWidth, height: 70 }}
               >
                 {vocalsWaveformEnvelope ? (
                   vocalsWaveformEnvelope.map((val: number, idx: number) => {

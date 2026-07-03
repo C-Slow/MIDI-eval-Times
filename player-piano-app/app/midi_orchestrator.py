@@ -672,32 +672,19 @@ class MidiOrchestrator:
                         
                         N = len(data_no_beeps)
                         
-                        # Construct boundaries
-                        boundaries = [0]
+                        # Construct timeline boundaries (T) and segment offsets (S)
+                        T = [delay_ms]
+                        S = [delay_ms]
                         for b in sorted_breaks:
-                            idx = int((b.get("time_ms", 0) / 1000.0) * rate)
-                            if 0 < idx < N:
-                                boundaries.append(idx)
-                        boundaries.append(N)
+                            T.append(b.get("time_ms", 0))
+                            S.append(b.get("offset_ms", 0))
                         
-                        # Compute segment offsets directly
-                        segment_delays = [delay_ms]
-                        for b in sorted_breaks:
-                            idx = int((b.get("time_ms", 0) / 1000.0) * rate)
-                            if 0 < idx < N:
-                                segment_delays.append(b.get("offset_ms", 0))
-                                
+                        # Add final end time to T
+                        T.append(int(N * 1000.0 / rate) + S[-1])
+                        
                         # Calculate total output length
-                        max_out_idx = 0
-                        for i in range(len(boundaries) - 1):
-                            start_idx = boundaries[i]
-                            end_idx = boundaries[i+1]
-                            shift_samples = int((segment_delays[i] / 1000.0) * rate)
-                            target_start = max(0, start_idx + shift_samples)
-                            target_end = target_start + (end_idx - start_idx)
-                            if target_end > max_out_idx:
-                                max_out_idx = target_end
-                                
+                        max_out_idx = max(0, int((T[-1] / 1000.0) * rate))
+                        
                         # Initialize aligned_data buffer
                         is_stereo = (data_no_beeps.ndim == 2)
                         if is_stereo:
@@ -706,26 +693,32 @@ class MidiOrchestrator:
                             aligned_data = np.zeros(max_out_idx, dtype=np.float32)
                             
                         # Mix each segment piecewise
-                        for i in range(len(boundaries) - 1):
-                            start_idx = boundaries[i]
-                            end_idx = boundaries[i+1]
-                            shift_samples = int((segment_delays[i] / 1000.0) * rate)
-                            target_start = max(0, start_idx + shift_samples)
-                            target_end = target_start + (end_idx - start_idx)
+                        for i in range(len(S)):
+                            t_start = T[i]
+                            t_end = T[i+1]
+                            offset = S[i]
                             
-                            seg_data = data_no_beeps[start_idx:end_idx]
+                            # Audio boundaries
+                            audio_start = max(0, int(((t_start - offset) / 1000.0) * rate))
+                            audio_end = max(0, int(((t_end - offset) / 1000.0) * rate))
                             
-                            # Handle negative offsets truncating/cropping segment start
-                            if start_idx + shift_samples < 0:
-                                crop_amount = abs(start_idx + shift_samples)
-                                if crop_amount < len(seg_data):
-                                    seg_data = seg_data[crop_amount:]
-                                    target_start = 0
-                                    target_end = len(seg_data)
-                                else:
-                                    continue
-                                    
-                            aligned_data[target_start:target_end] += seg_data
+                            # Target mix indices in output buffer
+                            target_start = max(0, int((t_start / 1000.0) * rate))
+                            target_end = target_start + (audio_end - audio_start)
+                            
+                            # Ensure within bounds of the data array
+                            audio_start = min(N, audio_start)
+                            audio_end = min(N, audio_end)
+                            
+                            seg_data = data_no_beeps[audio_start:audio_end]
+                            if len(seg_data) > 0 and target_start < max_out_idx:
+                                # Ensure we don't write past output buffer
+                                write_len = min(len(seg_data), max_out_idx - target_start)
+                                if write_len > 0:
+                                    if is_stereo:
+                                        aligned_data[target_start:target_start + write_len, :] += seg_data[:write_len, :]
+                                    else:
+                                        aligned_data[target_start:target_start + write_len] += seg_data[:write_len]
                             
                         # Normalize, apply volume factor, clip and convert back to int16
                         max_amp = np.max(np.abs(aligned_data))
