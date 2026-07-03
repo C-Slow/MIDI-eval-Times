@@ -640,6 +640,7 @@ class MidiOrchestrator:
             if imported_vocals and imported_vocals.get("enabled"):
                 mp3_job_id = imported_vocals.get("mp3_job_id")
                 delay_ms = imported_vocals.get("delay_ms", 0)
+                volume_factor = imported_vocals.get("volume_factor", 1.0)
                 
                 src_vocals_wav = self.storage_dir / "separated" / mp3_job_id / "vocals.wav"
                 if src_vocals_wav.exists():
@@ -680,10 +681,12 @@ class MidiOrchestrator:
                         else:
                             aligned_data = data_no_beeps
                             
-                        # Normalize and convert back to int16
+                        # Normalize, apply volume factor, clip and convert back to int16
                         max_amp = np.max(np.abs(aligned_data))
                         if max_amp > 0:
                             aligned_data = (aligned_data / max_amp) * 32767.0
+                        
+                        aligned_data = np.clip(aligned_data * volume_factor, -32768.0, 32767.0)
                         aligned_int16 = aligned_data.astype(np.int16)
                         
                         wavfile.write(str(imported_wav_path), rate, aligned_int16)

@@ -241,6 +241,7 @@ export const MidiEditorScreen = () => {
   const [importedVocalsOriginalName, setImportedVocalsOriginalName] = useState<string | null>(null);
   const [importedVocalsDelayMs, setImportedVocalsDelayMs] = useState<number>(0);
   const [importedVocalsEnabled, setImportedVocalsEnabled] = useState<boolean>(true);
+  const [importedVocalsVolumeFactor, setImportedVocalsVolumeFactor] = useState<number>(1.0);
   const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
   const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
   const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
@@ -424,6 +425,7 @@ export const MidiEditorScreen = () => {
     setImportedVocalsOriginalName(impVoc?.original_name || null);
     setImportedVocalsDelayMs(impVoc?.delay_ms || 0);
     setImportedVocalsEnabled(impVoc?.enabled ?? true);
+    setImportedVocalsVolumeFactor(impVoc?.volume_factor ?? 1.0);
     setVocalsWaveformEnvelope(null);
 
     setLoading(true);
@@ -495,6 +497,7 @@ export const MidiEditorScreen = () => {
       setImportedVocalsOriginalName(origName);
       setImportedVocalsEnabled(true);
       setImportedVocalsDelayMs(0);
+      setImportedVocalsVolumeFactor(1.0);
       
       const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
       setVocalsWaveformEnvelope(waveData.envelope || null);
@@ -915,7 +918,8 @@ export const MidiEditorScreen = () => {
           mp3_job_id: importedVocalsJobId,
           original_name: importedVocalsOriginalName || undefined,
           delay_ms: importedVocalsDelayMs,
-          enabled: importedVocalsEnabled
+          enabled: importedVocalsEnabled,
+          volume_factor: importedVocalsVolumeFactor
         } : undefined
       );
       await fetchJobs();
@@ -2011,32 +2015,66 @@ export const MidiEditorScreen = () => {
                     <Text style={{ fontSize: 11, color: themeColors.textMuted, marginBottom: 8 }} numberOfLines={1}>
                       Linked: {importedVocalsOriginalName || `${importedVocalsJobId.slice(0, 18)}...`}
                     </Text>
-                    
-                    {/* Delay slider */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                         {/* Delay buttons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 6 }}>
                       <Text style={{ fontSize: 11, color: themeColors.text, width: 75 }}>Align Delay:</Text>
-                      <Slider
-                        style={{ flex: 1, height: 40 }}
-                        minimumValue={-2000}
-                        maximumValue={2000}
-                        step={10}
-                        value={importedVocalsDelayMs}
-                        onValueChange={setImportedVocalsDelayMs}
-                        minimumTrackTintColor="#e84393"
-                        maximumTrackTintColor={themeColors.border}
-                        thumbTintColor="#e84393"
-                      />
-                      <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: themeColors.border, width: 50 }}>
-                        <TextInput
-                          style={{ fontSize: 11, color: themeColors.text, padding: 0, textAlign: 'center', width: 35 }}
-                          value={String(importedVocalsDelayMs)}
-                          onChangeText={(txt) => {
-                            const val = parseInt(txt);
-                            setImportedVocalsDelayMs(isNaN(val) ? 0 : val);
-                          }}
-                          keyboardType="numeric"
-                        />
-                        <Text style={{ fontSize: 9, color: themeColors.textMuted }}>ms</Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'space-between' }}>
+                        {/* Decrements */}
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {[-100, -50, -10].map(val => (
+                            <TouchableOpacity 
+                              key={`dec-${val}`}
+                              style={{ paddingHorizontal: 6, paddingVertical: 4, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                              onPress={() => setImportedVocalsDelayMs(prev => prev + val)}
+                            >
+                              <Text style={{ fontSize: 9, color: themeColors.text }}>{val}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        {/* Value Display */}
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold', minWidth: 55, textAlign: 'center' }}>
+                          {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
+                        </Text>
+
+                        {/* Increments */}
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {[10, 50, 100].map(val => (
+                            <TouchableOpacity 
+                              key={`inc-${val}`}
+                              style={{ paddingHorizontal: 6, paddingVertical: 4, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                              onPress={() => setImportedVocalsDelayMs(prev => prev + val)}
+                            >
+                              <Text style={{ fontSize: 9, color: themeColors.text }}>{`+${val}`}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Volume buttons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 6 }}>
+                      <Text style={{ fontSize: 11, color: themeColors.text, width: 75 }}>Vocal Volume:</Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity 
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: themeColors.surface, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                          onPress={() => setImportedVocalsVolumeFactor(prev => Math.max(0.0, Number((prev - 0.1).toFixed(1))))}
+                        >
+                          <Ionicons name="remove" size={12} color={themeColors.text} />
+                        </TouchableOpacity>
+
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold', minWidth: 45, textAlign: 'center' }}>
+                          {Math.round(importedVocalsVolumeFactor * 100)}%
+                        </Text>
+
+                        <TouchableOpacity 
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: themeColors.surface, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                          onPress={() => setImportedVocalsVolumeFactor(prev => Math.min(2.0, Number((prev + 0.1).toFixed(1))))}
+                        >
+                          <Ionicons name="add" size={12} color={themeColors.text} />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>

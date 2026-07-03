@@ -1254,8 +1254,10 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
 
 class ImportedVocalsConfig(BaseModel):
     mp3_job_id: str
+    original_name: Optional[str] = None
     delay_ms: int = 0
     enabled: bool = True
+    volume_factor: float = 1.0
 
 class ProcessMidiRequest(BaseModel):
     piano_tracks: List[int]
