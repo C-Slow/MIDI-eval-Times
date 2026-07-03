@@ -323,6 +323,58 @@ class MidiOrchestrator:
         thread.daemon = True
         thread.start()
 
+    def _apply_vocal_expression(self, inst: pretty_midi.Instrument):
+        import math
+        notes = sorted(inst.notes, key=lambda n: n.start)
+        if not notes:
+            return
+            
+        pitch_bends = []
+        
+        # 1. Apply Portamento (glides) between consecutive notes
+        for i in range(1, len(notes)):
+            prev_n = notes[i-1]
+            curr_n = notes[i]
+            
+            # If notes are close in time (less than 150ms gap) and close in pitch (<= 6 semitones)
+            if 0 < (curr_n.start - prev_n.end) < 0.15 and abs(curr_n.pitch - prev_n.pitch) <= 6:
+                diff = curr_n.pitch - prev_n.pitch
+                if diff != 0:
+                    glide_dur = 0.12 # 120ms slide
+                    steps = 6
+                    # Slide starts at curr_n.start and goes to curr_n.start + glide_dur
+                    for s in range(steps + 1):
+                        t = curr_n.start + (s / steps) * glide_dur
+                        # Ramping from -diff * 4096 to 0
+                        frac = s / steps
+                        bend_val = int((-diff * 4096) * (1.0 - frac))
+                        bend_val = max(-8192, min(8191, bend_val))
+                        pitch_bends.append(pretty_midi.PitchBend(pitch=bend_val, time=t))
+                        
+        # 2. Apply Sinusoidal Vibrato for long held notes
+        for n in notes:
+            dur = n.end - n.start
+            if dur > 0.4:
+                vib_start = n.start + 0.25 # starts 250ms into the note
+                vib_end = n.end - 0.05
+                freq = 5.5 # 5.5 Hz vibrato
+                depth_cents = 35 # +/- 35 cents depth
+                
+                t = vib_start
+                while t < vib_end:
+                    phase = 2.0 * math.pi * freq * (t - vib_start)
+                    # 1 cent is 40.96 units
+                    bend_val = int(depth_cents * 40.96 * math.sin(phase))
+                    bend_val = max(-8192, min(8191, bend_val))
+                    pitch_bends.append(pretty_midi.PitchBend(pitch=bend_val, time=t))
+                    t += 0.02 # 20ms steps
+                    
+                # Reset pitch bend at end of note
+                pitch_bends.append(pretty_midi.PitchBend(pitch=0, time=vib_end))
+                
+        # Sort pitch bends by time and assign
+        inst.pitch_bends = sorted(pitch_bends, key=lambda pb: pb.time)
+
     def _process_rvc_vocals(self, job_dir: Path, pm: pretty_midi.PrettyMIDI, vocal_tracks: List[int], gender: str, time_shift: float) -> Optional[Path]:
         if not vocal_tracks:
             return None
@@ -341,6 +393,7 @@ class MidiOrchestrator:
                         start=max(0.0, n.start - time_shift),
                         end=max(0.0, n.end - time_shift)
                     ))
+                self._apply_vocal_expression(new_inst)
                 vocal_pm.instruments.append(new_inst)
                 
         if not vocal_pm.instruments:
