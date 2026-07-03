@@ -491,7 +491,7 @@ class MidiOrchestrator:
                     if min_start is None or note.start < min_start:
                         min_start = note.start
             
-            time_shift = min_start if (min_start is not None and min_start > 0.0) else 0.0
+            time_shift = 0.0
             
             self.status[job_id]["progress"] = 30
             self._save_db()
