@@ -344,11 +344,13 @@ export const midiOrchestratorApi = {
     const token = getToken();
     return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
   },
-  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[]) => {
+  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[], vocalMaleTracks: number[] = [], vocalFemaleTracks: number[] = []) => {
     const token = getToken();
     const pStr = pianoTracks.join(',');
     const sStr = speakerTracks.join(',');
-    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&token=${encodeURIComponent(token || '')}`;
+    const mStr = vocalMaleTracks.join(',');
+    const fStr = vocalFemaleTracks.join(',');
+    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&vocal_male_tracks=${encodeURIComponent(mStr)}&vocal_female_tracks=${encodeURIComponent(fStr)}&token=${encodeURIComponent(token || '')}`;
   },
   playMidi: async (jobId: string) => {
     const res = await api.post(`/midi-orchestrator/play/${jobId}`);

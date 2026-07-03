@@ -1484,6 +1484,8 @@ async def get_midi_orchestrator_preview(
     job_id: str, 
     piano_tracks: str = Query(""), 
     speaker_tracks: str = Query(""), 
+    vocal_male_tracks: str = Query(""),
+    vocal_female_tracks: str = Query(""),
     pedal_preset: str = "light",
     rhythm_factor: float = 1.0,
     melody_factor: float = 1.0,
@@ -1505,6 +1507,8 @@ async def get_midi_orchestrator_preview(
     # Parse track lists
     p_tracks = [int(x) for x in piano_tracks.split(",") if x.strip()]
     s_tracks = [int(x) for x in speaker_tracks.split(",") if x.strip()]
+    vm_tracks = [int(x) for x in vocal_male_tracks.split(",") if x.strip()]
+    vf_tracks = [int(x) for x in vocal_female_tracks.split(",") if x.strip()]
     
     try:
         import pretty_midi
@@ -1534,6 +1538,22 @@ async def get_midi_orchestrator_preview(
                 new_inst = pretty_midi.Instrument(program=orig_inst.program, name=orig_inst.name, is_drum=orig_inst.is_drum)
                 new_inst.notes = orig_inst.notes
                 new_inst.control_changes = orig_inst.control_changes
+                preview_pm.instruments.append(new_inst)
+
+        # Add vocal male tracks (render as Choir Aahs program 52 for preview)
+        for idx in vm_tracks:
+            if idx < len(pm.instruments):
+                orig_inst = pm.instruments[idx]
+                new_inst = pretty_midi.Instrument(program=52, name=f"Male_Vocal_Preview_{idx}", is_drum=False)
+                new_inst.notes = orig_inst.notes
+                preview_pm.instruments.append(new_inst)
+
+        # Add vocal female tracks (render as Voice Oohs program 53 for preview)
+        for idx in vf_tracks:
+            if idx < len(pm.instruments):
+                orig_inst = pm.instruments[idx]
+                new_inst = pretty_midi.Instrument(program=53, name=f"Female_Vocal_Preview_{idx}", is_drum=False)
+                new_inst.notes = orig_inst.notes
                 preview_pm.instruments.append(new_inst)
                 
         preview_pm.write(str(temp_midi))

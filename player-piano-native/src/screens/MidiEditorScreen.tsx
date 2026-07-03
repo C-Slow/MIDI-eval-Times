@@ -746,7 +746,9 @@ export const MidiEditorScreen = () => {
       const url = midiOrchestratorApi.getPreviewUrl(
         selectedJobId, 
         Array.from(pianoTracks), 
-        Array.from(speakerTracks)
+        Array.from(speakerTracks),
+        Array.from(vocalMaleTracks),
+        Array.from(vocalFemaleTracks)
       );
 
       const { sound } = await Audio.Sound.createAsync(
