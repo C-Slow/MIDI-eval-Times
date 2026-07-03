@@ -680,14 +680,12 @@ class MidiOrchestrator:
                                 boundaries.append(idx)
                         boundaries.append(N)
                         
-                        # Compute cumulative shifts
+                        # Compute segment offsets directly
                         segment_delays = [delay_ms]
-                        cumulative_delay = delay_ms
                         for b in sorted_breaks:
                             idx = int((b.get("time_ms", 0) / 1000.0) * rate)
                             if 0 < idx < N:
-                                cumulative_delay += b.get("adjustment_ms", 0)
-                                segment_delays.append(cumulative_delay)
+                                segment_delays.append(b.get("offset_ms", 0))
                                 
                         # Calculate total output length
                         max_out_idx = 0

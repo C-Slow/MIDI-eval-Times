@@ -1254,7 +1254,7 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
 
 class BreaklineConfig(BaseModel):
     time_ms: int
-    adjustment_ms: int
+    offset_ms: int
 
 class ImportedVocalsConfig(BaseModel):
     mp3_job_id: str
