@@ -703,8 +703,15 @@ class MidiOrchestrator:
                             audio_end = max(0, int(((t_end - offset) / 1000.0) * rate))
                             
                             # Target mix indices in output buffer
-                            target_start = max(0, int((t_start / 1000.0) * rate))
-                            target_end = target_start + (audio_end - audio_start)
+                            raw_target_start = int((t_start / 1000.0) * rate)
+                            
+                            # Handle negative starting timeline positions by cropping audio start
+                            if raw_target_start < 0:
+                                crop_samples = abs(raw_target_start)
+                                audio_start += crop_samples
+                                target_start = 0
+                            else:
+                                target_start = raw_target_start
                             
                             # Ensure within bounds of the data array
                             audio_start = min(N, audio_start)

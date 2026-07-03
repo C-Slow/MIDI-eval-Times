@@ -257,10 +257,11 @@ const NoteGrid = React.memo(({
                   vocalsWaveformEnvelope.map((val: number, idx: number) => {
                     const tMs = idx * 100; // 10 points per sec = 100ms per point
                     
-                    // Compute dynamic segment offset directly
+                    // Compute dynamic segment offset based on audio boundaries
                     let offsetMs = importedVocalsDelayMs;
                     for (const b of sortedBreaks) {
-                      if (b.time_ms <= tMs) {
+                      const audioBoundary = b.time_ms - offsetMs;
+                      if (tMs > audioBoundary) {
                         offsetMs = b.offset_ms;
                       } else {
                         break;
@@ -509,6 +510,11 @@ export const MidiEditorScreen = () => {
   const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
   const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
   const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
+
+  const loopConfigRef = useRef({ enabled: false, start: null as number | null, end: null as number | null });
+  useEffect(() => {
+    loopConfigRef.current = { enabled: loopEnabled, start: loopStartMs, end: loopEndMs };
+  }, [loopEnabled, loopStartMs, loopEndMs]);
 
   // Tooltip & Finetuning States
   const [showTooltip, setShowTooltip] = useState(false);
@@ -1202,9 +1208,15 @@ export const MidiEditorScreen = () => {
         Array.from(vocalFemaleTracks)
       );
 
+      const initialStatus = {
+        shouldPlay: true,
+        progressUpdateIntervalMillis: 100,
+        positionMillis: (loopEnabled && loopStartMs !== null) ? loopStartMs : 0
+      };
+
       const { sound } = await Audio.Sound.createAsync(
         { uri: url },
-        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
+        initialStatus,
         (status: any) => {
           onPlaybackStatusUpdate(status);
           if (status.didJustFinish) {
@@ -1266,14 +1278,15 @@ export const MidiEditorScreen = () => {
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
       // Loop check
-      if (loopEnabled && loopStartMs !== null && loopEndMs !== null && status.isPlaying) {
-        if (status.positionMillis >= loopEndMs) {
+      const { enabled: isLoop, start: lStart, end: lEnd } = loopConfigRef.current;
+      if (isLoop && lStart !== null && lEnd !== null && status.isPlaying) {
+        if (status.positionMillis >= lEnd) {
           if (playbackMode === 'performance') {
-            soundRef.current?.setPositionAsync(loopStartMs);
+            soundRef.current?.setPositionAsync(lStart);
           } else {
-            previewSoundRef.current?.setPositionAsync(loopStartMs);
+            previewSoundRef.current?.setPositionAsync(lStart);
           }
-          setPlaybackPos(loopStartMs);
+          setPlaybackPos(lStart);
           return;
         }
       }
@@ -1304,6 +1317,11 @@ export const MidiEditorScreen = () => {
     try {
       setSystemBusy(true);
       setIsPlaying(true);
+
+      if (loopEnabled && loopStartMs !== null) {
+        await soundRef.current.setPositionAsync(loopStartMs);
+        setPlaybackPos(loopStartMs);
+      }
 
       const playPianoMidi = async () => {
         if (isPianoConnected && pianoTracks.size > 0) {
