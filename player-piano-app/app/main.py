@@ -1252,12 +1252,17 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
 #                   MIDI ORCHESTRATOR ROUTES
 # ==========================================================
 
+class BreaklineConfig(BaseModel):
+    time_ms: int
+    adjustment_ms: int
+
 class ImportedVocalsConfig(BaseModel):
     mp3_job_id: str
     original_name: Optional[str] = None
     delay_ms: int = 0
     enabled: bool = True
     volume_factor: float = 1.0
+    breaklines: Optional[List[BreaklineConfig]] = []
 
 class ProcessMidiRequest(BaseModel):
     piano_tracks: List[int]

@@ -666,20 +666,68 @@ class MidiOrchestrator:
                             data_no_beeps = scipy.signal.resample(data_no_beeps, num_samples, axis=0)
                             rate = 44100
                             
-                        # Apply delay_ms offset
-                        delay_samples = int((delay_ms / 1000.0) * rate)
+                        # Get breaklines
+                        breaklines = imported_vocals.get("breaklines", [])
+                        sorted_breaks = sorted(breaklines, key=lambda b: b.get("time_ms", 0))
                         
-                        if delay_samples > 0:
-                            if data_no_beeps.ndim == 2:
-                                padding = np.zeros((delay_samples, data_no_beeps.shape[1]), dtype=np.float32)
-                            else:
-                                padding = np.zeros(delay_samples, dtype=np.float32)
-                            aligned_data = np.concatenate([padding, data_no_beeps], axis=0)
-                        elif delay_samples < 0:
-                            trim_idx = min(len(data_no_beeps), abs(delay_samples))
-                            aligned_data = data_no_beeps[trim_idx:]
+                        N = len(data_no_beeps)
+                        
+                        # Construct boundaries
+                        boundaries = [0]
+                        for b in sorted_breaks:
+                            idx = int((b.get("time_ms", 0) / 1000.0) * rate)
+                            if 0 < idx < N:
+                                boundaries.append(idx)
+                        boundaries.append(N)
+                        
+                        # Compute cumulative shifts
+                        segment_delays = [delay_ms]
+                        cumulative_delay = delay_ms
+                        for b in sorted_breaks:
+                            idx = int((b.get("time_ms", 0) / 1000.0) * rate)
+                            if 0 < idx < N:
+                                cumulative_delay += b.get("adjustment_ms", 0)
+                                segment_delays.append(cumulative_delay)
+                                
+                        # Calculate total output length
+                        max_out_idx = 0
+                        for i in range(len(boundaries) - 1):
+                            start_idx = boundaries[i]
+                            end_idx = boundaries[i+1]
+                            shift_samples = int((segment_delays[i] / 1000.0) * rate)
+                            target_start = max(0, start_idx + shift_samples)
+                            target_end = target_start + (end_idx - start_idx)
+                            if target_end > max_out_idx:
+                                max_out_idx = target_end
+                                
+                        # Initialize aligned_data buffer
+                        is_stereo = (data_no_beeps.ndim == 2)
+                        if is_stereo:
+                            aligned_data = np.zeros((max_out_idx, data_no_beeps.shape[1]), dtype=np.float32)
                         else:
-                            aligned_data = data_no_beeps
+                            aligned_data = np.zeros(max_out_idx, dtype=np.float32)
+                            
+                        # Mix each segment piecewise
+                        for i in range(len(boundaries) - 1):
+                            start_idx = boundaries[i]
+                            end_idx = boundaries[i+1]
+                            shift_samples = int((segment_delays[i] / 1000.0) * rate)
+                            target_start = max(0, start_idx + shift_samples)
+                            target_end = target_start + (end_idx - start_idx)
+                            
+                            seg_data = data_no_beeps[start_idx:end_idx]
+                            
+                            # Handle negative offsets truncating/cropping segment start
+                            if start_idx + shift_samples < 0:
+                                crop_amount = abs(start_idx + shift_samples)
+                                if crop_amount < len(seg_data):
+                                    seg_data = seg_data[crop_amount:]
+                                    target_start = 0
+                                    target_end = len(seg_data)
+                                else:
+                                    continue
+                                    
+                            aligned_data[target_start:target_end] += seg_data
                             
                         # Normalize, apply volume factor, clip and convert back to int16
                         max_amp = np.max(np.abs(aligned_data))

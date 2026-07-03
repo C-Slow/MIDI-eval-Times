@@ -42,6 +42,10 @@ interface NoteGridProps {
   importedVocalsEnabled: boolean;
   importedVocalsDelayMs: number;
   vocalsWaveformEnvelope: number[] | null;
+  importedVocalsBreaklines: any[];
+  loopStartMs: number | null;
+  loopEndMs: number | null;
+  loopEnabled: boolean;
 }
 
 const NoteGrid = React.memo(({
@@ -57,6 +61,10 @@ const NoteGrid = React.memo(({
   importedVocalsEnabled,
   importedVocalsDelayMs,
   vocalsWaveformEnvelope,
+  importedVocalsBreaklines,
+  loopStartMs,
+  loopEndMs,
+  loopEnabled,
 }: NoteGridProps) => {
   const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
     if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
@@ -69,8 +77,78 @@ const NoteGrid = React.memo(({
   const verticalPadding = 8;
   const usableLaneHeight = LANE_HEIGHT - (verticalPadding * 2);
 
+  // Pre-sort breaklines for cumulative calculations
+  const sortedBreaks = useMemo(() => {
+    return [...(importedVocalsBreaklines || [])].sort((a, b) => a.time_ms - b.time_ms);
+  }, [importedVocalsBreaklines]);
+
   return (
     <View style={{ width: timelineWidth, height: totalHeight, position: 'absolute', top: 0, left: 0 }}>
+      {/* Loop Bound Highlight Area */}
+      {loopStartMs !== null && (
+        <View 
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: (loopStartMs / 1000) * PIXELS_PER_SECOND,
+            width: loopEndMs !== null ? Math.max(2, ((loopEndMs - loopStartMs) / 1000) * PIXELS_PER_SECOND) : 2,
+            backgroundColor: loopEnabled ? 'rgba(46, 204, 113, 0.08)' : 'rgba(120, 120, 120, 0.08)',
+            borderLeftWidth: 2,
+            borderLeftColor: loopEnabled ? '#2ecc71' : themeColors.textMuted,
+            borderRightWidth: loopEndMs !== null ? 2 : 0,
+            borderRightColor: loopEnabled ? '#e74c3c' : themeColors.textMuted,
+            zIndex: 9
+          }}
+        />
+      )}
+
+      {/* Piecewise Vocal Breaklines vertical dashed lines */}
+      {sortedBreaks.map((b, idx) => {
+        const left = (b.time_ms / 1000) * PIXELS_PER_SECOND;
+        
+        // Calculate cumulative delay up to this breakline
+        let cumVal = importedVocalsDelayMs;
+        for (let j = 0; j <= idx; j++) {
+          cumVal += sortedBreaks[j].adjustment_ms;
+        }
+
+        return (
+          <View
+            key={`break-${idx}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left,
+              width: 1,
+              borderStyle: 'dashed',
+              borderWidth: 1.5,
+              borderColor: '#e84393',
+              zIndex: 10
+            }}
+          >
+            <Text 
+              style={{ 
+                fontSize: 8, 
+                color: '#fff', 
+                backgroundColor: '#e84393', 
+                fontWeight: 'bold',
+                paddingHorizontal: 4, 
+                paddingVertical: 2,
+                borderRadius: 4, 
+                position: 'absolute', 
+                top: 4, 
+                left: 4,
+                overflow: 'hidden'
+              }}
+            >
+              {b.adjustment_ms >= 0 ? `+${b.adjustment_ms}` : b.adjustment_ms} ms (Total: {cumVal >= 0 ? `+${cumVal}` : cumVal} ms)
+            </Text>
+          </View>
+        );
+      })}
+
       {/* Consolidated parent vertical grid lines */}
       {Array.from({ length: Math.ceil(durationSec / 5) }).map((_, i) => (
         <View 
@@ -88,7 +166,6 @@ const NoteGrid = React.memo(({
 
       {lanesData.map((lane: any, laneIdx: number) => {
         if (lane.index === -99) {
-          const delayOffsetPx = (importedVocalsDelayMs / 1000) * PIXELS_PER_SECOND;
           const waveformColor = importedVocalsEnabled ? '#e84393' : 'rgba(120, 120, 120, 0.4)';
           
           return (
@@ -106,6 +183,19 @@ const NoteGrid = React.memo(({
             >
               {vocalsWaveformEnvelope ? (
                 vocalsWaveformEnvelope.map((val: number, idx: number) => {
+                  const tMs = idx * 100; // 10 points per sec = 100ms per point
+                  
+                  // Compute cumulative delay for this point
+                  let cumDelayMs = importedVocalsDelayMs;
+                  for (const b of sortedBreaks) {
+                    if (b.time_ms <= tMs) {
+                      cumDelayMs += b.adjustment_ms;
+                    } else {
+                      break;
+                    }
+                  }
+                  
+                  const delayOffsetPx = (cumDelayMs / 1000) * PIXELS_PER_SECOND;
                   const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
                   if (left < -10 || left > timelineWidth + 10) return null;
                   
@@ -191,6 +281,10 @@ const NoteGrid = React.memo(({
   if (prevProps.importedVocalsEnabled !== nextProps.importedVocalsEnabled) return false;
   if (prevProps.importedVocalsDelayMs !== nextProps.importedVocalsDelayMs) return false;
   if (prevProps.vocalsWaveformEnvelope !== nextProps.vocalsWaveformEnvelope) return false;
+  if (prevProps.importedVocalsBreaklines !== nextProps.importedVocalsBreaklines) return false;
+  if (prevProps.loopStartMs !== nextProps.loopStartMs) return false;
+  if (prevProps.loopEndMs !== nextProps.loopEndMs) return false;
+  if (prevProps.loopEnabled !== nextProps.loopEnabled) return false;
   
   if (prevProps.pianoTracks.size !== nextProps.pianoTracks.size) return false;
   if (prevProps.speakerTracks.size !== nextProps.speakerTracks.size) return false;
@@ -242,6 +336,12 @@ export const MidiEditorScreen = () => {
   const [importedVocalsDelayMs, setImportedVocalsDelayMs] = useState<number>(0);
   const [importedVocalsEnabled, setImportedVocalsEnabled] = useState<boolean>(true);
   const [importedVocalsVolumeFactor, setImportedVocalsVolumeFactor] = useState<number>(1.0);
+  const [importedVocalsBreaklines, setImportedVocalsBreaklines] = useState<any[]>([]);
+
+  // Looping Playback State
+  const [loopStartMs, setLoopStartMs] = useState<number | null>(null);
+  const [loopEndMs, setLoopEndMs] = useState<number | null>(null);
+  const [loopEnabled, setLoopEnabled] = useState<boolean>(false);
   const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
   const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
   const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
@@ -426,7 +526,11 @@ export const MidiEditorScreen = () => {
     setImportedVocalsDelayMs(impVoc?.delay_ms || 0);
     setImportedVocalsEnabled(impVoc?.enabled ?? true);
     setImportedVocalsVolumeFactor(impVoc?.volume_factor ?? 1.0);
+    setImportedVocalsBreaklines(impVoc?.breaklines || []);
     setVocalsWaveformEnvelope(null);
+    setLoopStartMs(null);
+    setLoopEndMs(null);
+    setLoopEnabled(false);
 
     setLoading(true);
     try {
@@ -498,6 +602,7 @@ export const MidiEditorScreen = () => {
       setImportedVocalsEnabled(true);
       setImportedVocalsDelayMs(0);
       setImportedVocalsVolumeFactor(1.0);
+      setImportedVocalsBreaklines([]);
       
       const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
       setVocalsWaveformEnvelope(waveData.envelope || null);
@@ -507,6 +612,33 @@ export const MidiEditorScreen = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddBreakline = () => {
+    const playPos = Math.round(playbackPos);
+    // Don't add duplicate breaklines at the exact same millisecond
+    if (importedVocalsBreaklines.some(b => b.time_ms === playPos)) {
+      Alert.alert('Duplicate Marker', 'A breakline already exists at this timestamp.');
+      return;
+    }
+    const updated = [...importedVocalsBreaklines, { time_ms: playPos, adjustment_ms: 0 }]
+      .sort((a, b) => a.time_ms - b.time_ms);
+    setImportedVocalsBreaklines(updated);
+  };
+
+  const handleUpdateBreaklineAdjustment = (index: number, delta: number) => {
+    const updated = importedVocalsBreaklines.map((b, i) => {
+      if (i === index) {
+        return { ...b, adjustment_ms: b.adjustment_ms + delta };
+      }
+      return b;
+    });
+    setImportedVocalsBreaklines(updated);
+  };
+
+  const handleDeleteBreakline = (index: number) => {
+    const updated = importedVocalsBreaklines.filter((_, i) => i !== index);
+    setImportedVocalsBreaklines(updated);
   };
 
   const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'male_vocal' | 'female_vocal' | 'mute') => {
@@ -919,7 +1051,8 @@ export const MidiEditorScreen = () => {
           original_name: importedVocalsOriginalName || undefined,
           delay_ms: importedVocalsDelayMs,
           enabled: importedVocalsEnabled,
-          volume_factor: importedVocalsVolumeFactor
+          volume_factor: importedVocalsVolumeFactor,
+          breaklines: importedVocalsBreaklines
         } : undefined
       );
       await fetchJobs();
@@ -936,6 +1069,19 @@ export const MidiEditorScreen = () => {
   // Sound Playback Updates
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
+      // Loop check
+      if (loopEnabled && loopStartMs !== null && loopEndMs !== null && status.isPlaying) {
+        if (status.positionMillis >= loopEndMs) {
+          if (playbackMode === 'performance') {
+            soundRef.current?.setPositionAsync(loopStartMs);
+          } else {
+            previewSoundRef.current?.setPositionAsync(loopStartMs);
+          }
+          setPlaybackPos(loopStartMs);
+          return;
+        }
+      }
+
       setPlaybackPos(status.positionMillis);
       setPlaybackDuration(status.durationMillis || 0);
 
@@ -1248,6 +1394,10 @@ export const MidiEditorScreen = () => {
               importedVocalsEnabled={importedVocalsEnabled}
               importedVocalsDelayMs={importedVocalsDelayMs}
               vocalsWaveformEnvelope={vocalsWaveformEnvelope}
+              importedVocalsBreaklines={importedVocalsBreaklines}
+              loopStartMs={loopStartMs}
+              loopEndMs={loopEndMs}
+              loopEnabled={loopEnabled}
             />
 
             {/* Glowing Vertical Playhead */}
@@ -1990,15 +2140,16 @@ export const MidiEditorScreen = () => {
                         trackColor={{ false: themeColors.border, true: '#e84393' }}
                         thumbColor="#fff"
                       />
-                      <TouchableOpacity 
-                        onPress={() => {
-                          setImportedVocalsJobId(null);
-                          setImportedVocalsOriginalName(null);
-                          setVocalsWaveformEnvelope(null);
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#ff7675" />
-                      </TouchableOpacity>
+                       <TouchableOpacity 
+                         onPress={() => {
+                           setImportedVocalsJobId(null);
+                           setImportedVocalsOriginalName(null);
+                           setVocalsWaveformEnvelope(null);
+                           setImportedVocalsBreaklines([]);
+                         }}
+                       >
+                         <Ionicons name="trash-outline" size={18} color="#ff7675" />
+                       </TouchableOpacity>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -2077,6 +2228,106 @@ export const MidiEditorScreen = () => {
                         </TouchableOpacity>
                       </View>
                     </View>
+
+                    {/* Breaklines Management section */}
+                    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: themeColors.border, opacity: 0.9 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
+                          Piecewise Adjustments ({importedVocalsBreaklines.length})
+                        </Text>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: themeColors.accent,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4
+                          }}
+                          onPress={handleAddBreakline}
+                        >
+                          <Ionicons name="add-circle" size={12} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>Add at Playhead</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {importedVocalsBreaklines.length === 0 ? (
+                        <Text style={{ fontSize: 9, color: themeColors.textMuted, fontStyle: 'italic' }}>
+                          No timing breaklines added. Seek to a position and click "Add at Playhead" to make corrections.
+                        </Text>
+                      ) : (
+                        <View style={{ maxHeight: 150, gap: 6 }}>
+                          {importedVocalsBreaklines.map((b, index) => (
+                            <View 
+                              key={`break-item-${index}`}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                backgroundColor: themeColors.surfaceSecondary,
+                                padding: 6,
+                                borderRadius: 6,
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#e84393'
+                              }}
+                            >
+                              <TouchableOpacity
+                                style={{ flex: 1 }}
+                                onPress={async () => {
+                                  // Seek to breakline time!
+                                  if (playbackMode === 'performance' && soundRef.current) {
+                                    await soundRef.current.setPositionAsync(b.time_ms);
+                                  } else if (previewSoundRef.current) {
+                                    await previewSoundRef.current.setPositionAsync(b.time_ms);
+                                  }
+                                  setPlaybackPos(b.time_ms);
+                                }}
+                              >
+                                <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>
+                                  @{formatTime(b.time_ms)}
+                                </Text>
+                              </TouchableOpacity>
+
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                {/* Decrements */}
+                                {[-50, -10].map(val => (
+                                  <TouchableOpacity
+                                    key={`bdec-${val}`}
+                                    style={{ paddingHorizontal: 4, paddingVertical: 2, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                                    onPress={() => handleUpdateBreaklineAdjustment(index, val)}
+                                  >
+                                    <Text style={{ fontSize: 8, color: themeColors.text }}>{val}</Text>
+                                  </TouchableOpacity>
+                                ))}
+
+                                <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold', minWidth: 45, textAlign: 'center' }}>
+                                  {b.adjustment_ms >= 0 ? `+${b.adjustment_ms}` : b.adjustment_ms}ms
+                                </Text>
+
+                                {/* Increments */}
+                                {[10, 50].map(val => (
+                                  <TouchableOpacity
+                                    key={`binc-${val}`}
+                                    style={{ paddingHorizontal: 4, paddingVertical: 2, backgroundColor: themeColors.surface, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}
+                                    onPress={() => handleUpdateBreaklineAdjustment(index, val)}
+                                  >
+                                    <Text style={{ fontSize: 8, color: themeColors.text }}>{`+${val}`}</Text>
+                                  </TouchableOpacity>
+                                ))}
+
+                                <TouchableOpacity
+                                  style={{ padding: 4, marginLeft: 4 }}
+                                  onPress={() => handleDeleteBreakline(index)}
+                                >
+                                  <Ionicons name="trash-outline" size={14} color="#ff7675" />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 )}
               </View>
@@ -2113,6 +2364,90 @@ export const MidiEditorScreen = () => {
               )}
               
               <Text style={{ color: themeColors.textMuted, fontSize: 12 }}>{formatTime(playbackDuration)}</Text>
+            </View>
+
+            {/* Loop Markers Bar */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: themeColors.border, opacity: 0.9 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: loopStartMs !== null ? 'rgba(46, 204, 113, 0.2)' : themeColors.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: loopStartMs !== null ? '#2ecc71' : themeColors.border
+                }}
+                onPress={() => setLoopStartMs(Math.round(playbackPos))}
+              >
+                <Ionicons name="flag" size={12} color={loopStartMs !== null ? '#2ecc71' : themeColors.text} />
+                <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: '600' }}>
+                  {loopStartMs !== null ? `Start: ${formatTime(loopStartMs)}` : 'Set A'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: loopEndMs !== null ? 'rgba(231, 76, 60, 0.2)' : themeColors.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: loopEndMs !== null ? '#e74c3c' : themeColors.border
+                }}
+                onPress={() => setLoopEndMs(Math.round(playbackPos))}
+              >
+                <Ionicons name="flag" size={12} color={loopEndMs !== null ? '#e74c3c' : themeColors.text} />
+                <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: '600' }}>
+                  {loopEndMs !== null ? `End: ${formatTime(loopEndMs)}` : 'Set B'}
+                </Text>
+              </TouchableOpacity>
+
+              {(loopStartMs !== null || loopEndMs !== null) && (
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 6,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    backgroundColor: themeColors.surfaceSecondary
+                  }}
+                  onPress={() => {
+                    setLoopStartMs(null);
+                    setLoopEndMs(null);
+                    setLoopEnabled(false);
+                  }}
+                >
+                  <Ionicons name="close-circle-outline" size={14} color="#ff7675" />
+                </TouchableOpacity>
+              )}
+
+              <View style={{ width: 1, height: 16, backgroundColor: themeColors.border }} />
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: loopEnabled ? 'rgba(46, 204, 113, 0.15)' : themeColors.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: loopEnabled ? '#2ecc71' : themeColors.border
+                }}
+                disabled={loopStartMs === null || loopEndMs === null}
+                onPress={() => setLoopEnabled(prev => !prev)}
+              >
+                <Ionicons name="repeat" size={12} color={loopEnabled ? '#2ecc71' : themeColors.text} />
+                <Text style={{ fontSize: 10, color: loopEnabled ? '#2ecc71' : themeColors.text, fontWeight: 'bold' }}>
+                  {loopEnabled ? 'Loop On' : 'Loop Off'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Main Buttons */}
