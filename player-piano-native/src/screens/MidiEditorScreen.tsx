@@ -22,7 +22,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
-import { midiOrchestratorApi, pianoApi } from '../services/api';
+import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -39,6 +39,9 @@ interface NoteGridProps {
   durationSec: number;
   timelineWidth: number;
   totalHeight: number;
+  importedVocalsEnabled: boolean;
+  importedVocalsDelayMs: number;
+  vocalsWaveformEnvelope: number[] | null;
 }
 
 const NoteGrid = React.memo(({
@@ -51,6 +54,9 @@ const NoteGrid = React.memo(({
   durationSec,
   timelineWidth,
   totalHeight,
+  importedVocalsEnabled,
+  importedVocalsDelayMs,
+  vocalsWaveformEnvelope,
 }: NoteGridProps) => {
   const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
     if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
@@ -81,6 +87,55 @@ const NoteGrid = React.memo(({
       ))}
 
       {lanesData.map((lane: any, laneIdx: number) => {
+        if (lane.index === -99) {
+          const delayOffsetPx = (importedVocalsDelayMs / 1000) * PIXELS_PER_SECOND;
+          const waveformColor = importedVocalsEnabled ? '#e84393' : 'rgba(120, 120, 120, 0.4)';
+          
+          return (
+            <View 
+              key={lane.index} 
+              style={[
+                styles.laneTimeline, 
+                { 
+                  height: LANE_HEIGHT, 
+                  top: laneIdx * LANE_HEIGHT, 
+                  borderBottomColor: themeColors.border,
+                  backgroundColor: 'rgba(232, 67, 147, 0.05)'
+                }
+              ]}
+            >
+              {vocalsWaveformEnvelope ? (
+                vocalsWaveformEnvelope.map((val: number, idx: number) => {
+                  const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
+                  if (left < -10 || left > timelineWidth + 10) return null;
+                  
+                  const barHeight = Math.max(2, val * usableLaneHeight);
+                  const barTop = verticalPadding + (usableLaneHeight - barHeight) / 2;
+                  
+                  return (
+                    <View
+                      key={idx}
+                      style={{
+                        position: 'absolute',
+                        left,
+                        width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
+                        top: barTop,
+                        height: barHeight,
+                        backgroundColor: waveformColor,
+                        borderRadius: 1
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <Text style={{ position: 'absolute', left: 20, top: 30, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
+                  No waveform data loaded
+                </Text>
+              )}
+            </View>
+          );
+        }
+
         const isPiano = pianoTracks.has(lane.index);
         const isSpeaker = speakerTracks.has(lane.index);
         const isMale = vocalMaleTracks.has(lane.index);
@@ -133,6 +188,9 @@ const NoteGrid = React.memo(({
   if (prevProps.durationSec !== nextProps.durationSec) return false;
   if (prevProps.themeColors !== nextProps.themeColors) return false;
   if (prevProps.lanesData !== nextProps.lanesData) return false;
+  if (prevProps.importedVocalsEnabled !== nextProps.importedVocalsEnabled) return false;
+  if (prevProps.importedVocalsDelayMs !== nextProps.importedVocalsDelayMs) return false;
+  if (prevProps.vocalsWaveformEnvelope !== nextProps.vocalsWaveformEnvelope) return false;
   
   if (prevProps.pianoTracks.size !== nextProps.pianoTracks.size) return false;
   if (prevProps.speakerTracks.size !== nextProps.speakerTracks.size) return false;
@@ -177,6 +235,14 @@ export const MidiEditorScreen = () => {
   const [pedalPreset, setPedalPreset] = useState<'light' | 'medium' | 'full'>('light');
   const [rhythmFactor, setRhythmFactor] = useState(1.0);
   const [melodyFactor, setMelodyFactor] = useState(1.0);
+
+  // Imported MP3 Vocals State
+  const [importedVocalsJobId, setImportedVocalsJobId] = useState<string | null>(null);
+  const [importedVocalsDelayMs, setImportedVocalsDelayMs] = useState<number>(0);
+  const [importedVocalsEnabled, setImportedVocalsEnabled] = useState<boolean>(true);
+  const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
+  const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
+  const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
 
   // Settings Panel visibility
   const [showSettings, setShowSettings] = useState(false);
@@ -352,9 +418,22 @@ export const MidiEditorScreen = () => {
     setPedalPreset(job.pedal_preset || 'light');
     setRhythmFactor(job.rhythm_factor ?? 1.0);
     setMelodyFactor(job.melody_factor ?? 1.0);
+    const impVoc = job.imported_vocals || null;
+    setImportedVocalsJobId(impVoc?.mp3_job_id || null);
+    setImportedVocalsDelayMs(impVoc?.delay_ms || 0);
+    setImportedVocalsEnabled(impVoc?.enabled ?? true);
+    setVocalsWaveformEnvelope(null);
 
     setLoading(true);
     try {
+      if (impVoc?.mp3_job_id) {
+        try {
+          const waveData = await midiOrchestratorApi.getVocalsWaveform(impVoc.mp3_job_id);
+          setVocalsWaveformEnvelope(waveData.envelope || null);
+        } catch (waveErr) {
+          console.error("Failed to fetch vocals waveform:", waveErr);
+        }
+      }
       // 1. Fetch note events for the lanes
       const noteData = await midiOrchestratorApi.getNotes(jobId);
       setNotes(noteData);
@@ -384,6 +463,39 @@ export const MidiEditorScreen = () => {
     } catch (e: any) {
       console.error(e);
       Alert.alert('Workspace Error', 'Failed to load visualizer workspace.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenMp3ImportModal = async () => {
+    try {
+      setLoading(true);
+      const jobsList = await mp3Api.listJobs();
+      const completed = jobsList.filter((j: any) => j.status === 'completed' && j.vocals);
+      setMp3Jobs(completed);
+      setShowMp3ImportModal(true);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to fetch MP3 orchestrator library.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectMp3Vocals = async (mp3JobId: string) => {
+    try {
+      setLoading(true);
+      setShowMp3ImportModal(false);
+      setImportedVocalsJobId(mp3JobId);
+      setImportedVocalsEnabled(true);
+      setImportedVocalsDelayMs(0);
+      
+      const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
+      setVocalsWaveformEnvelope(waveData.envelope || null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Waveform Error', 'Could not load vocal waveform details.');
     } finally {
       setLoading(false);
     }
@@ -613,7 +725,10 @@ export const MidiEditorScreen = () => {
         contextJob.speaker_tracks || [],
         recleanPedal,
         recleanRhythm,
-        recleanMelody
+        recleanMelody,
+        contextJob.vocal_male_tracks || [],
+        contextJob.vocal_female_tracks || [],
+        contextJob.imported_vocals
       );
       
       Alert.alert('Processing Started', 'The MIDI job is being re-synthesized in the background.');
@@ -790,7 +905,12 @@ export const MidiEditorScreen = () => {
         rhythmFactor,
         melodyFactor,
         Array.from(vocalMaleTracks),
-        Array.from(vocalFemaleTracks)
+        Array.from(vocalFemaleTracks),
+        importedVocalsJobId ? {
+          mp3_job_id: importedVocalsJobId,
+          delay_ms: importedVocalsDelayMs,
+          enabled: importedVocalsEnabled
+        } : undefined
       );
       await fetchJobs();
       setStage('list');
@@ -926,7 +1046,7 @@ export const MidiEditorScreen = () => {
     if (!currentJob || !notes) return [];
     
     // Build lanes only for tracks containing notes
-    return currentJob.tracks.filter((t: any) => {
+    const lanes = currentJob.tracks.filter((t: any) => {
       const trackNotes = notes[String(t.index)] || [];
       return trackNotes.length > 0;
     }).map((track: any) => {
@@ -944,7 +1064,25 @@ export const MidiEditorScreen = () => {
         pitchRange
       };
     });
-  }, [currentJob, notes]);
+
+    if (importedVocalsJobId) {
+      lanes.push({
+        index: -99,
+        name: "🎙️ MP3 Vocals",
+        program: -1,
+        instrument_name: "Audio Stems",
+        is_drum: false,
+        note_count: 0,
+        duration: 0.0,
+        notes: [],
+        minPitch: 0,
+        maxPitch: 0,
+        pitchRange: 1
+      });
+    }
+
+    return lanes;
+  }, [currentJob, notes, importedVocalsJobId]);
 
   // Timeline render item notes
   const renderVisualizerTimeline = () => {
@@ -968,6 +1106,48 @@ export const MidiEditorScreen = () => {
             const isFemale = vocalFemaleTracks.has(lane.index);
             const isMuted = !isPiano && !isSpeaker && !isMale && !isFemale;
             
+            if (lane.index === -99) {
+              return (
+                <View key="-99" style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border, paddingHorizontal: 10, justifyContent: 'center' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
+                      🎙️ MP3 Vocals
+                    </Text>
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        importedVocalsEnabled ? { backgroundColor: '#e84393' } : { backgroundColor: themeColors.border }
+                      ]}
+                      onPress={() => setImportedVocalsEnabled(!importedVocalsEnabled)}
+                    >
+                      <Ionicons name={importedVocalsEnabled ? "volume-high" : "volume-mute"} size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Delay controls */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <TouchableOpacity 
+                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      onPress={() => setImportedVocalsDelayMs(prev => prev - 50)}
+                    >
+                      <Text style={{ fontSize: 9, color: themeColors.text }}>-50</Text>
+                    </TouchableOpacity>
+                    
+                    <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>
+                      {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
+                    </Text>
+                    
+                    <TouchableOpacity 
+                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      onPress={() => setImportedVocalsDelayMs(prev => prev + 50)}
+                    >
+                      <Text style={{ fontSize: 9, color: themeColors.text }}>+50</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+
             return (
               <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
                 <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
@@ -1055,6 +1235,9 @@ export const MidiEditorScreen = () => {
               durationSec={durationSec}
               timelineWidth={timelineWidth}
               totalHeight={totalHeight}
+              importedVocalsEnabled={importedVocalsEnabled}
+              importedVocalsDelayMs={importedVocalsDelayMs}
+              vocalsWaveformEnvelope={vocalsWaveformEnvelope}
             />
 
             {/* Glowing Vertical Playhead */}
@@ -1780,6 +1963,78 @@ export const MidiEditorScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* MP3 Vocal Import Section */}
+              <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
+
+              <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
+                    🎙️ MP3 Vocal Stem
+                  </Text>
+                  {importedVocalsJobId ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Switch
+                        value={importedVocalsEnabled}
+                        onValueChange={setImportedVocalsEnabled}
+                        trackColor={{ false: themeColors.border, true: '#e84393' }}
+                        thumbColor="#fff"
+                      />
+                      <TouchableOpacity 
+                        onPress={() => {
+                          setImportedVocalsJobId(null);
+                          setVocalsWaveformEnvelope(null);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ff7675" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ backgroundColor: themeColors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                      onPress={handleOpenMp3ImportModal}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Link MP3 Vocals</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {importedVocalsJobId && (
+                  <View style={{ marginTop: 4 }}>
+                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginBottom: 8 }}>
+                      Linked Job ID: {importedVocalsJobId.slice(0, 18)}...
+                    </Text>
+                    
+                    {/* Delay slider */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Text style={{ fontSize: 11, color: themeColors.text, width: 75 }}>Align Delay:</Text>
+                      <Slider
+                        style={{ flex: 1, height: 40 }}
+                        minimumValue={-2000}
+                        maximumValue={2000}
+                        step={10}
+                        value={importedVocalsDelayMs}
+                        onValueChange={setImportedVocalsDelayMs}
+                        minimumTrackTintColor="#e84393"
+                        maximumTrackTintColor={themeColors.border}
+                        thumbTintColor="#e84393"
+                      />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: themeColors.border, width: 50 }}>
+                        <TextInput
+                          style={{ fontSize: 11, color: themeColors.text, padding: 0, textAlign: 'center', width: 35 }}
+                          value={String(importedVocalsDelayMs)}
+                          onChangeText={(txt) => {
+                            const val = parseInt(txt);
+                            setImportedVocalsDelayMs(isNaN(val) ? 0 : val);
+                          }}
+                          keyboardType="numeric"
+                        />
+                        <Text style={{ fontSize: 9, color: themeColors.textMuted }}>ms</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
@@ -1876,6 +2131,74 @@ export const MidiEditorScreen = () => {
               )}
             </View>
           </View>
+
+          {/* MP3 Vocal Stem Selection Modal */}
+          <Modal
+            visible={showMp3ImportModal}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowMp3ImportModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface, maxHeight: '80%' }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>Link MP3 Vocals</Text>
+                  <TouchableOpacity onPress={() => setShowMp3ImportModal(false)}>
+                    <Ionicons name="close" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {mp3Jobs.length === 0 ? (
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <Ionicons name="cloud-offline-outline" size={48} color={themeColors.textMuted} />
+                    <Text style={{ color: themeColors.textMuted, marginTop: 10, textAlign: 'center' }}>
+                      No completed MP3 separation jobs found.
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={mp3Jobs}
+                    keyExtractor={(item) => item.job_id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={{
+                          padding: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: themeColors.border,
+                          backgroundColor: themeColors.surfaceSecondary,
+                          borderRadius: 8,
+                          marginBottom: 8
+                        }}
+                        onPress={() => handleSelectMp3Vocals(item.job_id)}
+                      >
+                        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
+                          {item.filename || 'Untitled MP3 Job'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 15, marginTop: 4 }}>
+                          <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                            ID: {item.job_id.slice(0, 8)}
+                          </Text>
+                          {item.artist && (
+                            <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
+                              Artist: {item.artist}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    style={{ maxHeight: 350 }}
+                  />
+                )}
+
+                <TouchableOpacity 
+                  style={[styles.modalBtn, { backgroundColor: themeColors.accent, marginTop: 15 }]} 
+                  onPress={() => setShowMp3ImportModal(false)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
         </View>
       )}

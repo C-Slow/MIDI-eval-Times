@@ -299,7 +299,7 @@ class MidiOrchestrator:
             print(f"Error extracting track notes: {e}")
             return {}
 
-    def start_processing(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str = "light", rhythm_factor: float = 1.0, melody_factor: float = 1.0, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None):
+    def start_processing(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str = "light", rhythm_factor: float = 1.0, melody_factor: float = 1.0, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None, imported_vocals: Dict = None):
         if job_id not in self.status:
             raise ValueError("Job not found.")
             
@@ -315,7 +315,8 @@ class MidiOrchestrator:
             "vocal_female_tracks": vocal_female_tracks,
             "pedal_preset": pedal_preset,
             "rhythm_factor": rhythm_factor,
-            "melody_factor": melody_factor
+            "melody_factor": melody_factor,
+            "imported_vocals": imported_vocals
         })
         self._save_db()
         
@@ -632,6 +633,64 @@ class MidiOrchestrator:
             male_wav_path = self._process_rvc_vocals(job_dir, pm, vocal_male_tracks, "male", time_shift)
             female_wav_path = self._process_rvc_vocals(job_dir, pm, vocal_female_tracks, "female", time_shift)
             
+            # --- 3.5 Process Imported MP3 Vocals if Configured ---
+            imported_wav_path = None
+            job_status = self.status.get(job_id, {})
+            imported_vocals = job_status.get("imported_vocals")
+            if imported_vocals and imported_vocals.get("enabled"):
+                mp3_job_id = imported_vocals.get("mp3_job_id")
+                delay_ms = imported_vocals.get("delay_ms", 0)
+                
+                src_vocals_wav = self.storage_dir / "mp3_orchestrator" / "jobs" / mp3_job_id / "vocals.wav"
+                if src_vocals_wav.exists():
+                    imported_wav_path = job_dir / "imported_vocals_aligned.wav"
+                    try:
+                        import scipy.io.wavfile as wavfile
+                        import numpy as np
+                        import scipy.signal
+                        
+                        rate, data = wavfile.read(str(src_vocals_wav))
+                        data_float = data.astype(np.float32)
+                        
+                        # Trim the 4-second beep preamble
+                        skip_samples = int(4.0 * rate)
+                        if len(data_float) > skip_samples:
+                            data_no_beeps = data_float[skip_samples:]
+                        else:
+                            data_no_beeps = np.zeros((0, data_float.shape[1]) if data_float.ndim == 2 else (0,), dtype=np.float32)
+                            
+                        # Resample to 44.1k Hz
+                        if rate != 44100:
+                            num_samples = int(len(data_no_beeps) * 44100 / rate)
+                            data_no_beeps = scipy.signal.resample(data_no_beeps, num_samples, axis=0)
+                            rate = 44100
+                            
+                        # Apply delay_ms offset
+                        delay_samples = int((delay_ms / 1000.0) * rate)
+                        
+                        if delay_samples > 0:
+                            if data_no_beeps.ndim == 2:
+                                padding = np.zeros((delay_samples, data_no_beeps.shape[1]), dtype=np.float32)
+                            else:
+                                padding = np.zeros(delay_samples, dtype=np.float32)
+                            aligned_data = np.concatenate([padding, data_no_beeps], axis=0)
+                        elif delay_samples < 0:
+                            trim_idx = min(len(data_no_beeps), abs(delay_samples))
+                            aligned_data = data_no_beeps[trim_idx:]
+                        else:
+                            aligned_data = data_no_beeps
+                            
+                        # Normalize and convert back to int16
+                        max_amp = np.max(np.abs(aligned_data))
+                        if max_amp > 0:
+                            aligned_data = (aligned_data / max_amp) * 32767.0
+                        aligned_int16 = aligned_data.astype(np.int16)
+                        
+                        wavfile.write(str(imported_wav_path), rate, aligned_int16)
+                    except Exception as ve:
+                        print(f"Error processing imported vocals: {ve}")
+                        imported_wav_path = None
+            
             # --- 4. Mix backing tracks together ---
             self.status[job_id]["progress"] = 90
             self._save_db()
@@ -644,6 +703,8 @@ class MidiOrchestrator:
                 mix_list.append(male_wav_path)
             if female_wav_path and female_wav_path.exists():
                 mix_list.append(female_wav_path)
+            if imported_wav_path and imported_wav_path.exists():
+                mix_list.append(imported_wav_path)
                 
             if mix_list:
                 self._mix_wav_files(mix_list, final_backing_wav_path)

@@ -1252,6 +1252,11 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
 #                   MIDI ORCHESTRATOR ROUTES
 # ==========================================================
 
+class ImportedVocalsConfig(BaseModel):
+    mp3_job_id: str
+    delay_ms: int = 0
+    enabled: bool = True
+
 class ProcessMidiRequest(BaseModel):
     piano_tracks: List[int]
     speaker_tracks: List[int]
@@ -1260,6 +1265,7 @@ class ProcessMidiRequest(BaseModel):
     pedal_preset: Optional[str] = "light"
     rhythm_factor: Optional[float] = 1.0
     melody_factor: Optional[float] = 1.0
+    imported_vocals: Optional[ImportedVocalsConfig] = None
 
 class Base64MidiUploadRequest(BaseModel):
     filename: str
@@ -1372,6 +1378,66 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
         
     return {"job_id": job_id, "tracks": midi_orchestrator.status[job_id]["tracks"]}
 
+def get_vocals_waveform_envelope(vocals_path: Path) -> List[float]:
+    import scipy.io.wavfile as wavfile
+    import numpy as np
+    
+    if not vocals_path.exists():
+        return []
+        
+    try:
+        rate, data = wavfile.read(str(vocals_path))
+        if data.ndim == 2:
+            data = np.mean(data, axis=1)
+            
+        # Skip 4.0 seconds of calibration beeps
+        skip_samples = int(4.0 * rate)
+        if len(data) > skip_samples:
+            data_no_beeps = data[skip_samples:]
+        else:
+            data_no_beeps = data
+            
+        # Target 10 points per second
+        chunk_size = int(rate / 10)
+        if chunk_size == 0:
+            chunk_size = 1
+            
+        num_chunks = len(data_no_beeps) // chunk_size
+        if num_chunks == 0:
+            return []
+            
+        envelope = []
+        for i in range(num_chunks):
+            chunk = data_no_beeps[i * chunk_size : (i + 1) * chunk_size]
+            max_val = np.max(np.abs(chunk))
+            envelope.append(float(max_val))
+            
+        # Normalize to [0.0, 1.0]
+        max_envelope = max(envelope) if envelope else 0
+        if max_envelope > 0:
+            envelope = [round(v / max_envelope, 3) for v in envelope]
+            
+        return envelope
+    except Exception as e:
+        print(f"Error computing vocals waveform: {e}")
+        return []
+
+@app.get("/midi-orchestrator/vocals-waveform/{mp3_job_id}", dependencies=[Depends(verify_auth)])
+async def get_vocals_waveform(mp3_job_id: str):
+    vocals_path = BASE_DIR / "storage" / "mp3_orchestrator" / "jobs" / mp3_job_id / "vocals.wav"
+    if not vocals_path.exists():
+        raise HTTPException(status_code=404, detail="Vocals file not found for this MP3 job.")
+        
+    envelope = get_vocals_waveform_envelope(vocals_path)
+    import scipy.io.wavfile as wavfile
+    try:
+        rate, data = wavfile.read(str(vocals_path))
+        duration = max(0.0, (len(data) / rate) - 4.0)
+    except Exception:
+        duration = 0.0
+        
+    return {"envelope": envelope, "duration": duration}
+
 @app.get("/midi-orchestrator/notes/{job_id}", dependencies=[Depends(verify_auth)])
 async def get_midi_orchestrator_notes(job_id: str):
     notes = midi_orchestrator.get_track_notes(job_id)
@@ -1390,7 +1456,8 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             req.rhythm_factor,
             req.melody_factor,
             req.vocal_male_tracks,
-            req.vocal_female_tracks
+            req.vocal_female_tracks,
+            imported_vocals=req.imported_vocals.dict() if req.imported_vocals else None
         )
         return {"status": "started"}
     except ValueError as e:
