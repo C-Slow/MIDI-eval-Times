@@ -1424,7 +1424,7 @@ def get_vocals_waveform_envelope(vocals_path: Path) -> List[float]:
 
 @app.get("/midi-orchestrator/vocals-waveform/{mp3_job_id}", dependencies=[Depends(verify_auth)])
 async def get_vocals_waveform(mp3_job_id: str):
-    vocals_path = BASE_DIR / "storage" / "mp3_orchestrator" / "jobs" / mp3_job_id / "vocals.wav"
+    vocals_path = BASE_DIR / "storage" / "separated" / mp3_job_id / "vocals.wav"
     if not vocals_path.exists():
         raise HTTPException(status_code=404, detail="Vocals file not found for this MP3 job.")
         

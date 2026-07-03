@@ -641,7 +641,7 @@ class MidiOrchestrator:
                 mp3_job_id = imported_vocals.get("mp3_job_id")
                 delay_ms = imported_vocals.get("delay_ms", 0)
                 
-                src_vocals_wav = self.storage_dir / "mp3_orchestrator" / "jobs" / mp3_job_id / "vocals.wav"
+                src_vocals_wav = self.storage_dir / "separated" / mp3_job_id / "vocals.wav"
                 if src_vocals_wav.exists():
                     imported_wav_path = job_dir / "imported_vocals_aligned.wav"
                     try:

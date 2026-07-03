@@ -238,6 +238,7 @@ export const MidiEditorScreen = () => {
 
   // Imported MP3 Vocals State
   const [importedVocalsJobId, setImportedVocalsJobId] = useState<string | null>(null);
+  const [importedVocalsOriginalName, setImportedVocalsOriginalName] = useState<string | null>(null);
   const [importedVocalsDelayMs, setImportedVocalsDelayMs] = useState<number>(0);
   const [importedVocalsEnabled, setImportedVocalsEnabled] = useState<boolean>(true);
   const [vocalsWaveformEnvelope, setVocalsWaveformEnvelope] = useState<number[] | null>(null);
@@ -420,6 +421,7 @@ export const MidiEditorScreen = () => {
     setMelodyFactor(job.melody_factor ?? 1.0);
     const impVoc = job.imported_vocals || null;
     setImportedVocalsJobId(impVoc?.mp3_job_id || null);
+    setImportedVocalsOriginalName(impVoc?.original_name || null);
     setImportedVocalsDelayMs(impVoc?.delay_ms || 0);
     setImportedVocalsEnabled(impVoc?.enabled ?? true);
     setVocalsWaveformEnvelope(null);
@@ -487,7 +489,10 @@ export const MidiEditorScreen = () => {
     try {
       setLoading(true);
       setShowMp3ImportModal(false);
+      const job = mp3Jobs.find(j => j.job_id === mp3JobId);
+      const origName = job?.original_name || job?.filename || 'Untitled MP3 Job';
       setImportedVocalsJobId(mp3JobId);
+      setImportedVocalsOriginalName(origName);
       setImportedVocalsEnabled(true);
       setImportedVocalsDelayMs(0);
       
@@ -908,6 +913,7 @@ export const MidiEditorScreen = () => {
         Array.from(vocalFemaleTracks),
         importedVocalsJobId ? {
           mp3_job_id: importedVocalsJobId,
+          original_name: importedVocalsOriginalName || undefined,
           delay_ms: importedVocalsDelayMs,
           enabled: importedVocalsEnabled
         } : undefined
@@ -1983,6 +1989,7 @@ export const MidiEditorScreen = () => {
                       <TouchableOpacity 
                         onPress={() => {
                           setImportedVocalsJobId(null);
+                          setImportedVocalsOriginalName(null);
                           setVocalsWaveformEnvelope(null);
                         }}
                       >
@@ -2001,8 +2008,8 @@ export const MidiEditorScreen = () => {
 
                 {importedVocalsJobId && (
                   <View style={{ marginTop: 4 }}>
-                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginBottom: 8 }}>
-                      Linked Job ID: {importedVocalsJobId.slice(0, 18)}...
+                    <Text style={{ fontSize: 11, color: themeColors.textMuted, marginBottom: 8 }} numberOfLines={1}>
+                      Linked: {importedVocalsOriginalName || `${importedVocalsJobId.slice(0, 18)}...`}
                     </Text>
                     
                     {/* Delay slider */}
@@ -2172,7 +2179,7 @@ export const MidiEditorScreen = () => {
                         onPress={() => handleSelectMp3Vocals(item.job_id)}
                       >
                         <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 13 }} numberOfLines={1}>
-                          {item.filename || 'Untitled MP3 Job'}
+                          {item.original_name || item.filename || 'Untitled MP3 Job'}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 15, marginTop: 4 }}>
                           <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>
