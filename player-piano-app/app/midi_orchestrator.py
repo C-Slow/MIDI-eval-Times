@@ -189,8 +189,12 @@ class MidiOrchestrator:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         
-        self.soundfont_path = storage_dir / "FluidR3_GM.sf2"
-        # Fallback if FluidR3_GM doesn't exist
+        self.soundfont_path = storage_dir / "SGM-V2.01.sf2"
+        # Fallbacks
+        if not self.soundfont_path.exists():
+            self.soundfont_path = storage_dir / "ChoriumRevA.sf2"
+        if not self.soundfont_path.exists():
+            self.soundfont_path = storage_dir / "FluidR3_GM.sf2"
         if not self.soundfont_path.exists():
             self.soundfont_path = storage_dir / "GeneralUser_GS.sf2"
 
