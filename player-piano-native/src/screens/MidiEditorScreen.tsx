@@ -33,6 +33,8 @@ interface NoteGridProps {
   lanesData: any[];
   pianoTracks: Set<number>;
   speakerTracks: Set<number>;
+  vocalMaleTracks: Set<number>;
+  vocalFemaleTracks: Set<number>;
   themeColors: any;
   durationSec: number;
   timelineWidth: number;
@@ -43,14 +45,18 @@ const NoteGrid = React.memo(({
   lanesData,
   pianoTracks,
   speakerTracks,
+  vocalMaleTracks,
+  vocalFemaleTracks,
   themeColors,
   durationSec,
   timelineWidth,
   totalHeight,
 }: NoteGridProps) => {
-  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean) => {
+  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
     if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
     if (isSpeaker) return '#a29bfe'; // Light purple for strings/speakers
+    if (isMale) return '#0984e3'; // Vibrant blue for male vocals
+    if (isFemale) return '#e84393'; // Vibrant pink for female vocals
     return themeColors.textMuted;
   };
 
@@ -77,7 +83,9 @@ const NoteGrid = React.memo(({
       {lanesData.map((lane: any, laneIdx: number) => {
         const isPiano = pianoTracks.has(lane.index);
         const isSpeaker = speakerTracks.has(lane.index);
-        const color = getTrackColor(lane.index, isPiano, isSpeaker);
+        const isMale = vocalMaleTracks.has(lane.index);
+        const isFemale = vocalFemaleTracks.has(lane.index);
+        const color = getTrackColor(lane.index, isPiano, isSpeaker, isMale, isFemale);
 
         return (
           <View 
@@ -128,12 +136,20 @@ const NoteGrid = React.memo(({
   
   if (prevProps.pianoTracks.size !== nextProps.pianoTracks.size) return false;
   if (prevProps.speakerTracks.size !== nextProps.speakerTracks.size) return false;
+  if (prevProps.vocalMaleTracks.size !== nextProps.vocalMaleTracks.size) return false;
+  if (prevProps.vocalFemaleTracks.size !== nextProps.vocalFemaleTracks.size) return false;
   
   for (const item of prevProps.pianoTracks) {
     if (!nextProps.pianoTracks.has(item)) return false;
   }
   for (const item of prevProps.speakerTracks) {
     if (!nextProps.speakerTracks.has(item)) return false;
+  }
+  for (const item of prevProps.vocalMaleTracks) {
+    if (!nextProps.vocalMaleTracks.has(item)) return false;
+  }
+  for (const item of prevProps.vocalFemaleTracks) {
+    if (!nextProps.vocalFemaleTracks.has(item)) return false;
   }
   
   return true;
@@ -156,6 +172,8 @@ export const MidiEditorScreen = () => {
   // Track configuration state
   const [pianoTracks, setPianoTracks] = useState<Set<number>>(new Set());
   const [speakerTracks, setSpeakerTracks] = useState<Set<number>>(new Set());
+  const [vocalMaleTracks, setVocalMaleTracks] = useState<Set<number>>(new Set());
+  const [vocalFemaleTracks, setVocalFemaleTracks] = useState<Set<number>>(new Set());
   const [pedalPreset, setPedalPreset] = useState<'light' | 'medium' | 'full'>('light');
   const [rhythmFactor, setRhythmFactor] = useState(1.0);
   const [melodyFactor, setMelodyFactor] = useState(1.0);
@@ -285,9 +303,13 @@ export const MidiEditorScreen = () => {
     if (!currentJob) return false;
     const savedPiano = new Set(currentJob.piano_tracks || []);
     const savedSpeaker = new Set(currentJob.speaker_tracks || []);
+    const savedMale = new Set(currentJob.vocal_male_tracks || []);
+    const savedFemale = new Set(currentJob.vocal_female_tracks || []);
     
     if (pianoTracks.size !== savedPiano.size) return true;
     if (speakerTracks.size !== savedSpeaker.size) return true;
+    if (vocalMaleTracks.size !== savedMale.size) return true;
+    if (vocalFemaleTracks.size !== savedFemale.size) return true;
     
     for (const id of pianoTracks) {
       if (!savedPiano.has(id)) return true;
@@ -295,13 +317,19 @@ export const MidiEditorScreen = () => {
     for (const id of speakerTracks) {
       if (!savedSpeaker.has(id)) return true;
     }
+    for (const id of vocalMaleTracks) {
+      if (!savedMale.has(id)) return true;
+    }
+    for (const id of vocalFemaleTracks) {
+      if (!savedFemale.has(id)) return true;
+    }
     
     if (pedalPreset !== currentJob.pedal_preset) return true;
     if (rhythmFactor !== currentJob.rhythm_factor) return true;
     if (melodyFactor !== currentJob.melody_factor) return true;
     
     return false;
-  }, [currentJob, pianoTracks, speakerTracks, pedalPreset, rhythmFactor, melodyFactor]);
+  }, [currentJob, pianoTracks, speakerTracks, vocalMaleTracks, vocalFemaleTracks, pedalPreset, rhythmFactor, melodyFactor]);
 
   useEffect(() => {
     if (!currentJob) return;
@@ -319,6 +347,8 @@ export const MidiEditorScreen = () => {
     setSelectedJobId(jobId);
     setPianoTracks(new Set(job.piano_tracks || []));
     setSpeakerTracks(new Set(job.speaker_tracks || []));
+    setVocalMaleTracks(new Set(job.vocal_male_tracks || []));
+    setVocalFemaleTracks(new Set(job.vocal_female_tracks || []));
     setPedalPreset(job.pedal_preset || 'light');
     setRhythmFactor(job.rhythm_factor ?? 1.0);
     setMelodyFactor(job.melody_factor ?? 1.0);
@@ -359,7 +389,7 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'mute') => {
+  const handleToggleTrackRole = (trackIndex: number, role: 'piano' | 'speakers' | 'male_vocal' | 'female_vocal' | 'mute') => {
     if (isPreviewPlaying) {
       stopPreview();
     }
@@ -377,6 +407,20 @@ export const MidiEditorScreen = () => {
     setSpeakerTracks(prev => {
       const next = new Set(prev);
       if (role === 'speakers') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+
+    setVocalMaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'male_vocal') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+
+    setVocalFemaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'female_vocal') next.add(trackIndex);
       else next.delete(trackIndex);
       return next;
     });
@@ -642,7 +686,7 @@ export const MidiEditorScreen = () => {
   };
 
   // Toggle track role
-  const handleTrackRoleToggle = (trackIndex: number, role: 'piano' | 'speakers' | 'mute') => {
+  const handleTrackRoleToggle = (trackIndex: number, role: 'piano' | 'speakers' | 'male_vocal' | 'female_vocal' | 'mute') => {
     setPianoTracks(prev => {
       const next = new Set(prev);
       if (role === 'piano') next.add(trackIndex);
@@ -652,6 +696,18 @@ export const MidiEditorScreen = () => {
     setSpeakerTracks(prev => {
       const next = new Set(prev);
       if (role === 'speakers') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+    setVocalMaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'male_vocal') next.add(trackIndex);
+      else next.delete(trackIndex);
+      return next;
+    });
+    setVocalFemaleTracks(prev => {
+      const next = new Set(prev);
+      if (role === 'female_vocal') next.add(trackIndex);
       else next.delete(trackIndex);
       return next;
     });
@@ -717,8 +773,8 @@ export const MidiEditorScreen = () => {
   // Run Backend Split & Synthesize Process
   const handleProcess = async () => {
     if (!selectedJobId) return;
-    if (pianoTracks.size === 0 && speakerTracks.size === 0) {
-      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano or Speakers.');
+    if (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) {
+      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano, Speakers, or Vocals.');
       return;
     }
 
@@ -730,7 +786,9 @@ export const MidiEditorScreen = () => {
         Array.from(speakerTracks),
         pedalPreset,
         rhythmFactor,
-        melodyFactor
+        melodyFactor,
+        Array.from(vocalMaleTracks),
+        Array.from(vocalFemaleTracks)
       );
       await fetchJobs();
       setStage('list');
@@ -904,7 +962,9 @@ export const MidiEditorScreen = () => {
           {getLanesData.map((lane: any) => {
             const isPiano = pianoTracks.has(lane.index);
             const isSpeaker = speakerTracks.has(lane.index);
-            const isMuted = !isPiano && !isSpeaker;
+            const isMale = vocalMaleTracks.has(lane.index);
+            const isFemale = vocalFemaleTracks.has(lane.index);
+            const isMuted = !isPiano && !isSpeaker && !isMale && !isFemale;
             
             return (
               <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
@@ -912,8 +972,9 @@ export const MidiEditorScreen = () => {
                   {lane.name}
                 </Text>
                 
-                {/* 3-Way Live Toggle Row */}
+                {/* 5-Way Live Toggle Row */}
                 <View style={styles.allocationRow}>
+                  {/* Piano */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -924,6 +985,7 @@ export const MidiEditorScreen = () => {
                     <Ionicons name="musical-notes" size={12} color={isPiano ? "#fff" : themeColors.textMuted} />
                   </TouchableOpacity>
 
+                  {/* Speakers (Instruments) */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -934,6 +996,29 @@ export const MidiEditorScreen = () => {
                     <Ionicons name="volume-high" size={12} color={isSpeaker ? "#fff" : themeColors.textMuted} />
                   </TouchableOpacity>
 
+                  {/* Male Vocal */}
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isMale && { backgroundColor: '#0984e3' }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'male_vocal')}
+                  >
+                    <Ionicons name="man" size={12} color={isMale ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  {/* Female Vocal */}
+                  <TouchableOpacity 
+                    style={[
+                      styles.allocToggleBtn, 
+                      isFemale && { backgroundColor: '#e84393' }
+                    ]}
+                    onPress={() => handleToggleTrackRole(lane.index, 'female_vocal')}
+                  >
+                    <Ionicons name="woman" size={12} color={isFemale ? "#fff" : themeColors.textMuted} />
+                  </TouchableOpacity>
+
+                  {/* Mute */}
                   <TouchableOpacity 
                     style={[
                       styles.allocToggleBtn, 
@@ -962,6 +1047,8 @@ export const MidiEditorScreen = () => {
               lanesData={getLanesData}
               pianoTracks={pianoTracks}
               speakerTracks={speakerTracks}
+              vocalMaleTracks={vocalMaleTracks}
+              vocalFemaleTracks={vocalFemaleTracks}
               themeColors={themeColors}
               durationSec={durationSec}
               timelineWidth={timelineWidth}
@@ -1941,7 +2028,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   sidebar: {
-    width: 110,
+    width: 170,
     borderRightWidth: 1,
     zIndex: 10,
   },

@@ -307,10 +307,21 @@ export const midiOrchestratorApi = {
     const res = await api.get(`/midi-orchestrator/notes/${jobId}`);
     return res.data;
   },
-  process: async (jobId: string, pianoTracks: number[], speakerTracks: number[], pedalPreset: string = 'light', rhythmFactor: number = 1.0, melodyFactor: number = 1.0) => {
+  process: async (
+    jobId: string, 
+    pianoTracks: number[], 
+    speakerTracks: number[], 
+    pedalPreset: string = 'light', 
+    rhythmFactor: number = 1.0, 
+    melodyFactor: number = 1.0,
+    vocalMaleTracks: number[] = [],
+    vocalFemaleTracks: number[] = []
+  ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,
       speaker_tracks: speakerTracks,
+      vocal_male_tracks: vocalMaleTracks,
+      vocal_female_tracks: vocalFemaleTracks,
       pedal_preset: pedalPreset,
       rhythm_factor: rhythmFactor,
       melody_factor: melodyFactor

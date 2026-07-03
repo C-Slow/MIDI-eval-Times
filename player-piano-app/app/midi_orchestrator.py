@@ -199,6 +199,8 @@ class MidiOrchestrator:
             self.soundfont_path = storage_dir / "GeneralUser_GS.sf2"
 
         self.status: Dict[str, Dict] = self._load_db()
+        self.rvc = None
+        self.rvc_models_dir = storage_dir / "rvc_models"
 
     def _load_db(self) -> Dict:
         if self.db_path.exists():
@@ -297,27 +299,169 @@ class MidiOrchestrator:
             print(f"Error extracting track notes: {e}")
             return {}
 
-    def start_processing(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str = "light", rhythm_factor: float = 1.0, melody_factor: float = 1.0):
+    def start_processing(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str = "light", rhythm_factor: float = 1.0, melody_factor: float = 1.0, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None):
         if job_id not in self.status:
             raise ValueError("Job not found.")
+            
+        vocal_male_tracks = vocal_male_tracks or []
+        vocal_female_tracks = vocal_female_tracks or []
             
         self.status[job_id].update({
             "status": "processing",
             "progress": 10,
             "piano_tracks": piano_tracks,
             "speaker_tracks": speaker_tracks,
+            "vocal_male_tracks": vocal_male_tracks,
+            "vocal_female_tracks": vocal_female_tracks,
             "pedal_preset": pedal_preset,
             "rhythm_factor": rhythm_factor,
             "melody_factor": melody_factor
         })
         self._save_db()
         
-        thread = threading.Thread(target=self._process_task, args=(job_id, piano_tracks, speaker_tracks, pedal_preset, rhythm_factor, melody_factor))
+        thread = threading.Thread(target=self._process_task, args=(job_id, piano_tracks, speaker_tracks, pedal_preset, rhythm_factor, melody_factor, vocal_male_tracks, vocal_female_tracks))
         thread.daemon = True
         thread.start()
 
-    def _process_task(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str, rhythm_factor: float, melody_factor: float):
+    def _process_rvc_vocals(self, job_dir: Path, pm: pretty_midi.PrettyMIDI, vocal_tracks: List[int], gender: str, time_shift: float) -> Optional[Path]:
+        if not vocal_tracks:
+            return None
+            
+        # 1. Create guide MIDI file
+        vocal_pm = pretty_midi.PrettyMIDI()
+        for idx in vocal_tracks:
+            if idx < len(pm.instruments):
+                orig_inst = pm.instruments[idx]
+                # Use Program 52 (Choir Aahs) for a clean vocal guide hum
+                new_inst = pretty_midi.Instrument(program=52, name=f"Vocal_{gender}_{idx}")
+                for n in orig_inst.notes:
+                    new_inst.notes.append(pretty_midi.Note(
+                        velocity=n.velocity,
+                        pitch=n.pitch,
+                        start=max(0.0, n.start - time_shift),
+                        end=max(0.0, n.end - time_shift)
+                    ))
+                vocal_pm.instruments.append(new_inst)
+                
+        if not vocal_pm.instruments:
+            return None
+            
+        guide_mid_path = job_dir / f"guide_{gender}.mid"
+        guide_wav_path = job_dir / f"guide_{gender}.wav"
+        rvc_wav_path = job_dir / f"rvc_{gender}.wav"
+        
+        vocal_pm.write(str(guide_mid_path))
+        
+        # 2. Render guide MIDI to WAV using FluidSynth
+        utils.render_midi_to_wav_with_soundfont(
+            str(guide_mid_path),
+            str(self.soundfont_path),
+            str(guide_wav_path)
+        )
+        
+        # Clean up guide MIDI
+        if guide_mid_path.exists():
+            guide_mid_path.unlink()
+            
+        if not guide_wav_path.exists():
+            return None
+            
+        # 3. Perform RVC inference
         try:
+            print(f"MIDI Orchestrator: Starting RVC {gender} voice conversion for {guide_wav_path}...")
+            
+            # Lazy import RVCInference
+            from rvc_python.infer import RVCInference
+            if self.rvc is None:
+                self.rvc = RVCInference(device="cpu")
+                
+            model_name = "male_singing.pth" if gender == "male" else "female_singing.pth"
+            model_path = self.rvc_models_dir / model_name
+            
+            if not model_path.exists():
+                raise FileNotFoundError(f"RVC voice model {model_name} not found at {model_path}")
+                
+            self.rvc.load_model(str(model_path), version="v2")
+            # Set RMVPE pitch extraction, no pitch shifting (f0up_key=0)
+            self.rvc.set_params(f0up_key=0, f0method="rmvpe")
+            self.rvc.infer_file(str(guide_wav_path), str(rvc_wav_path))
+            
+            print(f"MIDI Orchestrator: RVC {gender} voice conversion complete -> {rvc_wav_path}")
+            
+            # Clean up guide WAV
+            if guide_wav_path.exists():
+                guide_wav_path.unlink()
+                
+            return rvc_wav_path
+        except Exception as e:
+            print(f"Error performing RVC inference for {gender} vocals: {e}")
+            # If RVC fails, return the guide WAV as fallback!
+            return guide_wav_path
+
+    def _mix_wav_files(self, input_paths: List[Path], output_path: Path):
+        from scipy.io import wavfile
+        import numpy as np
+        
+        valid_paths = [p for p in input_paths if p and p.exists()]
+        if not valid_paths:
+            return
+            
+        if len(valid_paths) == 1:
+            shutil.copy(str(valid_paths[0]), str(output_path))
+            return
+            
+        tensors = []
+        rate = None
+        
+        for p in valid_paths:
+            try:
+                r, d = wavfile.read(str(p))
+                if rate is None:
+                    rate = r
+                tensors.append(d.astype(np.float32))
+            except Exception as e:
+                print(f"Error reading {p} for mixing: {e}")
+                
+        if not tensors:
+            return
+            
+        # Find max length and pad smaller arrays
+        max_len = max(len(t) for t in tensors)
+        mixed_data = np.zeros(max_len, dtype=np.float32)
+        
+        # Check if any input is stereo
+        is_stereo = any(t.ndim == 2 for t in tensors)
+        if is_stereo:
+            mixed_data = np.zeros((max_len, 2), dtype=np.float32)
+            
+        for t in tensors:
+            # Pad
+            if t.ndim == 2:
+                # Stereo
+                padded = np.zeros((max_len, 2), dtype=np.float32)
+                padded[:len(t)] = t
+            else:
+                # Mono
+                padded = np.zeros(max_len, dtype=np.float32)
+                padded[:len(t)] = t
+                if is_stereo:
+                    # Duplicate to stereo
+                    padded = np.stack([padded, padded], axis=1)
+            mixed_data += padded
+            
+        # Prevent clipping by normalizing
+        max_val = np.max(np.abs(mixed_data))
+        if max_val > 32767.0:
+            mixed_data = (mixed_data / max_val) * 32767.0
+            
+        mixed_int = mixed_data.astype(np.int16)
+        wavfile.write(str(output_path), rate, mixed_int)
+
+    def _process_task(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str, rhythm_factor: float, melody_factor: float, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None):
+        try:
+            vocal_male_tracks = vocal_male_tracks or []
+            vocal_female_tracks = vocal_female_tracks or []
+            
             job_dir = self.jobs_dir / job_id
             job_dir.mkdir(parents=True, exist_ok=True)
             
@@ -333,7 +477,8 @@ class MidiOrchestrator:
             pm = pretty_midi.PrettyMIDI(str(original_midi))
             
             # Find global min_start time across all chosen tracks (to shift silence together)
-            all_selected_insts = [pm.instruments[i] for i in (piano_tracks + speaker_tracks) if i < len(pm.instruments)]
+            all_selected_tracks = list(set(piano_tracks + speaker_tracks + vocal_male_tracks + vocal_female_tracks))
+            all_selected_insts = [pm.instruments[i] for i in all_selected_tracks if i < len(pm.instruments)]
             min_start = None
             for inst in all_selected_insts:
                 for note in inst.notes:
@@ -380,14 +525,16 @@ class MidiOrchestrator:
                 piano_pm.instruments.append(piano_master)
                 piano_pm.write(str(piano_out_path))
             
-            self.status[job_id]["progress"] = 60
+            self.status[job_id]["progress"] = 50
             self._save_db()
             
-            # --- 2. Process Backing (Speakers) Track ---
-            backing_out_path = job_dir / "backing.mid"
+            # --- 2. Process Backing Instruments Track (exclude vocal tracks to avoid doubling) ---
+            backing_out_path = job_dir / "backing_insts.mid"
             backing_pm = pretty_midi.PrettyMIDI()
             
-            for idx in speaker_tracks:
+            non_vocal_speakers = [idx for idx in speaker_tracks if idx not in vocal_male_tracks and idx not in vocal_female_tracks]
+            
+            for idx in non_vocal_speakers:
                 if idx < len(pm.instruments):
                     orig_inst = pm.instruments[idx]
                     new_inst = pretty_midi.Instrument(program=orig_inst.program, name=orig_inst.name, is_drum=orig_inst.is_drum)
@@ -402,31 +549,60 @@ class MidiOrchestrator:
                         new_inst.control_changes.append(cc)
                     backing_pm.instruments.append(new_inst)
             
-            backing_wav_path = job_dir / "backing.wav"
+            backing_insts_wav_path = job_dir / "backing_insts.wav"
             
             if backing_pm.instruments:
                 backing_pm.write(str(backing_out_path))
                 
-                # --- 3. FluidSynth rendering using high quality SoundFont ---
-                self.status[job_id]["progress"] = 80
-                self.status[job_id]["status"] = "synthesizing"
-                self._save_db()
-                
+                # Render instruments using SoundFont
                 utils.render_midi_to_wav_with_soundfont(
                     str(backing_out_path), 
                     str(self.soundfont_path), 
-                    str(backing_wav_path)
+                    str(backing_insts_wav_path)
                 )
+                
+                # Clean up intermediate midi
+                if backing_out_path.exists():
+                    backing_out_path.unlink()
+            
+            self.status[job_id]["progress"] = 70
+            self.status[job_id]["status"] = "synthesizing"
+            self._save_db()
+            
+            # --- 3. Render Vocal Tracks via RVC ---
+            male_wav_path = self._process_rvc_vocals(job_dir, pm, vocal_male_tracks, "male", time_shift)
+            female_wav_path = self._process_rvc_vocals(job_dir, pm, vocal_female_tracks, "female", time_shift)
+            
+            # --- 4. Mix backing tracks together ---
+            self.status[job_id]["progress"] = 90
+            self._save_db()
+            
+            final_backing_wav_path = job_dir / "backing.wav"
+            mix_list = []
+            if backing_insts_wav_path.exists():
+                mix_list.append(backing_insts_wav_path)
+            if male_wav_path and male_wav_path.exists():
+                mix_list.append(male_wav_path)
+            if female_wav_path and female_wav_path.exists():
+                mix_list.append(female_wav_path)
+                
+            if mix_list:
+                self._mix_wav_files(mix_list, final_backing_wav_path)
+                # Clean up intermediate wav files
+                for wav_p in mix_list:
+                    # Do not delete the final target path if it's the only one
+                    if wav_p != final_backing_wav_path and wav_p.exists():
+                        wav_p.unlink()
             
             # Complete Job status
             self.status[job_id].update({
                 "status": "completed",
                 "progress": 100,
-                "vocals": str(backing_wav_path) if backing_wav_path.exists() else None,
+                "vocals": str(final_backing_wav_path) if final_backing_wav_path.exists() else None,
                 "midi": str(piano_out_path) if piano_out_path.exists() else None
             })
             self._save_db()
-            print(f"MIDI Orchestrator: Completed processing for job {job_id}")
+            print(f"MIDI Orchestrator: Completed processing with vocals for job {job_id}")
             
             # Clean up the original upload file in upload folder to save space
             if src_midi.exists():

@@ -1240,6 +1240,8 @@ async def replace_mp3_midi_existing(job_id: str, filename: str = Query(...)):
 class ProcessMidiRequest(BaseModel):
     piano_tracks: List[int]
     speaker_tracks: List[int]
+    vocal_male_tracks: Optional[List[int]] = []
+    vocal_female_tracks: Optional[List[int]] = []
     pedal_preset: Optional[str] = "light"
     rhythm_factor: Optional[float] = 1.0
     melody_factor: Optional[float] = 1.0
@@ -1371,7 +1373,9 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             req.speaker_tracks,
             req.pedal_preset,
             req.rhythm_factor,
-            req.melody_factor
+            req.melody_factor,
+            req.vocal_male_tracks,
+            req.vocal_female_tracks
         )
         return {"status": "started"}
     except ValueError as e:
