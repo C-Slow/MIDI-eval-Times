@@ -666,20 +666,66 @@ class MidiOrchestrator:
                             data_no_beeps = scipy.signal.resample(data_no_beeps, num_samples, axis=0)
                             rate = 44100
                             
-                        # Apply delay_ms offset
-                        delay_samples = int((delay_ms / 1000.0) * rate)
+                        # Get breaklines
+                        breaklines = imported_vocals.get("breaklines", [])
+                        sorted_breaks = sorted(breaklines, key=lambda b: b.get("time_ms", 0))
                         
-                        if delay_samples > 0:
-                            if data_no_beeps.ndim == 2:
-                                padding = np.zeros((delay_samples, data_no_beeps.shape[1]), dtype=np.float32)
-                            else:
-                                padding = np.zeros(delay_samples, dtype=np.float32)
-                            aligned_data = np.concatenate([padding, data_no_beeps], axis=0)
-                        elif delay_samples < 0:
-                            trim_idx = min(len(data_no_beeps), abs(delay_samples))
-                            aligned_data = data_no_beeps[trim_idx:]
+                        N = len(data_no_beeps)
+                        
+                        # Construct timeline boundaries (T) and segment offsets (S)
+                        T = [delay_ms]
+                        S = [delay_ms]
+                        for b in sorted_breaks:
+                            T.append(b.get("time_ms", 0))
+                            S.append(b.get("offset_ms", 0))
+                        
+                        # Add final end time to T
+                        T.append(int(N * 1000.0 / rate) + S[-1])
+                        
+                        # Calculate total output length
+                        max_out_idx = max(0, int((T[-1] / 1000.0) * rate))
+                        
+                        # Initialize aligned_data buffer
+                        is_stereo = (data_no_beeps.ndim == 2)
+                        if is_stereo:
+                            aligned_data = np.zeros((max_out_idx, data_no_beeps.shape[1]), dtype=np.float32)
                         else:
-                            aligned_data = data_no_beeps
+                            aligned_data = np.zeros(max_out_idx, dtype=np.float32)
+                            
+                        # Mix each segment piecewise
+                        for i in range(len(S)):
+                            t_start = T[i]
+                            t_end = T[i+1]
+                            offset = S[i]
+                            
+                            # Audio boundaries
+                            audio_start = max(0, int(((t_start - offset) / 1000.0) * rate))
+                            audio_end = max(0, int(((t_end - offset) / 1000.0) * rate))
+                            
+                            # Target mix indices in output buffer
+                            raw_target_start = int((t_start / 1000.0) * rate)
+                            
+                            # Handle negative starting timeline positions by cropping audio start
+                            if raw_target_start < 0:
+                                crop_samples = abs(raw_target_start)
+                                audio_start += crop_samples
+                                target_start = 0
+                            else:
+                                target_start = raw_target_start
+                            
+                            # Ensure within bounds of the data array
+                            audio_start = min(N, audio_start)
+                            audio_end = min(N, audio_end)
+                            
+                            seg_data = data_no_beeps[audio_start:audio_end]
+                            if len(seg_data) > 0 and target_start < max_out_idx:
+                                # Ensure we don't write past output buffer
+                                write_len = min(len(seg_data), max_out_idx - target_start)
+                                if write_len > 0:
+                                    if is_stereo:
+                                        aligned_data[target_start:target_start + write_len, :] += seg_data[:write_len, :]
+                                    else:
+                                        aligned_data[target_start:target_start + write_len] += seg_data[:write_len]
                             
                         # Normalize, apply volume factor, clip and convert back to int16
                         max_amp = np.max(np.abs(aligned_data))
