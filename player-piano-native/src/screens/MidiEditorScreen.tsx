@@ -253,49 +253,51 @@ const NoteGrid = React.memo(({
                 }}
                 style={{ position: 'absolute', top: 0, left: 0, width: timelineWidth, height: 70 }}
               >
-                {vocalsWaveformEnvelope ? (
-                  vocalsWaveformEnvelope.map((val: number, idx: number) => {
-                    const tMs = idx * 100; // 10 points per sec = 100ms per point
-                    
-                    // Compute dynamic segment offset based on audio boundaries
-                    let offsetMs = importedVocalsDelayMs;
-                    for (const b of sortedBreaks) {
-                      const audioBoundary = b.time_ms - offsetMs;
-                      if (tMs > audioBoundary) {
-                        offsetMs = b.offset_ms;
-                      } else {
-                        break;
+                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                  {vocalsWaveformEnvelope ? (
+                    vocalsWaveformEnvelope.map((val: number, idx: number) => {
+                      const tMs = idx * 100; // 10 points per sec = 100ms per point
+                      
+                      // Compute dynamic segment offset based on audio boundaries
+                      let offsetMs = importedVocalsDelayMs;
+                      for (const b of sortedBreaks) {
+                        const audioBoundary = b.time_ms - offsetMs;
+                        if (tMs > audioBoundary) {
+                          offsetMs = b.offset_ms;
+                        } else {
+                          break;
+                        }
                       }
-                    }
-                    
-                    const delayOffsetPx = (offsetMs / 1000) * PIXELS_PER_SECOND;
-                    const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
-                    if (left < -10 || left > timelineWidth + 10) return null;
-                    
-                    // Center waveform in top 70px envelope region
-                    const barHeight = Math.max(2, val * (70 - verticalPadding * 2));
-                    const barTop = verticalPadding + ((70 - verticalPadding * 2) - barHeight) / 2;
-                    
-                    return (
-                      <View
-                        key={idx}
-                        style={{
-                          position: 'absolute',
-                          left,
-                          width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
-                          top: barTop,
-                          height: barHeight,
-                          backgroundColor: waveformColor,
-                          borderRadius: 1
-                        }}
-                      />
-                    );
-                  })
-                ) : (
-                  <Text style={{ position: 'absolute', left: 20, top: 25, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
-                    No waveform data loaded. Long-press here to place markers.
-                  </Text>
-                )}
+                      
+                      const delayOffsetPx = (offsetMs / 1000) * PIXELS_PER_SECOND;
+                      const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
+                      if (left < -10 || left > timelineWidth + 10) return null;
+                      
+                      // Center waveform in top 70px envelope region
+                      const barHeight = Math.max(2, val * (70 - verticalPadding * 2));
+                      const barTop = verticalPadding + ((70 - verticalPadding * 2) - barHeight) / 2;
+                      
+                      return (
+                        <View
+                          key={idx}
+                          style={{
+                            position: 'absolute',
+                            left,
+                            width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
+                            top: barTop,
+                            height: barHeight,
+                            backgroundColor: waveformColor,
+                            borderRadius: 1
+                          }}
+                        />
+                      );
+                    })
+                  ) : (
+                    <Text style={{ position: 'absolute', left: 20, top: 25, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
+                      No waveform data loaded. Long-press here to place markers.
+                    </Text>
+                  )}
+                </View>
               </Pressable>
 
               {/* Inline Breakline Alignment Controllers in the bottom 50px of expanded lane */}
@@ -2548,6 +2550,22 @@ export const MidiEditorScreen = () => {
 
             {/* Main Buttons */}
             <View style={styles.buttonsRow}>
+              {/* Always show Synthesize button to the left of the stop button */}
+              <TouchableOpacity 
+                style={[styles.miniProcessBtn, { backgroundColor: themeColors.accent, marginRight: 10, marginLeft: 0 }]}
+                onPress={handleProcess}
+                disabled={loading || isPreviewPlaying || isPlaying}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="color-wand" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.miniProcessBtnText}>Synthesize</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               {playbackMode === 'preview' ? (
                 // PREVIEW PLAY BUTTONS
                 <>
@@ -2569,23 +2587,6 @@ export const MidiEditorScreen = () => {
                       <Ionicons name={isPreviewPlaying ? "pause" : "play"} size={36} color="#fff" />
                     )}
                   </TouchableOpacity>
-
-                  {(currentJob.status !== 'completed' || hasChanges) && (
-                    <TouchableOpacity 
-                      style={[styles.miniProcessBtn, { backgroundColor: themeColors.accent }]}
-                      onPress={handleProcess}
-                      disabled={loading || isPreviewPlaying}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <>
-                          <Ionicons name="color-wand" size={16} color="#fff" style={{ marginRight: 6 }} />
-                          <Text style={styles.miniProcessBtnText}>Synthesize</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
                 </>
               ) : (
                 // PERFORMANCE PLAY BUTTONS
