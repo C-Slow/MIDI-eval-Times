@@ -578,6 +578,7 @@ export const MidiEditorScreen = () => {
   const [detailsMood, setDetailsMood] = useState('');
   const [detailsSource, setDetailsSource] = useState('');
   const [detailsDnu, setDetailsDnu] = useState(false);
+  const [detailsValidated, setDetailsValidated] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [playbackMode, setPlaybackMode] = useState<'preview' | 'performance'>('preview');
   const [search, setSearch] = useState('');
@@ -1121,6 +1122,7 @@ export const MidiEditorScreen = () => {
       setDetailsMood(meta.mood || job.mood || '');
       setDetailsSource(meta.source || job.source || '');
       setDetailsDnu(meta.dnu || job.dnu || false);
+      setDetailsValidated(meta.validated || job.validated || false);
       setDetailsVisible(true);
     } catch (e: any) {
       console.error(e);
@@ -1151,7 +1153,8 @@ export const MidiEditorScreen = () => {
         genre: detailsGenre.trim(),
         mood: detailsMood.trim(),
         source: detailsSource.trim(),
-        dnu: detailsDnu
+        dnu: detailsDnu,
+        validated: detailsValidated
       });
 
       Alert.alert('Success', 'Song metadata updated successfully.');
@@ -1867,6 +1870,11 @@ export const MidiEditorScreen = () => {
                                 <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>P:{item.pedal_preset.charAt(0).toUpperCase()}</Text>
                               </View>
                             )}
+                            {item.validated && (
+                              <View style={[styles.statBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)' }]}>
+                                <Text style={[styles.statBadgeText, { color: '#2ecc71', fontWeight: 'bold' }]}>V</Text>
+                              </View>
+                            )}
                           </>
                         )}
 
@@ -2157,6 +2165,19 @@ export const MidiEditorScreen = () => {
                         value={detailsDnu} 
                         onValueChange={setDetailsDnu} 
                         trackColor={{ false: themeColors.border, true: '#ff5252' }} 
+                      />
+                    </View>
+
+                    {/* Validated Switch */}
+                    <View style={[styles.detailRow, { marginBottom: 20 }]}>
+                      <View>
+                        <Text style={{ color: themeColors.text, fontWeight: '600' }}>Validated</Text>
+                        <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>Mark this file as verified and correct</Text>
+                      </View>
+                      <Switch 
+                        value={detailsValidated} 
+                        onValueChange={setDetailsValidated} 
+                        trackColor={{ false: themeColors.border, true: '#2ecc71' }} 
                       />
                     </View>
 

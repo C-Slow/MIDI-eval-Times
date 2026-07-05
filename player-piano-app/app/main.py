@@ -1481,6 +1481,7 @@ class MidiOrchestratorMetadataUpdate(BaseModel):
     source: Optional[str] = None
     dnu: Optional[bool] = None
     playlists: Optional[List[str]] = None
+    validated: Optional[bool] = None
 
 @app.get("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
 async def get_midi_orchestrator_metadata(job_id: str):
@@ -1496,6 +1497,7 @@ async def get_midi_orchestrator_metadata(job_id: str):
         "mood": job.get("mood", ""),
         "source": job.get("source", ""),
         "dnu": job.get("dnu", False),
+        "validated": job.get("validated", False),
         "playlists": job.get("playlists", [])
     }
 
@@ -1513,6 +1515,7 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     if req.source is not None: updates["source"] = req.source
     if req.dnu is not None: updates["dnu"] = req.dnu
     if req.playlists is not None: updates["playlists"] = req.playlists
+    if req.validated is not None: updates["validated"] = req.validated
     
     midi_orchestrator.status[job_id].update(updates)
     midi_orchestrator._save_db()
