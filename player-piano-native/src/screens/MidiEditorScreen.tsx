@@ -520,19 +520,22 @@ export const MidiEditorScreen = () => {
     loopConfigRef.current = { enabled: loopEnabled, start: loopStartMs, end: loopEndMs };
   }, [loopEnabled, loopStartMs, loopEndMs]);
 
-  // Configure Audio Mode & Keep Awake during playback
+  // Keep Awake during active playing
+  const wasPlayingRef = useRef(false);
   useEffect(() => {
-    setAudioMode('playback');
-  }, []);
-
-  useEffect(() => {
-    if (isPlaying || isPreviewPlaying) {
-      activateKeepAwakeAsync().catch(err => console.error('Failed to activate keep awake', err));
-    } else {
-      deactivateKeepAwakeAsync().catch(err => console.error('Failed to deactivate keep awake', err));
+    const currentlyPlaying = isPlaying || isPreviewPlaying;
+    if (currentlyPlaying !== wasPlayingRef.current) {
+      wasPlayingRef.current = currentlyPlaying;
+      if (currentlyPlaying) {
+        activateKeepAwakeAsync().catch(err => console.error('Failed to activate keep awake', err));
+      } else {
+        deactivateKeepAwakeAsync().catch(err => console.error('Failed to deactivate keep awake', err));
+      }
     }
     return () => {
-      deactivateKeepAwakeAsync().catch(() => {});
+      if (wasPlayingRef.current) {
+        deactivateKeepAwakeAsync().catch(() => {});
+      }
     };
   }, [isPlaying, isPreviewPlaying]);
 
@@ -1216,6 +1219,7 @@ export const MidiEditorScreen = () => {
 
     setIsPreviewLoading(true);
     try {
+      await setAudioMode('playback');
       if (previewSoundRef.current) {
         await previewSoundRef.current.unloadAsync();
       }
@@ -1335,6 +1339,7 @@ export const MidiEditorScreen = () => {
     }
 
     try {
+      await setAudioMode('playback');
       setSystemBusy(true);
       setIsPlaying(true);
 
