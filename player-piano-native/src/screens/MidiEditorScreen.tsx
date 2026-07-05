@@ -25,6 +25,8 @@ import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
 import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
+import { activateKeepAwakeAsync, deactivateKeepAwakeAsync } from 'expo-keep-awake';
+import { setAudioMode } from '../services/audioMode';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PIXELS_PER_SECOND = 40; // Timeline scale
@@ -517,6 +519,22 @@ export const MidiEditorScreen = () => {
   useEffect(() => {
     loopConfigRef.current = { enabled: loopEnabled, start: loopStartMs, end: loopEndMs };
   }, [loopEnabled, loopStartMs, loopEndMs]);
+
+  // Configure Audio Mode & Keep Awake during playback
+  useEffect(() => {
+    setAudioMode('playback');
+  }, []);
+
+  useEffect(() => {
+    if (isPlaying || isPreviewPlaying) {
+      activateKeepAwakeAsync().catch(err => console.error('Failed to activate keep awake', err));
+    } else {
+      deactivateKeepAwakeAsync().catch(err => console.error('Failed to deactivate keep awake', err));
+    }
+    return () => {
+      deactivateKeepAwakeAsync().catch(() => {});
+    };
+  }, [isPlaying, isPreviewPlaying]);
 
   // Tooltip & Finetuning States
   const [showTooltip, setShowTooltip] = useState(false);
