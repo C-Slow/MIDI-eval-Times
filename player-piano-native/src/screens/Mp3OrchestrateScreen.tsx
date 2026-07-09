@@ -4,7 +4,7 @@ import Slider from '@react-native-community/slider';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
-import { useKeepAwake, activateKeepAwakeAsync, deactivateKeepAwakeAsync } from 'expo-keep-awake';
+import { useKeepAwake, activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Ionicons } from '@expo/vector-icons';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useStore } from '../store/useStore';
@@ -521,7 +521,7 @@ export const Mp3OrchestrateScreen = () => {
     
     try {
       // Deactivate Keep-Awake when stopped to save battery
-      await deactivateKeepAwakeAsync();
+      await deactivateKeepAwake();
       console.log('[Orchestrate] Background protection disabled.');
     } catch (e) {}
   };
@@ -529,7 +529,7 @@ export const Mp3OrchestrateScreen = () => {
   useEffect(() => {
     // Cleanup keep-awake on unmount
     return () => {
-      deactivateKeepAwakeAsync();
+      deactivateKeepAwake();
     };
   }, []);
 

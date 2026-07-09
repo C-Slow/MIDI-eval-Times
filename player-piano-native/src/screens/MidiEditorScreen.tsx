@@ -25,7 +25,7 @@ import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
 import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
-import { activateKeepAwakeAsync, deactivateKeepAwakeAsync } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setAudioMode } from '../services/audioMode';
 import { useNavigation } from '@react-navigation/native';
 
@@ -533,12 +533,12 @@ export const MidiEditorScreen = () => {
       if (currentlyPlaying) {
         activateKeepAwakeAsync().catch(err => console.error('Failed to activate keep awake', err));
       } else {
-        deactivateKeepAwakeAsync().catch(err => console.error('Failed to deactivate keep awake', err));
+        deactivateKeepAwake().catch(err => console.error('Failed to deactivate keep awake', err));
       }
     }
     return () => {
       if (wasPlayingRef.current) {
-        deactivateKeepAwakeAsync().catch(() => {});
+        deactivateKeepAwake().catch(() => {});
       }
     };
   }, [isPlaying, isPreviewPlaying]);
