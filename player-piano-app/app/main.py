@@ -1769,7 +1769,7 @@ async def play_midi_orchestrator(job_id: str, offset: float = Query(0.0)):
     try:
         utils.start_play_async(
             str(midi_path), 
-            port_name=utils._auto_connect_target,
+            port_name=None,
             seek_offset=0,
             audio_path=str(audio_path) if audio_path else None,
             global_offset_ms=offset

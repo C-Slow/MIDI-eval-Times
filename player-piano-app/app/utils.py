@@ -1006,12 +1006,7 @@ def stop_current_play():
         except Exception:
             pass
 
-    # Stop sounddevice audio output if active
-    try:
-        import sounddevice as sd
-        sd.stop()
-    except Exception:
-        pass
+
 
     # Panic stop fallback - use shared handle
     out = _get_out(port)
