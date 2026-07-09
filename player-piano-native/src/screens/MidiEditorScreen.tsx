@@ -27,6 +27,7 @@ import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
 import { activateKeepAwakeAsync, deactivateKeepAwakeAsync } from 'expo-keep-awake';
 import { setAudioMode } from '../services/audioMode';
+import { useNavigation } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PIXELS_PER_SECOND = 40; // Timeline scale
@@ -479,6 +480,7 @@ const NoteGrid = React.memo(({
 export const MidiEditorScreen = () => {
   const theme = useStore(state => state.theme);
   const themeColors = Colors[theme];
+  const navigation = useNavigation();
   const isPianoConnected = useStore(state => state.isPianoConnected);
   const globalOffset = useStore(state => state.midiOrchestrateOffset);
   const setGlobalOffset = useStore(state => state.setMidiOrchestrateOffset);
@@ -625,6 +627,40 @@ export const MidiEditorScreen = () => {
       console.error('Failed to set volume', err);
     }
   };
+
+  useEffect(() => {
+    if (stage === 'visualizer' && backendAudioEnabled) {
+      navigation.setOptions({
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
+            <Ionicons name="volume-medium" size={18} color={themeColors.text} />
+            <Slider
+              style={{ width: 100, height: 40 }}
+              minimumValue={0}
+              maximumValue={1}
+              minimumTrackTintColor={themeColors.accent}
+              maximumTrackTintColor={themeColors.textMuted}
+              thumbTintColor={themeColors.accent}
+              value={backendAudioVolume}
+              onValueChange={handleVolumeChange}
+            />
+            <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
+              {Math.round(backendAudioVolume * 100)}%
+            </Text>
+          </View>
+        )
+      });
+    } else {
+      navigation.setOptions({
+        headerRight: undefined
+      });
+    }
+    return () => {
+      navigation.setOptions({
+        headerRight: undefined
+      });
+    };
+  }, [stage, backendAudioEnabled, backendAudioVolume, themeColors, navigation]);
 
   // Playback / Visualizer State
   const [notes, setNotes] = useState<Record<string, any[]>>({});
@@ -2377,25 +2413,7 @@ export const MidiEditorScreen = () => {
               </Text>
             </View>
 
-            {/* Backend Volume Control Widget */}
-            {backendAudioEnabled && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
-                <Ionicons name="volume-medium" size={18} color={themeColors.text} />
-                <Slider
-                  style={{ width: 100, height: 40 }}
-                  minimumValue={0}
-                  maximumValue={1}
-                  minimumTrackTintColor={themeColors.accent}
-                  maximumTrackTintColor={themeColors.textMuted}
-                  thumbTintColor={themeColors.accent}
-                  value={backendAudioVolume}
-                  onValueChange={handleVolumeChange}
-                />
-                <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
-                  {Math.round(backendAudioVolume * 100)}%
-                </Text>
-              </View>
-            )}
+
 
             {/* Settings Toggle Button */}
             <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={{ marginRight: 15 }}>
@@ -2601,7 +2619,7 @@ export const MidiEditorScreen = () => {
                           No paired Bluetooth devices found. Make sure it is paired in Windows settings.
                         </Text>
                       ) : (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
                           {audioDevices.map((device: any) => {
                             const isSelected = selectedDevice === device.name;
                             return (
@@ -2609,8 +2627,8 @@ export const MidiEditorScreen = () => {
                                 key={device.name}
                                 style={[
                                   {
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 6,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
                                     borderRadius: 8,
                                     borderWidth: 1,
                                     flexDirection: 'row',
@@ -2634,7 +2652,7 @@ export const MidiEditorScreen = () => {
                               </TouchableOpacity>
                             );
                           })}
-                        </View>
+                        </ScrollView>
                       )}
                     </View>
                   )}
