@@ -1673,8 +1673,71 @@ async def get_midi_orchestrator_preview(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ConnectDeviceRequest(BaseModel):
+    device_name: str
+
+class AudioSettingsRequest(BaseModel):
+    backend_audio_enabled: bool
+    selected_device: str
+    backend_audio_volume: float
+
+@app.get("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
+def get_midi_orchestrator_audio_settings():
+    settings = utils.load_settings()
+    return {
+        "backend_audio_enabled": settings.get("backend_audio_enabled", False),
+        "selected_device": settings.get("selected_device", ""),
+        "backend_audio_volume": settings.get("backend_audio_volume", 1.0)
+    }
+
+@app.post("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
+def save_midi_orchestrator_audio_settings(req: AudioSettingsRequest):
+    settings = utils.load_settings()
+    settings["backend_audio_enabled"] = req.backend_audio_enabled
+    settings["selected_device"] = req.selected_device
+    settings["backend_audio_volume"] = req.backend_audio_volume
+    utils.save_settings(settings)
+    utils._backend_audio_volume = req.backend_audio_volume
+    return {"status": "success", "settings": settings}
+
+@app.get("/midi-orchestrator/audio-devices", dependencies=[Depends(verify_auth)])
+def get_midi_orchestrator_audio_devices():
+    return {"devices": utils.list_audio_devices()}
+
+@app.post("/midi-orchestrator/bluetooth/connect", dependencies=[Depends(verify_auth)])
+def connect_bluetooth_device(req: ConnectDeviceRequest):
+    success = utils.connect_paired_device(req.device_name)
+    if success:
+        return {"status": "success", "message": f"Connected to {req.device_name}"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to connect to Bluetooth device")
+
+@app.post("/midi-orchestrator/bluetooth/disconnect", dependencies=[Depends(verify_auth)])
+def disconnect_bluetooth_device():
+    device_name = utils._active_bt_device_name
+    if not device_name:
+        settings = utils.load_settings()
+        device_name = settings.get("selected_device", "")
+    
+    if device_name:
+        success = utils.disconnect_paired_device(device_name)
+        utils._active_bt_device_name = None
+        if success:
+            return {"status": "success", "message": f"Disconnected from {device_name}"}
+            
+    return {"status": "success", "message": "No active device or already disconnected"}
+
+@app.post("/midi-orchestrator/volume", dependencies=[Depends(verify_auth)])
+def set_midi_orchestrator_volume(volume: float = Query(1.0)):
+    utils._backend_audio_volume = volume
+    settings = utils.load_settings()
+    settings["backend_audio_volume"] = volume
+    utils.save_settings(settings)
+    utils._last_activity_timestamp = time.time()
+    return {"status": "success", "volume": volume}
+
 @app.post("/midi-orchestrator/play/{job_id}", dependencies=[Depends(verify_auth)])
-async def play_midi_orchestrator(job_id: str):
+async def play_midi_orchestrator(job_id: str, offset: float = Query(0.0)):
     if job_id not in midi_orchestrator.status:
         raise HTTPException(status_code=404, detail="Job not found")
         
@@ -1686,11 +1749,31 @@ async def play_midi_orchestrator(job_id: str):
     if not midi_path.exists():
         raise HTTPException(status_code=404, detail="Midi file not found on disk")
         
-    if not (utils._ble_handle and utils._ble_handle.connected):
+    settings = utils.load_settings()
+    is_backend_audio = settings.get("backend_audio_enabled", False)
+    
+    if not is_backend_audio and not (utils._ble_handle and utils._ble_handle.connected):
         raise HTTPException(status_code=400, detail="Piano not connected")
         
+    utils._last_activity_timestamp = time.time()
+
+    if is_backend_audio:
+        selected_device = settings.get("selected_device", "")
+        if selected_device and not utils._active_bt_device_name:
+            utils.connect_paired_device(selected_device)
+        
+    audio_path = Path(job["vocals"]) if job.get("vocals") else None
+    if audio_path and not audio_path.exists():
+        audio_path = None
+        
     try:
-        utils.start_play_async(str(midi_path))
+        utils.start_play_async(
+            str(midi_path), 
+            port_name=utils._auto_connect_target,
+            seek_offset=0,
+            audio_path=str(audio_path) if audio_path else None,
+            global_offset_ms=offset
+        )
         return {"status": "playing"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
