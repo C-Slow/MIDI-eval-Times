@@ -5,7 +5,7 @@ const getBaseUrl = () => useStore.getState().serverUrl;
 const getToken = () => useStore.getState().token;
 
 const api = axios.create({
-  timeout: 120000, // 120 seconds (2 minutes)
+  timeout: 10000, // 10 seconds
 });
 
 // Simple retry logic for intermittent network errors
