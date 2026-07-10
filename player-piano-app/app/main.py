@@ -1781,4 +1781,4 @@ async def play_midi_orchestrator(job_id: str, offset: float = Query(0.0)):
 
 
 if __name__ == '__main__':
-    uvicorn.run('app.main:app', host='0.0.0.0', port=8000, reload=False)
+    uvicorn.run('app.main:app', host='192.168.1.8', port=8000, reload=False)
