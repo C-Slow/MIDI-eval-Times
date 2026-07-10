@@ -2529,7 +2529,7 @@ export const MidiEditorScreen = () => {
               <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
-                    🎙️ MP3 Vocal Stem
+                    MP3 Vocal Stem
                   </Text>
                   {importedVocalsJobId ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2599,7 +2599,7 @@ export const MidiEditorScreen = () => {
                 <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
-                      🔊 Use Backend Speakers
+                      Use Backend Speakers
                     </Text>
                     <Switch
                       value={backendAudioEnabled}
