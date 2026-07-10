@@ -71,7 +71,19 @@ We have provided wrapper scripts in the project root to automatically handle vir
    - Extract it (e.g., to `C:\fluidsynth` or local folder `C:\app\fluidsynth`).
    - Define the environment variable `FLUIDSYNTH_BIN` pointing to `fluidsynth.exe` (defaults to `C:\fluidsynth\bin\fluidsynth.exe` if not provided).
 
-6. **Start the server:**
+6. **Install FFmpeg (Required for audio separation & voice conversion):**
+   FFmpeg is used by Demucs and RVC to decode, split, and convert audio stems.
+   - Install FFmpeg via winget: `winget install Gnu.FFmpeg` (or download from [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/)).
+   - Ensure the extracted `bin/` folder containing `ffmpeg.exe` is added to your system's `PATH`.
+
+7. **Download RVC Voice Models (Required for vocal rendering):**
+   RVC uses pre-trained voice models to convert guide MIDI tracks into singing vocals. Run the provided downloader utility script from the project root to fetch and automatically verify their safety:
+   ```bash
+   python tools/download_rvc_models.py
+   ```
+   This will download and place `hubert_base.pt`, `female_singing.pth` (`f0G40k.pth`), and `male_singing.pth` (`syz.pth`) inside `storage/rvc_models/`.
+
+8. **Start the server:**
    ```bash
    # From the player-piano-app directory
    $env:PYTHONPATH="."
@@ -79,7 +91,7 @@ We have provided wrapper scripts in the project root to automatically handle vir
    python -m app.main
    ```
 
-7. **Windows Automatic Startup (Optional):**
+9. **Windows Automatic Startup (Optional):**
    To have the backend server start automatically when you log in to Windows:
    - Press `Win + R`, type `shell:startup`, and press **Enter** to open the Windows Startup folder.
    - Create a new batch file named `start_midi_backend.bat` in that folder with the following content:

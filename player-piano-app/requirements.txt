@@ -15,4 +15,6 @@ torch<2.1
 torchaudio<2.1
 torchvision<0.16
 numpy<2
+scipy
+rvc-python
 # 'runpy' is part of the Python standard library; do not include it here
