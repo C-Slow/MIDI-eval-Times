@@ -179,7 +179,11 @@ export const useStore = create<AppState>((set) => ({
     const theme = await SecureStore.getItemAsync('theme') as 'light' | 'dark' | null;
     const midiOrchestrateOffset = await SecureStore.getItemAsync('midiOrchestrateOffset');
     if (serverUrl) set({ serverUrl });
-    if (token) set({ token, isLoggedIn: true });
+    if (token && token !== 'null' && token !== 'undefined') {
+      set({ token, isLoggedIn: true });
+    } else {
+      set({ token: null, isLoggedIn: false });
+    }
     if (theme) set({ theme });
     if (midiOrchestrateOffset) set({ midiOrchestrateOffset: parseInt(midiOrchestrateOffset, 10) || 0 });
   },

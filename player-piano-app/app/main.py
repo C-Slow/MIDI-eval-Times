@@ -60,6 +60,7 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
         actual_token = token
 
     if not actual_token or actual_token != master_password:
+        print(f"DEBUG AUTH: Unauthorized access attempt. Got token: {actual_token!r}, expected: {master_password!r}")
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
