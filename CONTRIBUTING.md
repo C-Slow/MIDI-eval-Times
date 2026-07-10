@@ -18,4 +18,6 @@ Thanks for helping! A few guidelines:
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.
 - **UI Changes:** For UI changes, prefer lightweight vanilla JS and keep static assets inside `player-piano-app/app/static/`.
 
+If app crashes and is unable to connect to piano. Null the target_device in C:\app\storage\settings.json
+
 If unsure, open an issue describing the change first.

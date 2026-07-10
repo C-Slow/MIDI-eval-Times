@@ -392,16 +392,504 @@ def start_auto_connect_monitor():
     _log("BLE direct monitor started")
 
 
-def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0):
-    _log(f"Playback started for {path} at offset {start_offset}")
+# --- Stationary Backend Audio & Bluetooth Support ---
+
+SETTINGS_JSON = os.path.join(PROJECT_ROOT, 'storage', 'settings.json')
+
+def load_settings() -> dict:
+    try:
+        if os.path.exists(SETTINGS_JSON):
+            with open(SETTINGS_JSON, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_settings(settings: dict):
+    try:
+        os.makedirs(os.path.dirname(SETTINGS_JSON), exist_ok=True)
+        with open(SETTINGS_JSON, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+
+# Win32 Bluetooth ctypes structures (Windows only)
+import platform
+IS_WINDOWS = platform.system() == "Windows"
+
+_active_bt_device_name = None
+_last_activity_timestamp = time.time()
+_backend_audio_volume = 1.0
+
+try:
+    _backend_audio_volume = load_settings().get("backend_audio_volume", 1.0)
+except Exception:
+    pass
+
+if IS_WINDOWS:
+    import ctypes
+    from ctypes import wintypes
+
+    class SYSTEMTIME(ctypes.Structure):
+        _fields_ = [
+            ("wYear", wintypes.WORD),
+            ("wMonth", wintypes.WORD),
+            ("wDayOfWeek", wintypes.WORD),
+            ("wDay", wintypes.WORD),
+            ("wHour", wintypes.WORD),
+            ("wMinute", wintypes.WORD),
+            ("wSecond", wintypes.WORD),
+            ("wMilliseconds", wintypes.WORD),
+        ]
+
+    class BLUETOOTH_DEVICE_INFO(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("Address", ctypes.c_uint64),
+            ("ulClassofDevice", ctypes.c_ulong),
+            ("fConnected", wintypes.BOOL),
+            ("fRemembered", wintypes.BOOL),
+            ("fAuthenticated", wintypes.BOOL),
+            ("stLastSeen", SYSTEMTIME),
+            ("stLastUsed", SYSTEMTIME),
+            ("szName", wintypes.WCHAR * 248),
+        ]
+
+    class BLUETOOTH_DEVICE_SEARCH_PARAMS(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("fReturnAuthenticated", wintypes.BOOL),
+            ("fReturnRemembered", wintypes.BOOL),
+            ("fReturnUnknown", wintypes.BOOL),
+            ("fReturnConnected", wintypes.BOOL),
+            ("fIssueInquiry", wintypes.BOOL),
+            ("cTimeoutMultiplier", ctypes.c_ubyte),
+            ("hRadio", wintypes.HANDLE),
+        ]
+
+    class GUID(ctypes.Structure):
+        _fields_ = [
+            ("Data1", ctypes.c_ulong),
+            ("Data2", ctypes.c_ushort),
+            ("Data3", ctypes.c_ushort),
+            ("Data4", ctypes.c_ubyte * 8),
+        ]
+
+    GUID_AUDIO_SINK = GUID(
+        0x0000110b, 
+        0x0000, 
+        0x1000, 
+        (ctypes.c_ubyte * 8)(0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb)
+    )
+
+def list_paired_bluetooth_devices() -> list:
+    if not IS_WINDOWS:
+        return []
+    try:
+        bth = ctypes.windll.bluetoothapis
+        bth.BluetoothFindFirstDevice.argtypes = [
+            ctypes.POINTER(BLUETOOTH_DEVICE_SEARCH_PARAMS),
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindFirstDevice.restype = wintypes.HANDLE
+        bth.BluetoothFindNextDevice.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindNextDevice.restype = wintypes.BOOL
+        bth.BluetoothFindDeviceClose.argtypes = [wintypes.HANDLE]
+        bth.BluetoothFindDeviceClose.restype = wintypes.BOOL
+
+        search_params = BLUETOOTH_DEVICE_SEARCH_PARAMS()
+        search_params.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS)
+        search_params.fReturnAuthenticated = True
+        search_params.fReturnRemembered = True
+        search_params.fReturnUnknown = False
+        search_params.fReturnConnected = True
+        search_params.fIssueInquiry = False
+        search_params.hRadio = None
+        
+        device_info = BLUETOOTH_DEVICE_INFO()
+        device_info.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_INFO)
+        
+        h_find = bth.BluetoothFindFirstDevice(ctypes.byref(search_params), ctypes.byref(device_info))
+        if not h_find:
+            return []
+            
+        names = []
+        try:
+            has_next = True
+            while has_next:
+                names.append(device_info.szName.strip())
+                has_next = bth.BluetoothFindNextDevice(h_find, ctypes.byref(device_info))
+        finally:
+            bth.BluetoothFindDeviceClose(h_find)
+            
+        return names
+    except Exception as e:
+        print(f"Error in list_paired_bluetooth_devices: {e}")
+        return []
+
+def list_audio_devices() -> list:
+    try:
+        import sounddevice as sd
+        try:
+            device_list = sd.query_devices()
+            default_out = sd.default.device[1]
+        except Exception:
+            device_list = []
+            default_out = -1
+
+        seen_names = set()
+        devices = []
+        
+        skip_patterns = [
+            r"primary sound driver",
+            r"microsoft sound mapper",
+            r"audio capture filter",
+            r"sound mapper"
+        ]
+
+        # 1. Add active/connected output devices
+        for idx, dev in enumerate(device_list):
+            if dev['max_output_channels'] > 0:
+                name = dev['name'].strip()
+                if any(re.search(pat, name.lower()) for pat in skip_patterns):
+                    continue
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                devices.append({
+                    "index": idx,
+                    "name": name,
+                    "is_default": idx == default_out
+                })
+
+        # 2. Add paired Bluetooth devices that aren't currently active
+        paired_bt_names = list_paired_bluetooth_devices()
+        for name in paired_bt_names:
+            is_active = False
+            for active_name in seen_names:
+                if name.lower() in active_name.lower() or active_name.lower() in name.lower():
+                    is_active = True
+                    break
+            if not is_active:
+                devices.append({
+                    "index": -1, # Flag as disconnected candidate
+                    "name": name,
+                    "is_default": False
+                })
+                seen_names.add(name)
+                
+        return devices
+    except Exception as e:
+        print(f"Error listing audio devices: {e}")
+        return []
+
+def connect_paired_device(device_name_substring: str) -> bool:
+    global _active_bt_device_name, _last_activity_timestamp
+    if not IS_WINDOWS:
+        return False
+    try:
+        bth = ctypes.windll.bluetoothapis
+        
+        bth.BluetoothFindFirstDevice.argtypes = [
+            ctypes.POINTER(BLUETOOTH_DEVICE_SEARCH_PARAMS),
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindFirstDevice.restype = wintypes.HANDLE
+        
+        bth.BluetoothFindNextDevice.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindNextDevice.restype = wintypes.BOOL
+        
+        bth.BluetoothFindDeviceClose.argtypes = [wintypes.HANDLE]
+        bth.BluetoothFindDeviceClose.restype = wintypes.BOOL
+        
+        bth.BluetoothSetServiceState.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO),
+            ctypes.POINTER(GUID),
+            wintypes.DWORD
+        ]
+        bth.BluetoothSetServiceState.restype = wintypes.DWORD
+
+        search_params = BLUETOOTH_DEVICE_SEARCH_PARAMS()
+        search_params.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS)
+        search_params.fReturnAuthenticated = True
+        search_params.fReturnRemembered = True
+        search_params.fReturnUnknown = False
+        search_params.fReturnConnected = True
+        search_params.fIssueInquiry = False
+        search_params.hRadio = None
+        
+        device_info = BLUETOOTH_DEVICE_INFO()
+        device_info.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_INFO)
+        
+        h_find = bth.BluetoothFindFirstDevice(ctypes.byref(search_params), ctypes.byref(device_info))
+        if not h_find:
+            return False
+            
+        found_target = False
+        try:
+            has_next = True
+            while has_next:
+                name = device_info.szName
+                clean_name = re.sub(r'\s*\([^)]*\)', '', name).strip()
+                if device_name_substring.lower() in name.lower() or device_name_substring.lower() in clean_name.lower():
+                    found_target = True
+                    _last_activity_timestamp = time.time()
+                    _active_bt_device_name = name
+                    
+                    if not device_info.fConnected:
+                        print(f"Triggering Bluetooth connection to paired device '{name}'...")
+                        bth.BluetoothSetServiceState(None, ctypes.byref(device_info), ctypes.byref(GUID_AUDIO_SINK), 0)
+                        time.sleep(0.5)
+                        res = bth.BluetoothSetServiceState(None, ctypes.byref(device_info), ctypes.byref(GUID_AUDIO_SINK), 1)
+                        if res == 0:
+                            print(f"Connection signal sent successfully. Waiting for A2DP channel...")
+                            time.sleep(2.5) # Give Windows time to complete pairing handshake and load audio device
+                        else:
+                            print(f"BluetoothSetServiceState failed with code: {res}")
+                    break
+                has_next = bth.BluetoothFindNextDevice(h_find, ctypes.byref(device_info))
+        finally:
+            bth.BluetoothFindDeviceClose(h_find)
+            
+        return found_target
+    except Exception as e:
+        print(f"Error in connect_paired_device: {e}")
+        return False
+
+def disconnect_paired_device(device_name_substring: str) -> bool:
+    if not IS_WINDOWS:
+        return False
+    try:
+        bth = ctypes.windll.bluetoothapis
+        
+        bth.BluetoothFindFirstDevice.argtypes = [
+            ctypes.POINTER(BLUETOOTH_DEVICE_SEARCH_PARAMS),
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindFirstDevice.restype = wintypes.HANDLE
+        
+        bth.BluetoothFindNextDevice.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO)
+        ]
+        bth.BluetoothFindNextDevice.restype = wintypes.BOOL
+        
+        bth.BluetoothFindDeviceClose.argtypes = [wintypes.HANDLE]
+        bth.BluetoothFindDeviceClose.restype = wintypes.BOOL
+        
+        bth.BluetoothSetServiceState.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(BLUETOOTH_DEVICE_INFO),
+            ctypes.POINTER(GUID),
+            wintypes.DWORD
+        ]
+        bth.BluetoothSetServiceState.restype = wintypes.DWORD
+
+        search_params = BLUETOOTH_DEVICE_SEARCH_PARAMS()
+        search_params.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS)
+        search_params.fReturnAuthenticated = True
+        search_params.fReturnRemembered = True
+        search_params.fReturnUnknown = False
+        search_params.fReturnConnected = True
+        search_params.fIssueInquiry = False
+        search_params.hRadio = None
+        
+        device_info = BLUETOOTH_DEVICE_INFO()
+        device_info.dwSize = ctypes.sizeof(BLUETOOTH_DEVICE_INFO)
+        
+        h_find = bth.BluetoothFindFirstDevice(ctypes.byref(search_params), ctypes.byref(device_info))
+        if not h_find:
+            return False
+            
+        found_target = False
+        try:
+            has_next = True
+            while has_next:
+                name = device_info.szName
+                clean_name = re.sub(r'\s*\([^)]*\)', '', name).strip()
+                if device_name_substring.lower() in name.lower() or device_name_substring.lower() in clean_name.lower():
+                    found_target = True
+                    bth.BluetoothSetServiceState(None, ctypes.byref(device_info), ctypes.byref(GUID_AUDIO_SINK), 0)
+                    print(f"Triggered Bluetooth disconnect for device '{name}' successfully.")
+                    break
+                has_next = bth.BluetoothFindNextDevice(h_find, ctypes.byref(device_info))
+        finally:
+            bth.BluetoothFindDeviceClose(h_find)
+            
+        return found_target
+    except Exception as e:
+        print(f"Error in disconnect_paired_device: {e}")
+        return False
+
+# --- Background Idle Disconnect Monitor (5 Minutes) ---
+_idle_timer_thread = None
+
+def _run_idle_monitor():
+    global _active_bt_device_name, _last_activity_timestamp
+    while True:
+        try:
+            time.sleep(10)
+            if _active_bt_device_name:
+                is_playing = False
+                t = _current_play.get('thread')
+                if t and t.is_alive():
+                    is_playing = True
+                    _last_activity_timestamp = time.time()
+                
+                if not is_playing and (time.time() - _last_activity_timestamp > 300):
+                    print(f"Idle timeout reached. Disconnecting Bluetooth speaker '{_active_bt_device_name}'...")
+                    disconnect_paired_device(_active_bt_device_name)
+                    _active_bt_device_name = None
+        except Exception as e:
+            print(f"Error in idle monitor: {e}")
+
+def start_idle_monitor():
+    global _idle_timer_thread
+    if _idle_timer_thread is None:
+        _idle_timer_thread = threading.Thread(target=_run_idle_monitor, daemon=True)
+        _idle_timer_thread.start()
+
+start_idle_monitor()
+
+
+def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float, stop_event: Event, device_name: str):
+    try:
+        import sounddevice as sd
+        import soundfile as sf
+    except ImportError:
+        print("ERROR: sounddevice or soundfile is not installed. Backend audio playback failed.")
+        return
+
+    # Trigger connection to selected Bluetooth device if paired
+    if device_name:
+        connect_paired_device(device_name)
+
+    try:
+        if delay_seconds > 0:
+            slept = 0.0
+            while slept < delay_seconds:
+                if stop_event.is_set():
+                    return
+                time.sleep(0.02)
+                slept += 0.02
+
+        if stop_event.is_set():
+            return
+
+        data, fs = sf.read(audio_path)
+        
+        if seek_offset > 0:
+            start_frame = int(seek_offset * fs)
+            if start_frame < len(data):
+                data = data[start_frame:]
+            else:
+                return
+
+        # Ensure 2D array shape for compatibility
+        if len(data.shape) == 1:
+            data = data.reshape(-1, 1)
+
+        device_idx = None
+        if device_name:
+            try:
+                device_list = sd.query_devices()
+                best_match_idx = None
+                best_match_prio = -1  # 2 for WASAPI, 1 for DirectSound, 0 for MME
+                
+                for idx, dev in enumerate(device_list):
+                    if device_name.lower() in dev['name'].lower() and dev['max_output_channels'] > 0:
+                        api_name = sd.query_hostapis(dev['hostapi'])['name'].lower()
+                        prio = -1
+                        if 'wasapi' in api_name:
+                            prio = 2
+                        elif 'directsound' in api_name:
+                            prio = 1
+                        elif 'mme' in api_name:
+                            prio = 0
+                            
+                        if prio > best_match_prio:
+                            best_match_prio = prio
+                            best_match_idx = idx
+                            
+                device_idx = best_match_idx
+            except Exception as e:
+                print(f"Error resolving audio output device {device_name}: {e}")
+
+        if stop_event.is_set():
+            return
+
+        current_frame = 0
+        channels = data.shape[1]
+
+        def callback(outdata, frames, time_info, status):
+            nonlocal current_frame
+            chunksize = min(len(data) - current_frame, frames)
+            if chunksize > 0:
+                # Multiply by global volume factor dynamically!
+                vol = globals().get('_backend_audio_volume', 1.0)
+                outdata[:chunksize] = data[current_frame:current_frame + chunksize] * vol
+                if chunksize < frames:
+                    outdata[chunksize:] = 0
+                current_frame += chunksize
+            else:
+                outdata.fill(0)
+                raise sd.CallbackStop
+
+        stream = sd.OutputStream(
+            samplerate=fs, 
+            device=device_idx, 
+            channels=channels, 
+            callback=callback
+        )
+        
+        with stream:
+            while stream.active:
+                if stop_event.is_set():
+                    break
+                time.sleep(0.05)
+
+    except Exception as e:
+        print(f"Error in audio playback thread: {e}")
+
+
+def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
+    _log(f"Playback started for {path} at offset {start_offset} with audio_path={audio_path} and offset={global_offset_ms}ms")
     
-    out = None
     try:
         mid = mido.MidiFile(path)
+        settings = load_settings()
+        
+        # Start backing audio thread if enabled and audio file exists
+        if settings.get("backend_audio_enabled") and audio_path and os.path.exists(audio_path):
+            audio_delay = 0.0
+            if global_offset_ms < 0:
+                audio_delay = abs(global_offset_ms) / 1000.0
+                
+            device_name = settings.get("selected_device")
+            threading.Thread(
+                target=_play_audio_thread, 
+                args=(audio_path, start_offset, audio_delay, stop_event, device_name),
+                daemon=True
+            ).start()
+
         out = _get_out(port_name)
         if not out:
-            _log("No MIDI output available")
+            _log("No MIDI output available. Running silent MIDI timeline (audio only).")
+            while stop_event is not None and not stop_event.is_set():
+                time.sleep(0.05)
             return
+
+        # Handle MIDI Delay
+        midi_delay = 0.0
+        if settings.get("backend_audio_enabled") and audio_path and global_offset_ms > 0:
+            midi_delay = global_offset_ms / 1000.0
 
         accumulated_seconds = 0.0
         current_tempo = 500000
@@ -423,6 +911,9 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
             
             if start_anchor is None:
                 start_anchor = time.time()
+                # Apply MIDI delay offset
+                if midi_delay > 0:
+                    start_anchor += midi_delay
 
             target_time = start_anchor + (accumulated_seconds - start_offset)
             
@@ -438,9 +929,6 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
             if not msg.is_meta:
                 try:
                     out.send(msg)
-                    # Only log every 50 messages to avoid flooding
-                    if accumulated_seconds % 5 == 0: # crude but works
-                         pass 
                 except Exception as e:
                     print(f"DEBUG: out.send error: {e}")
                     _log(f"Send error: {e}")
@@ -471,7 +959,7 @@ def play_midi_blocking(path: str, port_name: str = None, stop_event=None, start_
 # Simple global playback controller for ad-hoc playback (not playlist manager)
 _current_play = {'thread': None, 'event': None, 'path': None, 'file': None, 'start': None, 'port': None, 'length': None, 'seek_offset': 0}
 
-def start_play_async(path: str, port_name: str = None, seek_offset: float = 0):
+def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
     # stop any existing playback
     stop_current_play()
     
@@ -486,14 +974,22 @@ def start_play_async(path: str, port_name: str = None, seek_offset: float = 0):
     _current_play['file'] = os.path.basename(path)
     _current_play['port'] = port_name
     _current_play['length'] = info.get('length')
-    _current_play['start'] = time.time()
-    # If we seeked, the virtual start time is in the past
-    if seek_offset > 0:
-        _current_play['start'] -= seek_offset
+    
+    virtual_start = time.time()
+    if audio_path and os.path.exists(audio_path):
+        settings = load_settings()
+        if settings.get("backend_audio_enabled") and global_offset_ms < 0:
+            virtual_start += abs(global_offset_ms) / 1000.0
+            
+    _current_play['start'] = virtual_start - seek_offset
     _current_play['seek_offset'] = seek_offset
     _current_play['event'] = ev
     
-    t = threading.Thread(target=_play_internal, args=(path, port_name, ev, seek_offset), daemon=True)
+    t = threading.Thread(
+        target=_play_internal, 
+        args=(path, port_name, ev, seek_offset, audio_path, global_offset_ms), 
+        daemon=True
+    )
     _current_play['thread'] = t
     t.start()
     return True
@@ -509,6 +1005,8 @@ def stop_current_play():
             ev.set()
         except Exception:
             pass
+
+
 
     # Panic stop fallback - use shared handle
     out = _get_out(port)

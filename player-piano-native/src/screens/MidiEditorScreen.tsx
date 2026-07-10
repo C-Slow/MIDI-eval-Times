@@ -25,8 +25,9 @@ import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
 import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
 import { Colors } from '../constants/Colors';
-import { activateKeepAwakeAsync, deactivateKeepAwakeAsync } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setAudioMode } from '../services/audioMode';
+import { useNavigation } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PIXELS_PER_SECOND = 40; // Timeline scale
@@ -479,6 +480,7 @@ const NoteGrid = React.memo(({
 export const MidiEditorScreen = () => {
   const theme = useStore(state => state.theme);
   const themeColors = Colors[theme];
+  const navigation = useNavigation();
   const isPianoConnected = useStore(state => state.isPianoConnected);
   const globalOffset = useStore(state => state.midiOrchestrateOffset);
   const setGlobalOffset = useStore(state => state.setMidiOrchestrateOffset);
@@ -486,6 +488,8 @@ export const MidiEditorScreen = () => {
 
   // Screen Stages: 'list' | 'visualizer'
   const [stage, setStage] = useState<'list' | 'visualizer'>('list');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -529,12 +533,12 @@ export const MidiEditorScreen = () => {
       if (currentlyPlaying) {
         activateKeepAwakeAsync().catch(err => console.error('Failed to activate keep awake', err));
       } else {
-        deactivateKeepAwakeAsync().catch(err => console.error('Failed to deactivate keep awake', err));
+        deactivateKeepAwake().catch(err => console.error('Failed to deactivate keep awake', err));
       }
     }
     return () => {
       if (wasPlayingRef.current) {
-        deactivateKeepAwakeAsync().catch(() => {});
+        deactivateKeepAwake().catch(() => {});
       }
     };
   }, [isPlaying, isPreviewPlaying]);
@@ -548,9 +552,118 @@ export const MidiEditorScreen = () => {
   // Settings Panel visibility
   const [showSettings, setShowSettings] = useState(false);
 
+  // Backend Audio / Speaker states
+  const [backendAudioEnabled, setBackendAudioEnabled] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [backendAudioVolume, setBackendAudioVolume] = useState(1.0);
+  const [audioDevices, setAudioDevices] = useState<any[]>([]);
+
+  // Load backend audio settings on mount
+  useEffect(() => {
+    const initSettings = async () => {
+      try {
+        const data = await midiOrchestratorApi.getAudioSettings();
+        setBackendAudioEnabled(data.backend_audio_enabled);
+        setSelectedDevice(data.selected_device);
+        setBackendAudioVolume(data.backend_audio_volume ?? 1.0);
+      } catch (err) {
+        console.error('Failed to fetch backend audio settings', err);
+      }
+    };
+    initSettings();
+  }, []);
+
+  // Fetch devices when settings panel is opened
+  useEffect(() => {
+    if (showSettings) {
+      const fetchDevices = async () => {
+        try {
+          const data = await midiOrchestratorApi.getAudioDevices();
+          setAudioDevices(data.devices || []);
+        } catch (err) {
+          console.error('Failed to fetch audio devices', err);
+        }
+      };
+      fetchDevices();
+    }
+  }, [showSettings]);
+
+  const handleToggleBackendAudio = async (enabled: boolean) => {
+    setBackendAudioEnabled(enabled);
+    try {
+      if (enabled) {
+        await midiOrchestratorApi.saveAudioSettings(true, selectedDevice, backendAudioVolume);
+        if (selectedDevice) {
+          await midiOrchestratorApi.connectBluetoothDevice(selectedDevice);
+        }
+      } else {
+        await midiOrchestratorApi.saveAudioSettings(false, selectedDevice, backendAudioVolume);
+        await midiOrchestratorApi.disconnectBluetoothDevice();
+      }
+    } catch (err: any) {
+      console.error('Error toggling backend audio', err);
+      Alert.alert('Settings Error', `Failed to apply backend audio settings: ${err.message}`);
+    }
+  };
+
+  const handleSelectDevice = async (device: string) => {
+    setSelectedDevice(device);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, device, backendAudioVolume);
+      if (backendAudioEnabled && device) {
+        await midiOrchestratorApi.connectBluetoothDevice(device);
+      }
+    } catch (err: any) {
+      console.error('Error selecting device', err);
+      Alert.alert('Connection Error', `Failed to connect device: ${err.message}`);
+    }
+  };
+
+  const handleVolumeChange = async (vol: number) => {
+    setBackendAudioVolume(vol);
+    try {
+      await midiOrchestratorApi.setVolume(vol);
+    } catch (err) {
+      console.error('Failed to set volume', err);
+    }
+  };
+
+  useEffect(() => {
+    if (stage === 'visualizer' && backendAudioEnabled) {
+      navigation.setOptions({
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
+            <Ionicons name="volume-medium" size={18} color={themeColors.text} />
+            <Slider
+              style={{ width: 100, height: 40 }}
+              minimumValue={0}
+              maximumValue={1}
+              minimumTrackTintColor={themeColors.accent}
+              maximumTrackTintColor={themeColors.textMuted}
+              thumbTintColor={themeColors.accent}
+              value={backendAudioVolume}
+              onValueChange={handleVolumeChange}
+            />
+            <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
+              {Math.round(backendAudioVolume * 100)}%
+            </Text>
+          </View>
+        )
+      });
+    } else {
+      navigation.setOptions({
+        headerRight: undefined
+      });
+    }
+    return () => {
+      navigation.setOptions({
+        headerRight: undefined
+      });
+    };
+  }, [stage, backendAudioEnabled, backendAudioVolume, themeColors, navigation]);
+
   // Playback / Visualizer State
   const [notes, setNotes] = useState<Record<string, any[]>>({});
-  const [isPlaying, setIsPlaying] = useState(false);
   const [playbackPos, setPlaybackPos] = useState(0); // in ms
   const [playbackDuration, setPlaybackDuration] = useState(0); // in ms
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -560,7 +673,6 @@ export const MidiEditorScreen = () => {
 
   // Preview State
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
   // Context Actions Bottom Sheet & Modals State
   const [contextJob, setContextJob] = useState<any | null>(null);
@@ -1351,14 +1463,20 @@ export const MidiEditorScreen = () => {
         setPlaybackPos(loopStartMs);
       }
 
+      const isSynthesizedPlay = pianoTracks.size > 0;
+      const useBackendRoute = backendAudioEnabled && isSynthesizedPlay;
+
+      // Set volume before playing
+      await soundRef.current.setStatusAsync({ volume: useBackendRoute ? 0.0 : 1.0 });
+
       const playPianoMidi = async () => {
-        if (isPianoConnected && pianoTracks.size > 0) {
+        if (isSynthesizedPlay || useBackendRoute) {
           try {
-            await midiOrchestratorApi.playMidi(selectedJobId);
+            await midiOrchestratorApi.playMidi(selectedJobId, globalOffset);
           } catch (e: any) {
-            console.error('Disklavier play failed', e);
+            console.error('Backend play failed', e);
             const msg = e.response?.data?.detail || e.message || 'Unknown error';
-            Alert.alert('Piano Playback Error', `Failed to play on the Disklavier piano: ${msg}. Playing backing audio locally.`);
+            Alert.alert('Playback Error', `Failed to play backend audio/keys: ${msg}`);
           }
         }
       };
@@ -2295,6 +2413,8 @@ export const MidiEditorScreen = () => {
               </Text>
             </View>
 
+
+
             {/* Settings Toggle Button */}
             <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={{ marginRight: 15 }}>
               <Ionicons 
@@ -2409,7 +2529,7 @@ export const MidiEditorScreen = () => {
               <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
-                    🎙️ MP3 Vocal Stem
+                    MP3 Vocal Stem
                   </Text>
                   {importedVocalsJobId ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2472,6 +2592,71 @@ export const MidiEditorScreen = () => {
                     </View>
                   </View>
                 )}
+
+                {/* Backend Speaker Control Section */}
+                <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
+
+                <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
+                      Use Backend Speakers
+                    </Text>
+                    <Switch
+                      value={backendAudioEnabled}
+                      onValueChange={handleToggleBackendAudio}
+                      trackColor={{ false: themeColors.border, true: themeColors.accent }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  {backendAudioEnabled && (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 6 }}>
+                        Select Bluetooth Speaker:
+                      </Text>
+                      {audioDevices.length === 0 ? (
+                        <Text style={{ color: themeColors.textMuted, fontSize: 11, fontStyle: 'italic' }}>
+                          No paired Bluetooth devices found. Make sure it is paired in Windows settings.
+                        </Text>
+                      ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                          {audioDevices.map((device: any) => {
+                            const isSelected = selectedDevice === device.name;
+                            return (
+                              <TouchableOpacity
+                                key={device.name}
+                                style={[
+                                  {
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 8,
+                                    borderRadius: 8,
+                                    borderWidth: 1,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6
+                                  },
+                                  isSelected 
+                                    ? { backgroundColor: themeColors.accentLight, borderColor: themeColors.accent } 
+                                    : { backgroundColor: themeColors.surface, borderColor: themeColors.border }
+                                ]}
+                                onPress={() => handleSelectDevice(device.name)}
+                              >
+                                <Ionicons 
+                                  name={device.index >= 0 ? "bluetooth" : "bluetooth-outline"} 
+                                  size={14} 
+                                  color={isSelected ? themeColors.accent : themeColors.textMuted} 
+                                />
+                                <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: isSelected ? '600' : '400' }}>
+                                  {device.name} {device.index >= 0 ? '(connected)' : ''}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
           )}

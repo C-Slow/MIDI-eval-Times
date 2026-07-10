@@ -60,6 +60,7 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
         actual_token = token
 
     if not actual_token or actual_token != master_password:
+        print(f"DEBUG AUTH: Unauthorized access attempt. Got token: {actual_token!r}, expected: {master_password!r}")
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
@@ -286,7 +287,7 @@ async def upload(file: UploadFile = File(...)):
     final_name, gemini_data = await process_uploaded_file(dest, new_name)
     return {'filename': final_name, 'gemini': gemini_data}
 
-@app.get('/files')
+@app.get('/files', dependencies=[Depends(verify_auth)])
 def list_files():
     from app import utils as _utils
     raw = []
@@ -337,7 +338,7 @@ def list_files():
             })
     return {'raw': raw, 'processed': processed}
 
-@app.get('/files/metadata/unique')
+@app.get('/files/metadata/unique', dependencies=[Depends(verify_auth)])
 def get_unique_metadata():
     all_meta = utils.get_all_metadata()
     # Use Counter to track frequency
@@ -372,11 +373,11 @@ def get_unique_metadata():
         for field in stats.keys()
     }
 
-@app.get('/files/metadata/{filename}')
+@app.get('/files/metadata/{filename}', dependencies=[Depends(verify_auth)])
 def get_file_metadata(filename: str):
     return utils.get_file_metadata(filename)
 
-@app.post('/files/metadata/{filename}')
+@app.post('/files/metadata/{filename}', dependencies=[Depends(verify_auth)])
 def update_file_metadata(filename: str, metadata: dict):
     utils.update_file_metadata(filename, metadata)
     return {'status': 'updated'}
@@ -385,7 +386,7 @@ class BulkMetadataRequest(BaseModel):
     filenames: List[str]
     metadata: dict
 
-@app.post('/files/metadata_bulk')
+@app.post('/files/metadata_bulk', dependencies=[Depends(verify_auth)])
 def bulk_update_file_metadata(req: BulkMetadataRequest):
     for fn in req.filenames:
         utils.update_file_metadata(fn, req.metadata)
@@ -467,7 +468,7 @@ class RenameRequest(BaseModel):
     old: str
     new: str
 
-@app.post('/files/rename_json')
+@app.post('/files/rename_json', dependencies=[Depends(verify_auth)])
 def rename_file_json(req: RenameRequest):
     return _do_rename(req.old, req.new)
 
@@ -610,7 +611,7 @@ def _do_rename(old: str, new: str):
 class DeleteRequest(BaseModel):
     filename: str
 
-@app.post('/files/delete')
+@app.post('/files/delete', dependencies=[Depends(verify_auth)])
 def delete_file(req: DeleteRequest):
     fn = req.filename
     target = STORAGE_PROCESSED / fn
@@ -665,14 +666,14 @@ def index():
         return HTMLResponse(index_file.read_text(encoding='utf-8'))
     return {'status': 'no ui'}
 
-@app.get('/playlists')
+@app.get('/playlists', dependencies=[Depends(verify_auth)])
 def list_playlists():
     return manager.list_playlists()
 
 class CreatePlaylistRequest(BaseModel):
     name: str
 
-@app.post('/playlists')
+@app.post('/playlists', dependencies=[Depends(verify_auth)])
 def create_playlist(req: CreatePlaylistRequest):
     name = req.name
     try:
@@ -780,7 +781,7 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
     manager._save()
     return name, len(to_add)
 
-@app.post('/playlists/smart')
+@app.post('/playlists/smart', dependencies=[Depends(verify_auth)])
 def create_smart_playlist(req: SmartPlaylistRequest):
     try:
         filters_list = []
@@ -801,7 +802,7 @@ def create_smart_playlist(req: SmartPlaylistRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post('/playlists/smart/refresh_all')
+@app.post('/playlists/smart/refresh_all', dependencies=[Depends(verify_auth)])
 def refresh_all_smart_playlists():
     if not hasattr(manager, 'smart_rules') or not manager.smart_rules:
         return {'status': 'no_smart_playlists_found', 'refreshed': 0}
@@ -829,14 +830,14 @@ def refresh_all_smart_playlists():
             
     return {'status': 'success', 'refreshed': refreshed_count}
 
-@app.get('/playlists/rules')
+@app.get('/playlists/rules', dependencies=[Depends(verify_auth)])
 def get_playlist_rules():
     return manager.smart_rules
 
 class BulkAddRequest(BaseModel):
     filenames: List[str]
 
-@app.post('/playlists/add_bulk')
+@app.post('/playlists/add_bulk', dependencies=[Depends(verify_auth)])
 def bulk_add_to_playlist(req: BulkAddRequest, name: str = Query(...)):
     try:
         for fn in req.filenames:
@@ -845,7 +846,7 @@ def bulk_add_to_playlist(req: BulkAddRequest, name: str = Query(...)):
         raise HTTPException(status_code=404, detail='playlist not found')
     return {'added': len(req.filenames)}
 
-@app.post('/playlists/remove_bulk')
+@app.post('/playlists/remove_bulk', dependencies=[Depends(verify_auth)])
 def bulk_remove_from_playlist(req: BulkAddRequest, name: str = Query(...)):
     try:
         for fn in req.filenames:
@@ -854,7 +855,7 @@ def bulk_remove_from_playlist(req: BulkAddRequest, name: str = Query(...)):
         raise HTTPException(status_code=404, detail='playlist not found')
     return {'removed': len(req.filenames)}
 
-@app.post('/playlists/delete')
+@app.post('/playlists/delete', dependencies=[Depends(verify_auth)])
 def delete_playlist(name: str = Query(...)):
     print(f"DEBUG: Deleting playlist: {name}")
     if name in manager.playlists:
@@ -868,7 +869,7 @@ def delete_playlist(name: str = Query(...)):
         return {'status': 'deleted'}
     raise HTTPException(status_code=404, detail='playlist not found')
 
-@app.post('/playlists/reload')
+@app.post('/playlists/reload', dependencies=[Depends(verify_auth)])
 def reload_playlists():
     manager._load()
     return {'status': 'reloaded'}
@@ -1673,8 +1674,71 @@ async def get_midi_orchestrator_preview(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ConnectDeviceRequest(BaseModel):
+    device_name: str
+
+class AudioSettingsRequest(BaseModel):
+    backend_audio_enabled: bool
+    selected_device: str
+    backend_audio_volume: float
+
+@app.get("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
+def get_midi_orchestrator_audio_settings():
+    settings = utils.load_settings()
+    return {
+        "backend_audio_enabled": settings.get("backend_audio_enabled", False),
+        "selected_device": settings.get("selected_device", ""),
+        "backend_audio_volume": settings.get("backend_audio_volume", 1.0)
+    }
+
+@app.post("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
+def save_midi_orchestrator_audio_settings(req: AudioSettingsRequest):
+    settings = utils.load_settings()
+    settings["backend_audio_enabled"] = req.backend_audio_enabled
+    settings["selected_device"] = req.selected_device
+    settings["backend_audio_volume"] = req.backend_audio_volume
+    utils.save_settings(settings)
+    utils._backend_audio_volume = req.backend_audio_volume
+    return {"status": "success", "settings": settings}
+
+@app.get("/midi-orchestrator/audio-devices", dependencies=[Depends(verify_auth)])
+def get_midi_orchestrator_audio_devices():
+    return {"devices": utils.list_audio_devices()}
+
+@app.post("/midi-orchestrator/bluetooth/connect", dependencies=[Depends(verify_auth)])
+def connect_bluetooth_device(req: ConnectDeviceRequest):
+    success = utils.connect_paired_device(req.device_name)
+    if success:
+        return {"status": "success", "message": f"Connected to {req.device_name}"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to connect to Bluetooth device")
+
+@app.post("/midi-orchestrator/bluetooth/disconnect", dependencies=[Depends(verify_auth)])
+def disconnect_bluetooth_device():
+    device_name = utils._active_bt_device_name
+    if not device_name:
+        settings = utils.load_settings()
+        device_name = settings.get("selected_device", "")
+    
+    if device_name:
+        success = utils.disconnect_paired_device(device_name)
+        utils._active_bt_device_name = None
+        if success:
+            return {"status": "success", "message": f"Disconnected from {device_name}"}
+            
+    return {"status": "success", "message": "No active device or already disconnected"}
+
+@app.post("/midi-orchestrator/volume", dependencies=[Depends(verify_auth)])
+def set_midi_orchestrator_volume(volume: float = Query(1.0)):
+    utils._backend_audio_volume = volume
+    settings = utils.load_settings()
+    settings["backend_audio_volume"] = volume
+    utils.save_settings(settings)
+    utils._last_activity_timestamp = time.time()
+    return {"status": "success", "volume": volume}
+
 @app.post("/midi-orchestrator/play/{job_id}", dependencies=[Depends(verify_auth)])
-async def play_midi_orchestrator(job_id: str):
+async def play_midi_orchestrator(job_id: str, offset: float = Query(0.0)):
     if job_id not in midi_orchestrator.status:
         raise HTTPException(status_code=404, detail="Job not found")
         
@@ -1686,15 +1750,35 @@ async def play_midi_orchestrator(job_id: str):
     if not midi_path.exists():
         raise HTTPException(status_code=404, detail="Midi file not found on disk")
         
-    if not (utils._ble_handle and utils._ble_handle.connected):
+    settings = utils.load_settings()
+    is_backend_audio = settings.get("backend_audio_enabled", False)
+    
+    if not is_backend_audio and not (utils._ble_handle and utils._ble_handle.connected):
         raise HTTPException(status_code=400, detail="Piano not connected")
         
+    utils._last_activity_timestamp = time.time()
+
+    if is_backend_audio:
+        selected_device = settings.get("selected_device", "")
+        if selected_device and not utils._active_bt_device_name:
+            utils.connect_paired_device(selected_device)
+        
+    audio_path = Path(job["vocals"]) if job.get("vocals") else None
+    if audio_path and not audio_path.exists():
+        audio_path = None
+        
     try:
-        utils.start_play_async(str(midi_path))
+        utils.start_play_async(
+            str(midi_path), 
+            port_name=None,
+            seek_offset=0,
+            audio_path=str(audio_path) if audio_path else None,
+            global_offset_ms=offset
+        )
         return {"status": "playing"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == '__main__':
-    uvicorn.run('app.main:app', host='0.0.0.0', port=8000, reload=False)
+    uvicorn.run('app.main:app', host='192.168.1.8', port=8000, reload=False)

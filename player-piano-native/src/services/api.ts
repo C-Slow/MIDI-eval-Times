@@ -5,7 +5,7 @@ const getBaseUrl = () => useStore.getState().serverUrl;
 const getToken = () => useStore.getState().token;
 
 const api = axios.create({
-  timeout: 120000, // 120 seconds (2 minutes)
+  timeout: 10000, // 10 seconds
 });
 
 // Simple retry logic for intermittent network errors
@@ -358,8 +358,36 @@ export const midiOrchestratorApi = {
     const fStr = vocalFemaleTracks.join(',');
     return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&vocal_male_tracks=${encodeURIComponent(mStr)}&vocal_female_tracks=${encodeURIComponent(fStr)}&token=${encodeURIComponent(token || '')}`;
   },
-  playMidi: async (jobId: string) => {
-    const res = await api.post(`/midi-orchestrator/play/${jobId}`);
+  playMidi: async (jobId: string, offset: number = 0) => {
+    const res = await api.post(`/midi-orchestrator/play/${jobId}?offset=${offset}`);
+    return res.data;
+  },
+  getAudioSettings: async () => {
+    const res = await api.get('/midi-orchestrator/audio-settings');
+    return res.data;
+  },
+  saveAudioSettings: async (backendAudioEnabled: boolean, selectedDevice: string, backendAudioVolume: number) => {
+    const res = await api.post('/midi-orchestrator/audio-settings', {
+      backend_audio_enabled: backendAudioEnabled,
+      selected_device: selectedDevice,
+      backend_audio_volume: backendAudioVolume
+    });
+    return res.data;
+  },
+  getAudioDevices: async () => {
+    const res = await api.get('/midi-orchestrator/audio-devices');
+    return res.data;
+  },
+  connectBluetoothDevice: async (deviceName: string) => {
+    const res = await api.post('/midi-orchestrator/bluetooth/connect', { device_name: deviceName });
+    return res.data;
+  },
+  disconnectBluetoothDevice: async () => {
+    const res = await api.post('/midi-orchestrator/bluetooth/disconnect');
+    return res.data;
+  },
+  setVolume: async (volume: number) => {
+    const res = await api.post(`/midi-orchestrator/volume?volume=${volume}`);
     return res.data;
   },
   getMetadata: async (jobId: string) => {
