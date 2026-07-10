@@ -1,25 +1,23 @@
-# 📋 Plan: Hybrid & Orchestrated Songs Integration in Playlists
+# 📋 Plan: MIDI Editor Songs Integration in Playlists
 
-This plan outlines the architecture and implementation steps to integrate AI-orchestrated/hybrid songs (MIDI + synced vocal/instrumental audio) with static and dynamic (smart) playlists, playing them seamlessly alongside normal MIDI files.
+This plan outlines the architecture and implementation steps to integrate songs built in the **MIDI Editor** workspace (containing custom track routing, manual synchronization, and optional imported vocals) with static and dynamic (smart) playlists, playing them seamlessly alongside normal processed MIDI files.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-The system currently handles two types of media files:
-1. **Normal MIDI files:** Raw piano key events stored in `storage/processed/` that play exclusively on the piano (or synthesize to WAV for mobile preview).
-2. **Orchestrated/Hybrid songs:** Jobs stored in `storage/midi_orchestrator/jobs/` that pair a MIDI track with parsed vocals (`vocals.wav`) and backing instruments, synchronized via Dynamic Time Warping (DTW) alignments.
-
-To unify them, we will introduce a new **Validation Stage** in the MIDI Editor. Once validated, hybrid songs are exposed to the playlist engine via a virtual URI scheme (`hybrid:{job_id}`).
+The system handles two distinct play types:
+1. **Normal MIDI files:** Standard processed MIDI files stored in `storage/processed/` that play exclusively on the piano (or synthesize to WAV for mobile preview).
+2. **MIDI Editor (Orchestrated) songs:** Workspace projects stored in `storage/midi_orchestrator/jobs/` and managed via `storage/midi_orchestrator/midi_jobs.json`. These contain manual synchronization offsets, custom track assignments (selective piano keys vs. backing speakers), and optional imported vocal tracks (originally separated by the MP3 Orchestrator).
 
 ```mermaid
 graph TD
-    subgraph MIDI Editor (Perform Tab)
-        A[Orchestrated Job] -->|User Reviews & Tags| B(Validated Status)
+    subgraph MIDI Editor Workspace
+        A[MIDI Editor Project] -->|Tracks, Manual Sync, Vocal Import| B(Validated Switch)
     end
 
     subgraph Database
-        B -->|Saves state| C[(midi_jobs.json)]
+        B -->|Already supported via POST /metadata| C[(midi_orchestrator/midi_jobs.json)]
     end
 
     subgraph Playlist Engine
@@ -33,7 +31,7 @@ graph TD
         F -->|Normal MIDI| G[Play MIDI on Piano]
         F -->|hybrid:job_id| H[Sync MIDI + Vocals Audio]
         H -->|Backend Audio Enabled| I[Audio on Backend Speakers + MIDI on Piano]
-        H -->|Backend Audio Disabled| J[Audio on Phone Speakers + MIDI on Piano]
+        H -->|Backend Audio/Phones Enabled| J[Audio on Phone Speakers + MIDI on Piano]
     end
 ```
 
@@ -41,44 +39,20 @@ graph TD
 
 ## 🛠️ Step-by-Step Implementation Plan
 
-### Phase 1: Database & Validation API
+### Phase 1: Expose Validated MIDI Editor Songs to Playlists
 
-We need to add a `"validated"` boolean flag to the jobs schema and provide a toggle endpoint.
+Since the `"validated"` boolean is already supported by the MIDI Editor's metadata endpoint (`/midi-orchestrator/metadata/{job_id}`), we can immediately utilize it to filter eligible songs.
 
-#### 1. Update Database Schema
-In [midi_jobs.json](file:///C:/Users/coren/Projects/MIDI-eval%20Times/storage/midi_orchestrator/midi_jobs.json), completed jobs will gain a new metadata property:
-```json
-"validated": true
-```
+#### 1. Integrate with Smart Playlist Rule Generator
+In [main.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/main.py#L696-L766), modify `generate_smart_playlist_logic` to pool both processed MIDI files and validated MIDI Editor projects. 
 
-#### 2. Implement Validation Endpoint
-Add a new route in [main.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/main.py) to toggle this flag:
-```python
-@app.post("/midi-orchestrator/jobs/{job_id}/validate", dependencies=[Depends(verify_auth)])
-async def validate_midi_orchestrator_job(job_id: str, validated: bool = Query(...)):
-    if job_id not in midi_orchestrator.status:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    midi_orchestrator.status[job_id]["validated"] = validated
-    midi_orchestrator._save_db()
-    return {"status": "success", "job_id": job_id, "validated": validated}
-```
-
----
-
-### Phase 2: Smart & Static Playlists Integration
-
-Currently, [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/manager.py) and smart playlist generators only look at the physical MIDI files in `STORAGE_PROCESSED`. We will extend this to include virtual `hybrid:{job_id}` entries.
-
-#### 1. Expose Validated Hybrid Songs to Smart Rule Generator
-In [main.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/main.py#L696-L766), modify `generate_smart_playlist_logic` to query both files and validated jobs:
-
+For each matching validated MIDI Editor project, we add a virtual URI `hybrid:{job_id}` to the playlist:
 ```python
 def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], exclude_dnu: bool):
     all_meta = utils.get_all_metadata()
     processed_files = [p.name for p in STORAGE_PROCESSED.iterdir() if p.suffix.lower() in ('.mid', '.midi')]
     
-    # 1. Gather all candidates (Normal MIDIs + Validated Hybrid Songs)
+    # 1. Gather all candidates (Normal processed files + Validated MIDI Editor workspace songs)
     candidates = []
     for fn in processed_files:
         candidates.append({
@@ -86,8 +60,10 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
             'meta': all_meta.get(fn, {})
         })
         
+    from app.main import midi_orchestrator
     for job_id, job in midi_orchestrator.status.items():
-        if job.get("status") == "completed" and job.get("validated"):
+        # Only pull completed and validated projects from the MIDI Editor workspace
+        if job.get("status") == "completed" and job.get("validated", False):
             candidates.append({
                 'id': f"hybrid:{job_id}",
                 'meta': {
@@ -113,7 +89,7 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
             f_type = f.get('filter_type')
             f_val = f.get('filter_value', '')
             
-            # (Keep existing filter matching logic on meta)
+            # (Keep existing dynamic rating and text filter matching)
             # ...
             
         if all_filters_match:
@@ -121,18 +97,17 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
 ```
 
 #### 2. Update Playlist manager Security Checks
-In [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/manager.py#L73-L84), update `add_to_playlist` to recognize and allow `hybrid:` prefixes:
+In [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-app/app/manager.py#L73-L84), update `add_to_playlist` to validate virtual `hybrid:` track URIs before saving:
 ```python
     def add_to_playlist(self, name: str, filename: str):
         if name not in self.playlists:
             raise KeyError('no such playlist')
         
-        # Allow if it's a valid hybrid URI or a processed MIDI file
         is_valid_hybrid = False
         if filename.startswith("hybrid:"):
             job_id = filename.split(":", 1)[1]
             from app.main import midi_orchestrator
-            is_valid_hybrid = job_id in midi_orchestrator.status and midi_orchestrator.status[job_id].get("validated")
+            is_valid_hybrid = job_id in midi_orchestrator.status and midi_orchestrator.status[job_id].get("validated", False)
             
         if not is_valid_hybrid and not (self.processed_dir / filename).exists():
             print(f"SECURITY: Blocked attempt to add invalid file '{filename}' to playlist '{name}'")
@@ -145,7 +120,7 @@ In [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-a
 
 ---
 
-### Phase 3: Playback Sync & Speaker Handling
+### Phase 2: Playback Sync & Speaker Handling
 
 We must modify the playback thread in `PlaylistManager` to parse and delegate the hybrid paths (MIDI path + Audio path + Timing offsets) to the core player.
 
@@ -176,9 +151,11 @@ In [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-a
                             job = midi_orchestrator.status.get(job_id)
                             if not job:
                                 continue
+                            # Path to MIDI containing piano key tracks
                             path = job["midi"]
-                            audio_path = job["vocals"]
-                            # Default to the job's custom offset if set, or fall back to 0
+                            # Path to vocal/backing audio track
+                            audio_path = job.get("vocals")
+                            # Default to the job's manual sync offset if set
                             global_offset_ms = job.get("sync_offset", 0.0)
                         else:
                             path = self._resolve_path(fn)
@@ -207,25 +184,14 @@ In [manager.py](file:///C:/Users/coren/Projects/MIDI-eval%20Times/player-piano-a
 
 ---
 
-### Phase 4: Handle Speaker Routing
+### Phase 3: Speaker Routing & Global Sync
 
-Depending on the global speaker selection, we route audio appropriately:
+Playback follows the user's active speaker route settings:
 
-| Routing Option | Backend Speaker Audio | Client Phone Audio | Sync Mechanism |
-| :--- | :--- | :--- | :--- |
-| **Backend Speakers** (`backend_audio_enabled = true`) | Played via `_play_audio_thread` on backend device. | Muted locally. | Backend calculates delay/advance offsets (`global_offset_ms`) and sleeps/delays start. |
-| **Phone Speakers** (`backend_audio_enabled = false`) | Muted on backend. | Played via Expo AV `soundRef` stream from `/midi-orchestrator/backing-audio/{job_id}`. | Phone polls `/queue/status`. When a `hybrid:` track changes, it preloads the stream and triggers playback synced to the queue's `elapsed` status. |
-
----
-
-### Phase 5: Client-Side UI Enhancements
-
-1. **Add Validation Toggle in MIDI Editor:**
-   Add a switch/checkbox next to the metadata inputs in `MidiEditorScreen` labeled "Validated for Playlists". When toggled, make an API request to:
-   ```javascript
-   await api.post(`/midi-orchestrator/jobs/${jobId}/validate?validated=${value}`);
-   ```
-2. **Display Smart List Suggestions:**
-   Update the smart playlist UI so that when filtering, matching orchestrated song values are suggested.
-3. **Show Custom Badges in Playlists View:**
-   Use a distinct icon (e.g. a small cassette/wave badge) for tracks prefixed with `hybrid:` to make it clear they include vocals.
+1. **Backend Speakers (`backend_audio_enabled = true`):**
+   - The backend plays the backing audio on the backend speakers (via `_play_audio_thread` on the host PC).
+   - The backend plays the keys on the piano (via BLE).
+   - Sync is handled via `global_offset_ms` (which coordinates either MIDI or audio delays).
+2. **Phone Speakers (`backend_audio_enabled = false`):**
+   - The backend plays the keys on the piano (via BLE).
+   - The phone polls `/queue/status`. When a `hybrid:{job_id}` track starts playing, the phone app automatically preloads the backing audio stream from `/midi-orchestrator/backing-audio/{job_id}` and plays it locally, keeping it synchronized with the queue's `elapsed` status.
