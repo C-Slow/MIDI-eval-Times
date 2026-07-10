@@ -1,5 +1,19 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
+
+const getDefaultServerUrl = (): string => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  if (debuggerHost) {
+    const ip = debuggerHost.split(':')[0];
+    return `http://${ip}:8000`;
+  }
+  return 'http://localhost:8000';
+};
+
 
 interface FileInfo {
   name: string;
@@ -96,7 +110,7 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
-  serverUrl: 'http://192.168.1.8:8000',
+  serverUrl: getDefaultServerUrl(),
   token: null,
   files: { raw: [], processed: [] },
   uniqueMetadata: { artist: [], genre: [], mood: [], source: [] },
