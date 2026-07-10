@@ -189,14 +189,35 @@ class MidiOrchestrator:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         
-        self.soundfont_path = storage_dir / "SGM-V2.01.sf2"
-        # Fallbacks
-        if not self.soundfont_path.exists():
-            self.soundfont_path = storage_dir / "ChoriumRevA.sf2"
-        if not self.soundfont_path.exists():
-            self.soundfont_path = storage_dir / "FluidR3_GM.sf2"
-        if not self.soundfont_path.exists():
-            self.soundfont_path = storage_dir / "GeneralUser_GS.sf2"
+        # Soundfont selection with fallback and corruption validation
+        soundfonts = [
+            "SGM-V2.01.sf2",
+            "ChoriumRevA.sf2",
+            "FluidR3_GM.sf2",
+            "Salamander.sf2",
+            "GeneralUser_GS.sf2"
+        ]
+        
+        self.soundfont_path = None
+        for sf_name in soundfonts:
+            sf_path = storage_dir / sf_name
+            if sf_path.exists():
+                # Verify the file is not a corrupted HTML page download
+                try:
+                    with open(sf_path, 'rb') as f:
+                        header = f.read(100)
+                    if b'<!DOCTYPE html>' in header or b'<html' in header:
+                        print(f"MIDI Orchestrator: WARNING: {sf_path.name} is a corrupted HTML file. Deleting it.")
+                        sf_path.unlink()
+                        continue
+                except Exception as e:
+                    print(f"MIDI Orchestrator: Failed to inspect soundfont {sf_name}: {e}")
+                
+                self.soundfont_path = sf_path
+                break
+                
+        if self.soundfont_path is None:
+            self.soundfont_path = storage_dir / "Salamander.sf2"
 
         self.status: Dict[str, Dict] = self._load_db()
         self.rvc = None

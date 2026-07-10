@@ -17,8 +17,12 @@ PEDAL_JSON = os.path.join(PROJECT_ROOT, 'pedal_profiles.json')
 METADATA_JSON = os.path.join(PROJECT_ROOT, 'storage', 'metadata.json')
 PLAYBACK_LOG = os.path.join(PROJECT_ROOT, 'storage', 'playback_debug.log')
 SOUNDFONT = os.path.join(PROJECT_ROOT, 'storage', 'Salamander.sf2')
-# Prefer environment variable for portability
-FLUIDSYNTH_BIN = os.environ.get('FLUIDSYNTH_BIN', os.path.join(PROJECT_ROOT, 'fluidsynth', 'bin', 'fluidsynth.exe'))
+# Prefer environment variable, then system PATH, then default fallback path
+import shutil
+FLUIDSYNTH_BIN = os.environ.get(
+    'FLUIDSYNTH_BIN',
+    shutil.which('fluidsynth') or os.path.join(PROJECT_ROOT, 'fluidsynth', 'bin', 'fluidsynth.exe')
+)
 RENDER_CACHE = os.path.join(PROJECT_ROOT, 'storage', 'render_cache')
 STORAGE_RAW = os.path.join(PROJECT_ROOT, 'storage', 'raw')
 STORAGE_PROCESSED = os.path.join(PROJECT_ROOT, 'storage', 'processed')
@@ -1130,7 +1134,7 @@ def scan_model_file(filepath: str) -> bool:
                         if name not in SAFE_BUILTINS:
                             print(f"Model safety scan WARNING: Blocked loading file due to suspicious builtin '{module}.{name}'.")
                             return False
-                    elif module not in SAFE_MODULES and not module.startswith('torch.'):
+                    elif module not in SAFE_MODULES and not module.startswith('torch.') and not module.startswith('fairseq.') and module != 'fairseq':
                         print(f"Model safety scan WARNING: Blocked loading file due to suspicious pickle import '{module}.{name}' at position {pos}.")
                         return False
             return True

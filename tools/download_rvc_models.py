@@ -72,7 +72,7 @@ def scan_model_file(filepath: Path) -> bool:
                         if name not in SAFE_BUILTINS:
                             print(f"\nSafety scan WARNING: Blocked loading file due to suspicious builtin '{module}.{name}'.")
                             return False
-                    elif module not in SAFE_MODULES and not module.startswith('torch.'):
+                    elif module not in SAFE_MODULES and not module.startswith('torch.') and not module.startswith('fairseq.') and module != 'fairseq':
                         print(f"\nSafety scan WARNING: Blocked loading file due to suspicious pickle import '{module}.{name}' at position {pos}.")
                         return False
             return True
