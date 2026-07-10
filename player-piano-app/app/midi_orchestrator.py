@@ -435,6 +435,10 @@ class MidiOrchestrator:
             if not model_path.exists():
                 raise FileNotFoundError(f"RVC voice model {model_name} not found at {model_path}")
                 
+            # Perform safety validation scan before loading the pickle weights
+            if not utils.scan_model_file(str(model_path)):
+                raise ValueError(f"Unsafe model weights detected for RVC model {model_name}! Load aborted.")
+                
             self.rvc.load_model(str(model_path), version="v2")
             # Set RMVPE pitch extraction, no pitch shifting (f0up_key=0)
             self.rvc.set_params(f0up_key=0, f0method="rmvpe")

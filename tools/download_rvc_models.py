@@ -38,13 +38,100 @@ def download_with_progress(url, dest_path):
             except Exception:
                 pass
 
+def scan_model_file(filepath: Path) -> bool:
+    """
+    Scans a PyTorch (.pth or .pt) model file to verify it doesn't contain
+    malicious pickle bytecode that could execute arbitrary commands.
+    """
+    import zipfile
+    import pickletools
+
+    # Allowed modules/packages for standard PyTorch model weights
+    SAFE_MODULES = {
+        'torch',
+        'torch._utils',
+        'collections',
+        'numpy',
+        'numpy.core.multiarray',
+        '_codecs',
+    }
+    
+    # Allowed specific names from builtins
+    SAFE_BUILTINS = {'dict', 'list', 'set', 'tuple', 'bool', 'int', 'float', 'str', 'bytes'}
+
+    if not filepath.exists():
+        print(f"Safety scan: File {filepath} does not exist.")
+        return False
+
+    def scan_pickle_data(data_bytes: bytes) -> bool:
+        try:
+            for opcode, args, pos in pickletools.genops(data_bytes):
+                if opcode.name == 'GLOBAL':
+                    module, name = args.split(' ')
+                    if module == 'builtins' or module == '__builtin__':
+                        if name not in SAFE_BUILTINS:
+                            print(f"\nSafety scan WARNING: Blocked loading file due to suspicious builtin '{module}.{name}'.")
+                            return False
+                    elif module not in SAFE_MODULES and not module.startswith('torch.'):
+                        print(f"\nSafety scan WARNING: Blocked loading file due to suspicious pickle import '{module}.{name}' at position {pos}.")
+                        return False
+            return True
+        except Exception as e:
+            print(f"\nSafety scan: Error parsing pickle bytecode: {e}")
+            return False
+
+    # Standard PyTorch models can be raw pickles or Zip archives
+    if zipfile.is_zipfile(filepath):
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zip_ref:
+                has_pickle = False
+                for file_info in zip_ref.infolist():
+                    if file_info.filename.endswith('.pkl') or 'data.pkl' in file_info.filename:
+                        has_pickle = True
+                        data = zip_ref.read(file_info.filename)
+                        if not scan_pickle_data(data):
+                            return False
+                if not has_pickle:
+                    print(f"Safety scan: ZIP file {filepath.name} has no .pkl files, assuming safe (e.g. state dict or ONNX).")
+                return True
+        except Exception as e:
+            print(f"Safety scan: Failed to read ZIP archive: {e}")
+            return False
+    else:
+        try:
+            with open(filepath, 'rb') as f:
+                data = f.read()
+            return scan_pickle_data(data)
+        except Exception as e:
+            print(f"Safety scan: Failed to read file: {e}")
+            return False
+
 def main():
     for name, url in MODELS.items():
         dest = RVC_DIR / name
         if dest.exists() and dest.stat().st_size > 1000000:
-            print(f"{name} already exists in storage. Skipping.")
+            print(f"{name} already exists in storage. Scanning for safety...")
+            if not scan_model_file(dest):
+                print(f"CRITICAL WARNING: Existing model file {name} failed safety scan! Deleting it.")
+                try:
+                    dest.unlink()
+                except Exception as e:
+                    print(f"Failed to delete unsafe file {dest}: {e}")
+            else:
+                print(f"{name} safety scan passed.")
         else:
             download_with_progress(url, dest)
+            if dest.exists():
+                print(f"Scanning downloaded model {name} for safety...")
+                if not scan_model_file(dest):
+                    print(f"CRITICAL WARNING: Downloaded model file {name} failed safety scan! Deleting it.")
+                    try:
+                        dest.unlink()
+                    except Exception as e:
+                        print(f"Failed to delete unsafe file {dest}: {e}")
+                else:
+                    print(f"{name} safety scan passed.")
 
 if __name__ == '__main__':
     main()
+

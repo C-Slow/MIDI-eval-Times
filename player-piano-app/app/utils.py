@@ -1090,3 +1090,80 @@ def cleanup_render_cache():
     except Exception as e:
         print(f"RENDER_CACHE: Cleanup failed: {e}")
         return 0
+
+
+def scan_model_file(filepath: str) -> bool:
+    """
+    Scans a PyTorch (.pth or .pt) model file to verify it doesn't contain
+    malicious pickle bytecode that could execute arbitrary commands.
+    Returns True if the file is safe to load, or False if suspicious imports are found.
+    """
+    import zipfile
+    import pickletools
+    from pathlib import Path
+
+    # Allowed modules/packages for standard PyTorch model weights
+    SAFE_MODULES = {
+        'torch',
+        'torch._utils',
+        'collections',
+        'numpy',
+        'numpy.core.multiarray',
+        '_codecs',
+    }
+    
+    # Allowed specific names from builtins
+    SAFE_BUILTINS = {'dict', 'list', 'set', 'tuple', 'bool', 'int', 'float', 'str', 'bytes'}
+
+    path = Path(filepath)
+    if not path.exists():
+        print(f"Model safety scan: File {filepath} does not exist.")
+        return False
+
+    def scan_pickle_data(data_bytes: bytes) -> bool:
+        try:
+            for opcode, args, pos in pickletools.genops(data_bytes):
+                if opcode.name == 'GLOBAL':
+                    module, name = args.split(' ')
+                    # Verify if the module or builtin name is safe
+                    if module == 'builtins' or module == '__builtin__':
+                        if name not in SAFE_BUILTINS:
+                            print(f"Model safety scan WARNING: Blocked loading file due to suspicious builtin '{module}.{name}'.")
+                            return False
+                    elif module not in SAFE_MODULES and not module.startswith('torch.'):
+                        print(f"Model safety scan WARNING: Blocked loading file due to suspicious pickle import '{module}.{name}' at position {pos}.")
+                        return False
+            return True
+        except Exception as e:
+            # If pickletools cannot parse it, treat it as unsafe/malformed
+            print(f"Model safety scan: Error parsing pickle bytecode: {e}")
+            return False
+
+    # Standard PyTorch models can be raw pickles or Zip archives (saving format since PyTorch 1.6)
+    if zipfile.is_zipfile(filepath):
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zip_ref:
+                # Scan any pickle files inside the archive (typically data.pkl)
+                has_pickle = False
+                for file_info in zip_ref.infolist():
+                    if file_info.filename.endswith('.pkl') or 'data.pkl' in file_info.filename:
+                        has_pickle = True
+                        data = zip_ref.read(file_info.filename)
+                        if not scan_pickle_data(data):
+                            return False
+                if not has_pickle:
+                    print(f"Model safety scan: ZIP file {filepath} has no .pkl files, assuming safe (e.g. state dict or ONNX).")
+                return True
+        except Exception as e:
+            print(f"Model safety scan: Failed to read ZIP archive: {e}")
+            return False
+    else:
+        # Raw pickle file
+        try:
+            with open(filepath, 'rb') as f:
+                data = f.read()
+            return scan_pickle_data(data)
+        except Exception as e:
+            print(f"Model safety scan: Failed to read file: {e}")
+            return False
+
