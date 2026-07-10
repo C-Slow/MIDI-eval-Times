@@ -96,7 +96,7 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
-  serverUrl: 'http://192.168.1.19:8000',
+  serverUrl: 'http://192.168.1.8:8000',
   token: null,
   files: { raw: [], processed: [] },
   uniqueMetadata: { artist: [], genre: [], mood: [], source: [] },
