@@ -955,9 +955,9 @@ def play_midi_async(path: str, port_name: str = None, stop_event=None, start_off
     return t
 
 
-def play_midi_blocking(path: str, port_name: str = None, stop_event=None, start_offset: float = 0):
+def play_midi_blocking(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
     """Play MIDI file synchronously. Accepts optional threading.Event to allow interruption."""
-    _play_internal(path, port_name, stop_event, start_offset)
+    _play_internal(path, port_name, stop_event, start_offset, audio_path, global_offset_ms)
 
 
 # Simple global playback controller for ad-hoc playback (not playlist manager)

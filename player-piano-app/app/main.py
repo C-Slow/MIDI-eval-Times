@@ -703,11 +703,35 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
         
     all_meta = utils.get_all_metadata()
     processed_files = [p.name for p in STORAGE_PROCESSED.iterdir() if p.suffix.lower() in ('.mid', '.midi')]
-    print(f"DEBUG: Checking {len(processed_files)} processed files...")
+    
+    # Gather candidates (Normal processed MIDIs + Validated MIDI Editor projects)
+    candidates = []
+    for fn in processed_files:
+        candidates.append({
+            'id': fn,
+            'meta': all_meta.get(fn, {})
+        })
+        
+    for job_id, job in midi_orchestrator.status.items():
+        if job.get("status") == "completed" and job.get("validated", False):
+            candidates.append({
+                'id': f"hybrid:{job_id}",
+                'meta': {
+                    'artist': job.get('artist', 'Unknown'),
+                    'genre': job.get('genre', ''),
+                    'mood': job.get('mood', ''),
+                    'source': job.get('source', ''),
+                    'rating': job.get('rating', 0),
+                    'dnu': job.get('dnu', False)
+                }
+            })
+            
+    print(f"DEBUG: Checking {len(candidates)} total candidate tracks (processed + hybrid)...")
     
     to_add = []
-    for fn in processed_files:
-        meta = all_meta.get(fn, {})
+    for item in candidates:
+        track_id = item['id']
+        meta = item['meta']
         
         # Exclude DNU if requested
         if exclude_dnu and meta.get('dnu'):
@@ -761,7 +785,7 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
                 break
                 
         if all_filters_match:
-            to_add.append(fn)
+            to_add.append(track_id)
             
     print(f"DEBUG: Found {len(to_add)} matches.")
     if not to_add:

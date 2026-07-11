@@ -74,7 +74,13 @@ class PlaylistManager:
         if name not in self.playlists:
             raise KeyError('no such playlist')
         
-        if not (self.processed_dir / filename).exists():
+        is_valid_hybrid = False
+        if filename.startswith("hybrid:"):
+            job_id = filename.split(":", 1)[1]
+            from app.main import midi_orchestrator
+            is_valid_hybrid = job_id in midi_orchestrator.status and midi_orchestrator.status[job_id].get("validated", False)
+        
+        if not is_valid_hybrid and not (self.processed_dir / filename).exists():
             print(f"SECURITY: Blocked attempt to add raw file '{filename}' to playlist '{name}'")
             return
 
@@ -135,9 +141,25 @@ class PlaylistManager:
                         
                         self.current_index = i
                         fn = self.active_tracks[i]
-                        path = self._resolve_path(fn)
-                        print(f"DEBUG: Worker processing track {i}: {fn} (Path: {path})")
-                        if not path: continue
+                        
+                        audio_path = None
+                        global_offset_ms = 0.0
+                        
+                        if fn.startswith("hybrid:"):
+                            job_id = fn.split(":", 1)[1]
+                            from app.main import midi_orchestrator
+                            job = midi_orchestrator.status.get(job_id)
+                            if not job:
+                                continue
+                            path = job.get("midi")
+                            audio_path = job.get("vocals")
+                            global_offset_ms = job.get("sync_offset", 0.0)
+                        else:
+                            path = self._resolve_path(fn)
+                            
+                        print(f"DEBUG: Worker processing track {i}: {fn} (Path: {path}, Audio: {audio_path}, Offset: {global_offset_ms}ms)")
+                        if not path or not os.path.exists(path):
+                            continue
                         
                         info = utils.get_midi_info(path)
                         self.current_file = fn
@@ -153,7 +175,14 @@ class PlaylistManager:
                             self._stop_requested = True
                             break
 
-                        utils.play_midi_blocking(path, port_name, stop_event=self.stop_event, start_offset=current_offset)
+                        utils.play_midi_blocking(
+                            path, 
+                            port_name, 
+                            stop_event=self.stop_event, 
+                            start_offset=current_offset,
+                            audio_path=audio_path,
+                            global_offset_ms=global_offset_ms
+                        )
                         self.seek_offset = 0
                         
                         if self.stop_event.is_set():
