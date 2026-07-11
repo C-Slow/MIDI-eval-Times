@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Text, Platform, Image, AppState, Switch, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, Platform, Image, AppState, Switch, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,8 +38,13 @@ const HeaderControls = () => {
   const backendAudioVolume = useStore((state) => state.backendAudioVolume);
   const setBackendAudioVolume = useStore((state) => state.setBackendAudioVolume);
   const selectedDevice = useStore((state) => state.selectedDevice);
+  const setSelectedDevice = useStore((state) => state.setSelectedDevice);
   const themeColors = Colors[theme];
+
   const [connecting, setConnecting] = React.useState(false);
+  const [showPicker, setShowPicker] = React.useState(false);
+  const [devices, setDevices] = React.useState<any[]>([]);
+  const [loadingDevices, setLoadingDevices] = React.useState(false);
 
   const handleVolumeChange = async (vol: number) => {
     setBackendAudioVolume(vol);
@@ -54,18 +59,45 @@ const HeaderControls = () => {
     setBackendAudioEnabled(value);
     setConnecting(true);
     try {
-      await midiOrchestratorApi.saveAudioSettings({
-        backend_audio_enabled: value,
-        selected_device: selectedDevice,
-        backend_audio_volume: backendAudioVolume
-      });
+      await midiOrchestratorApi.saveAudioSettings(value, selectedDevice, backendAudioVolume);
       if (value && selectedDevice) {
-        await midiOrchestratorApi.connectBluetooth(selectedDevice);
-      } else {
-        await midiOrchestratorApi.disconnectBluetooth();
+        await midiOrchestratorApi.connectBluetoothDevice(selectedDevice);
+      } else if (!value) {
+        await midiOrchestratorApi.disconnectBluetoothDevice();
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to update audio settings', e);
+      Alert.alert('Error', `Failed to apply settings: ${e.message}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const openDevicePicker = async () => {
+    setShowPicker(true);
+    setLoadingDevices(true);
+    try {
+      const data = await midiOrchestratorApi.getAudioDevices();
+      setDevices(data.devices || []);
+    } catch (err) {
+      console.error('Failed to load audio devices', err);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  const handleSelectDevice = async (device: string) => {
+    setSelectedDevice(device);
+    setShowPicker(false);
+    setConnecting(true);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, device, backendAudioVolume);
+      if (backendAudioEnabled) {
+        await midiOrchestratorApi.connectBluetoothDevice(device);
+      }
+    } catch (err: any) {
+      console.error('Failed to connect to device', err);
+      Alert.alert('Connection Error', `Failed to connect: ${err.message}`);
     } finally {
       setConnecting(false);
     }
@@ -73,6 +105,31 @@ const HeaderControls = () => {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
+      {/* Speaker / Device Name Link (Only if enabled) */}
+      {backendAudioEnabled && (
+        <TouchableOpacity 
+          onPress={openDevicePicker} 
+          style={{ 
+            backgroundColor: themeColors.border, 
+            paddingHorizontal: 8, 
+            paddingVertical: 4, 
+            borderRadius: 6,
+            maxWidth: 110
+          }}
+        >
+          <Text 
+            numberOfLines={1} 
+            style={{ 
+              fontSize: 10, 
+              color: selectedDevice ? themeColors.text : themeColors.textMuted,
+              fontWeight: '600'
+            }}
+          >
+            {selectedDevice || 'Select Speaker...'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Backend Audio Toggle */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <Ionicons 
@@ -97,7 +154,7 @@ const HeaderControls = () => {
       {backendAudioEnabled && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Slider
-            style={{ width: 100, height: 40 }}
+            style={{ width: 80, height: 40 }}
             minimumValue={0}
             maximumValue={1}
             minimumTrackTintColor={themeColors.accent}
@@ -106,11 +163,96 @@ const HeaderControls = () => {
             value={backendAudioVolume}
             onValueChange={handleVolumeChange}
           />
-          <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
-            {Math.round(backendAudioVolume * 100)}%
-          </Text>
         </View>
       )}
+
+      {/* Device Picker Modal */}
+      <Modal
+        visible={showPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={() => setShowPicker(false)}
+          style={{ 
+            flex: 1, 
+            backgroundColor: 'rgba(0,0,0,0.5)', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+          }}
+        >
+          <View 
+            style={{ 
+              width: '80%', 
+              backgroundColor: themeColors.background, 
+              borderRadius: 12, 
+              padding: 16,
+              maxHeight: '60%',
+              borderWidth: 1,
+              borderColor: themeColors.border
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: themeColors.text, marginBottom: 12 }}>
+              Select Bluetooth Speaker
+            </Text>
+
+            {loadingDevices ? (
+              <ActivityIndicator size="large" color={themeColors.accent} style={{ marginVertical: 20 }} />
+            ) : devices.length === 0 ? (
+              <Text style={{ color: themeColors.textMuted, fontSize: 12, fontStyle: 'italic', marginVertical: 20, textAlign: 'center' }}>
+                No paired Bluetooth devices found. Make sure it is paired in Windows settings.
+              </Text>
+            ) : (
+              <ScrollView style={{ marginVertical: 8 }}>
+                {devices.map((device) => {
+                  const isSelected = selectedDevice === device.name;
+                  return (
+                    <TouchableOpacity
+                      key={device.name}
+                      onPress={() => handleSelectDevice(device.name)}
+                      style={{
+                        paddingVertical: 12,
+                        paddingHorizontal: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: themeColors.border,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <Text style={{ 
+                        fontSize: 14, 
+                        color: themeColors.text,
+                        fontWeight: isSelected ? 'bold' : 'normal' 
+                      }}>
+                        {device.name}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={themeColors.accent} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity 
+              onPress={() => setShowPicker(false)}
+              style={{ 
+                marginTop: 16, 
+                backgroundColor: themeColors.accent, 
+                paddingVertical: 10, 
+                borderRadius: 8,
+                alignItems: 'center' 
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };

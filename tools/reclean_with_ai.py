@@ -23,9 +23,9 @@ PLAYLISTS_FILE = BASE_DIR / 'storage' / 'playlists.json'
 def get_api_key():
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding='utf-8'))
-        return data.get('gemini_api_key')
+        return data.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
     except:
-        return None
+        return os.getenv('GEMINI_API_KEY')
 
 async def reload_backend_playlists():
     """Notify the running backend to reload playlists from disk."""

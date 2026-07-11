@@ -215,7 +215,7 @@ async def get_gemini_key():
 async def process_uploaded_file(raw_path: Path, original_filename: str):
     """Analyze with Gemini and auto-clean if possible."""
     settings = get_settings_data()
-    api_key = settings.get('gemini_api_key')
+    api_key = settings.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
     
     gemini_data = {}
     if api_key:
@@ -246,20 +246,28 @@ async def process_uploaded_file(raw_path: Path, original_filename: str):
             if slug:
                 new_base = slug
                 new_name = f"{new_base}.mid"
-                if not (STORAGE_PROCESSED / new_name).exists():
-                    # Rename processed
-                    os.rename(STORAGE_PROCESSED / final_filename, STORAGE_PROCESSED / new_name)
-                    
-                    # Rename original to match
-                    old_raw_path = raw_path
-                    new_raw_name = f"{new_base}_original.mid"
-                    new_raw_path = STORAGE_RAW / new_raw_name
-                    if not new_raw_path.exists():
-                        os.rename(old_raw_path, new_raw_path)
-                        print(f"DEBUG: Renamed raw to: {new_raw_name}")
-                    
-                    final_filename = new_name
-                    print(f"DEBUG: Renamed to Gemini title: {final_filename}")
+                
+                # Check for duplicate names and find a unique suffix
+                counter = 1
+                while (STORAGE_PROCESSED / new_name).exists() or (STORAGE_RAW / f"{new_name.replace('.mid', '')}_original.mid").exists():
+                    new_name = f"{new_base}-{counter}.mid"
+                    counter += 1
+                
+                new_base = new_name.replace('.mid', '')
+                
+                # Rename processed
+                os.rename(STORAGE_PROCESSED / final_filename, STORAGE_PROCESSED / new_name)
+                
+                # Rename original to match
+                old_raw_path = raw_path
+                new_raw_name = f"{new_base}_original.mid"
+                new_raw_path = STORAGE_RAW / new_raw_name
+                if not new_raw_path.exists():
+                    os.rename(old_raw_path, new_raw_path)
+                    print(f"DEBUG: Renamed raw to: {new_raw_name}")
+                
+                final_filename = new_name
+                print(f"DEBUG: Renamed to Gemini title: {final_filename}")
         
         metadata_updates = {
             "original_name": original_filename,
@@ -985,7 +993,7 @@ async def voice_command(audio: UploadFile = File(...)):
     try:
         # Get context for Gemini
         settings = get_settings_data()
-        api_key = settings.get('gemini_api_key')
+        api_key = settings.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
         if not api_key:
             return {"response_text": "Please set your Gemini API key in Settings first."}
             
@@ -1396,7 +1404,7 @@ async def upload_midi_orchestrator_base64(req: Base64MidiUploadRequest):
     # Run Gemini AI Analysis for auto-cleaning suggestion and metadata
     try:
         settings = get_settings_data()
-        api_key = settings.get('gemini_api_key')
+        api_key = settings.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
         if api_key:
             temp_midi_path = midi_orchestrator.uploads_dir / f"{job_id}.mid"
             midi_info = gemini.extract_midi_info(str(temp_midi_path))
@@ -1447,7 +1455,7 @@ async def upload_midi_orchestrator(file: UploadFile = File(...)):
     # Run Gemini AI Analysis for auto-cleaning suggestion and metadata
     try:
         settings = get_settings_data()
-        api_key = settings.get('gemini_api_key')
+        api_key = settings.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
         if api_key:
             temp_midi_path = midi_orchestrator.uploads_dir / f"{job_id}.mid"
             midi_info = gemini.extract_midi_info(str(temp_midi_path))

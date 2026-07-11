@@ -231,6 +231,7 @@ export const FilesScreen = () => {
     ['processed', 'raw'].forEach(group => {
       const groupFiles = files[group as keyof typeof files] || [];
       const filtered = groupFiles.filter(f => {
+        if (f.name.startsWith('hybrid:')) return false;
         if (!s) return true;
         const matchesName = f.name.toLowerCase().replace(/[-_]/g, ' ').includes(s);
         const matchesArtist = f.metadata?.artist?.toLowerCase().replace(/[-_]/g, ' ').includes(s);
