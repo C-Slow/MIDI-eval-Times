@@ -864,6 +864,7 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
 
 
 def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
+    _current_play['event'] = stop_event
     _log(f"Playback started for {path} at offset {start_offset} with audio_path={audio_path} and offset={global_offset_ms}ms")
     
     try:

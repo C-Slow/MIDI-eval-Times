@@ -206,7 +206,6 @@ class PlaylistManager:
                 self.start_time = None
                 self.track_length = None
                 self._stop_requested = False
-                self.stop_event.clear()
 
         t = threading.Thread(target=worker, daemon=True)
         self.play_thread = t
