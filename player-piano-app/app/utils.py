@@ -1046,7 +1046,14 @@ def playback_status():
         return {'playing': False}
         
     elapsed = (time.time() - start)
-    return {'playing': True, 'file': filename, 'elapsed': elapsed, 'length': length}
+    settings = load_settings()
+    return {
+        'playing': True, 
+        'file': filename, 
+        'elapsed': elapsed, 
+        'length': length,
+        'backend_audio_enabled': settings.get("backend_audio_enabled", False)
+    }
 
 
 def load_profiles():

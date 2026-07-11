@@ -70,6 +70,7 @@ interface AppState {
     elapsed: number;
     length: number;
     type: 'single' | 'queue' | null;
+    backend_audio_enabled?: boolean;
   };
   
   // Actions
@@ -139,6 +140,7 @@ export const useStore = create<AppState>((set) => ({
     elapsed: 0,
     length: 0,
     type: null,
+    backend_audio_enabled: false,
   },
 
   cleanModal: {

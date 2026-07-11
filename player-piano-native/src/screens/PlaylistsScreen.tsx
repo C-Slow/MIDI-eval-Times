@@ -7,32 +7,49 @@ import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { Colors } from '../constants/Colors';
 import { SmartPlaylistModal } from '../components/SmartPlaylistModal';
 
-const TrackListItem = React.memo(({ track, index, isSelected, themeColors, onPlay, onSelect, getDisplayName, artist }: any) => (
-  <TouchableOpacity 
-    style={[styles.trackItem, isSelected && { backgroundColor: themeColors.accentLight }, { borderBottomColor: themeColors.border, minHeight: 50, paddingVertical: 10 }]} 
-    onPress={onPlay}
-    onLongPress={onSelect}
-  >
-    <View style={styles.selectionIndicator}>
-      <Ionicons 
-        name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
-        size={22} 
-        color={isSelected ? themeColors.accent : themeColors.textMuted} 
-      />
-    </View>
-    <View style={styles.trackInfo}>
-      <Text style={[styles.trackNumber, { color: themeColors.textMuted }]}>{index + 1}.</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.trackName, { color: themeColors.text }]} numberOfLines={1}>{getDisplayName(track)}</Text>
-        {artist ? (
-          <Text style={{ fontSize: 10, color: themeColors.accent, fontWeight: '600', marginTop: -2 }} numberOfLines={1}>
-            {artist}
-          </Text>
-        ) : null}
+const getDisplayName = (filename: string, fileMetadataMap: Record<string, any>) => {
+  if (filename.startsWith("hybrid:")) {
+    const meta = fileMetadataMap[filename];
+    if (meta?.original_name) {
+      return meta.original_name.replace(/\.midi?$/i, '');
+    }
+    const job_id = filename.split(":", 1)[1];
+    return `Orchestrated - ${job_id.substring(0, 8)}`;
+  }
+  return filename.replace(/\.midi?$/i, '');
+};
+
+const TrackListItem = React.memo(({ track, index, isSelected, themeColors, onPlay, onSelect, displayName, artist }: any) => {
+  const handlePress = React.useCallback(() => onPlay(track), [onPlay, track]);
+  const handleLongPress = React.useCallback(() => onSelect(track), [onSelect, track]);
+
+  return (
+    <TouchableOpacity 
+      style={[styles.trackItem, isSelected && { backgroundColor: themeColors.accentLight }, { borderBottomColor: themeColors.border, minHeight: 50, paddingVertical: 10 }]} 
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+    >
+      <View style={styles.selectionIndicator}>
+        <Ionicons 
+          name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
+          size={22} 
+          color={isSelected ? themeColors.accent : themeColors.textMuted} 
+        />
       </View>
-    </View>
-  </TouchableOpacity>
-));
+      <View style={styles.trackInfo}>
+        <Text style={[styles.trackNumber, { color: themeColors.textMuted }]}>{index + 1}.</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.trackName, { color: themeColors.text }]} numberOfLines={1}>{displayName}</Text>
+          {artist ? (
+            <Text style={{ fontSize: 10, color: themeColors.accent, fontWeight: '600', marginTop: -2 }} numberOfLines={1}>
+              {artist}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export const PlaylistsScreen = () => {
   const playlists = useStore(state => state.playlists);
@@ -41,7 +58,7 @@ export const PlaylistsScreen = () => {
   const theme = useStore(state => state.theme);
   const isPianoConnected = useStore(state => state.isPianoConnected);
   const themeColors = Colors[theme];
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Optimize tab transition: render loader first
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const { play } = useAudioPlayer();
@@ -101,6 +118,14 @@ export const PlaylistsScreen = () => {
     });
   }, []);
 
+  const handlePlayTrack = React.useCallback((track: string) => {
+    if (selectedTracks.size > 0) {
+      toggleSelect(track);
+    } else {
+      play(track);
+    }
+  }, [selectedTracks.size, toggleSelect, play]);
+
   const clearSelection = () => setSelectedFiles(new Set());
 
   const fileMetadataMap = useMemo(() => {
@@ -126,10 +151,6 @@ export const PlaylistsScreen = () => {
     });
     return result;
   }, [playlists, expanded]);
-
-  const getDisplayName = (filename: string) => {
-    return filename.replace(/\.midi?$/i, '');
-  };
 
   const handleBulkRemove = (playlistName: string) => {
     if (selectedTracks.size === 0) return;
@@ -360,7 +381,9 @@ export const PlaylistsScreen = () => {
 
     // type === 'track'
     const { track, playlistName, index } = item;
-    const artist = fileMetadataMap[track]?.artist;
+    const meta = fileMetadataMap[track] || {};
+    const artist = meta.artist;
+    const displayName = getDisplayName(track, fileMetadataMap);
 
     return (
       <View style={{ backgroundColor: themeColors.surface, paddingLeft: 16 }}>
@@ -369,14 +392,14 @@ export const PlaylistsScreen = () => {
           index={index}
           isSelected={selectedTracks.has(track)}
           themeColors={themeColors}
-          onPlay={() => selectedTracks.size > 0 ? toggleSelect(track) : play(track)}
-          onSelect={() => toggleSelect(track)}
-          getDisplayName={getDisplayName}
+          onPlay={handlePlayTrack}
+          onSelect={toggleSelect}
+          displayName={displayName}
           artist={artist}
         />
       </View>
     );
-  }, [expanded, smartRules, themeColors, fileMetadataMap, selectedTracks, play, toggleSelect, getDisplayName]);
+  }, [expanded, smartRules, themeColors, fileMetadataMap, selectedTracks, handlePlayTrack, toggleSelect]);
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>

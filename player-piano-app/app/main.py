@@ -336,6 +336,40 @@ def list_files():
                 'metadata': meta,
                 'playlists': file_playlists.get(p.name, [])
             })
+            
+    # Include completed, validated MIDI Editor jobs as virtual hybrid tracks
+    from app.main import midi_orchestrator
+    for job_id, job in midi_orchestrator.status.items():
+        if job.get("status") == "completed" and job.get("validated", False):
+            hybrid_name = f"hybrid:{job_id}"
+            created_time = job.get("timestamp", 0)
+            midi_path = job.get("midi")
+            length = 0
+            if midi_path and os.path.exists(midi_path):
+                try:
+                    midi_info = _utils.get_midi_info(midi_path)
+                    length = midi_info.get('length', 0)
+                except Exception:
+                    pass
+            
+            processed.append({
+                'name': hybrid_name,
+                'length': length,
+                'size': 0,
+                'created': created_time,
+                'metadata': {
+                    'original_name': job.get('filename', ''),
+                    'artist': job.get('artist', 'Unknown'),
+                    'genre': job.get('genre', ''),
+                    'mood': job.get('mood', ''),
+                    'source': job.get('source', ''),
+                    'rating': job.get('rating', 0),
+                    'dnu': job.get('dnu', False),
+                    'comments': job.get('comments', '')
+                },
+                'playlists': file_playlists.get(hybrid_name, [])
+            })
+            
     return {'raw': raw, 'processed': processed}
 
 @app.get('/files/metadata/unique', dependencies=[Depends(verify_auth)])

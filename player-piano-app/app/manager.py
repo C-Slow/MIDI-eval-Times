@@ -236,6 +236,8 @@ class PlaylistManager:
         if playing and self.start_time:
             elapsed = time.time() - self.start_time
             
+        from app.utils import load_settings
+        settings = load_settings()
         return {
             'playing': playing,
             'current_playlist': self.current_playlist_name,
@@ -243,5 +245,6 @@ class PlaylistManager:
             'file': self.current_file,
             'elapsed': elapsed,
             'length': self.track_length,
-            'repeat': self.repeat
+            'repeat': self.repeat,
+            'backend_audio_enabled': settings.get("backend_audio_enabled", False)
         }

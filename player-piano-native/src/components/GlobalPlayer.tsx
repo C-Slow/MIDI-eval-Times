@@ -190,7 +190,7 @@ export const GlobalPlayer = () => {
           <View style={styles.titleRow}>
             {activePlayer === 'piano' && <Ionicons name="musical-notes" size={14} color={themeColors.accent} style={{marginRight: 5}} />}
             <Text style={[styles.fileName, { color: themeColors.text }]} numberOfLines={1}>
-              {currentData.isLoading ? 'Rendering...' : currentData.file?.replace(/\.midi?$/i, '') || 'Unknown'}
+              {currentData.isLoading ? 'Rendering...' : (currentFileMetadata?.original_name || currentData.file || '').replace(/\.midi?$/i, '') || 'Unknown'}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 1 }}>

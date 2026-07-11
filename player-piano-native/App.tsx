@@ -24,6 +24,7 @@ import { GlobalPlayer } from './src/components/GlobalPlayer';
 import { VoiceControl } from './src/components/VoiceControl';
 import { Colors } from './src/constants/Colors';
 import * as Notifications from 'expo-notifications';
+import { useBackingAudioSync } from './src/hooks/useBackingAudioSync';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -140,6 +141,9 @@ export default function App() {
   const isPianoPlaying = useStore(state => state.pianoPlayback.isPlaying);
   const themeColors = Colors[theme];
   
+  // Call backing audio sync hook
+  useBackingAudioSync();
+  
   const [appIsReady, setAppIsReady] = React.useState(false);
   const [showManualSplash, setShowManualSplash] = React.useState(true);
 
@@ -163,12 +167,12 @@ export default function App() {
       if (!s.playing) {
         const ps = await pianoApi.getPlaybackStatus();
         if (ps.playing) {
-          s = { isPlaying: true, file: ps.file, elapsed: ps.elapsed, length: ps.length, type: 'single' };
+          s = { isPlaying: true, file: ps.file, elapsed: ps.elapsed, length: ps.length, type: 'single', backend_audio_enabled: ps.backend_audio_enabled };
         } else {
-          s = { isPlaying: false, file: null, elapsed: 0, length: 0, type: null };
+          s = { isPlaying: false, file: null, elapsed: 0, length: 0, type: null, backend_audio_enabled: false };
         }
       } else {
-        s = { isPlaying: true, file: s.file, elapsed: s.elapsed, length: s.length, type: 'queue' };
+        s = { isPlaying: true, file: s.file, elapsed: s.elapsed, length: s.length, type: 'queue', backend_audio_enabled: s.backend_audio_enabled };
       }
       setPianoPlayback(s);
     } catch (e) {}
