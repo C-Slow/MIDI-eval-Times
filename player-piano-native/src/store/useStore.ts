@@ -65,6 +65,7 @@ interface AppState {
 
   backendAudioEnabled: boolean;
   backendAudioVolume: number;
+  selectedDevice: string;
 
   // Piano State (Hardware)
   pianoPlayback: {
@@ -93,6 +94,7 @@ interface AppState {
   setCurrentTab: (tab: string) => void;
   setBackendAudioEnabled: (enabled: boolean) => void;
   setBackendAudioVolume: (volume: number) => void;
+  setSelectedDevice: (device: string) => void;
   
   // Global Clean Modal
   cleanModal: {
@@ -141,6 +143,7 @@ export const useStore = create<AppState>((set) => ({
 
   backendAudioEnabled: false,
   backendAudioVolume: 1.0,
+  selectedDevice: '',
 
   pianoPlayback: {
     isPlaying: false,
@@ -198,6 +201,7 @@ export const useStore = create<AppState>((set) => ({
   setCurrentTab: (currentTab) => set({ currentTab }),
   setBackendAudioEnabled: (backendAudioEnabled) => set({ backendAudioEnabled }),
   setBackendAudioVolume: (backendAudioVolume) => set({ backendAudioVolume }),
+  setSelectedDevice: (selectedDevice) => set({ selectedDevice }),
 
   initialize: async () => {
     const serverUrl = await SecureStore.getItemAsync('serverUrl');
@@ -218,7 +222,8 @@ export const useStore = create<AppState>((set) => ({
       const settings = await midiOrchestratorApi.getAudioSettings();
       set({ 
         backendAudioEnabled: settings.backend_audio_enabled ?? false,
-        backendAudioVolume: settings.backend_audio_volume ?? 1.0
+        backendAudioVolume: settings.backend_audio_volume ?? 1.0,
+        selectedDevice: settings.selected_device ?? ''
       });
     } catch (e) {}
   },

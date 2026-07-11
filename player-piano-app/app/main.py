@@ -64,6 +64,8 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
         raise HTTPException(status_code=401, detail="Unauthorized")
     return True
 
+_last_client_seen_time = time.time()
+
 app = FastAPI(title='MIDI-eval Times')
 
 app.add_middleware(
@@ -74,6 +76,15 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+@app.middleware("http")
+async def update_last_client_seen(request, call_next):
+    global _last_client_seen_time
+    path = request.url.path
+    if any(p in path for p in ["/queue/status", "/playback/status", "/midi/status"]):
+        _last_client_seen_time = time.time()
+    response = await call_next(request)
+    return response
 
 # Startup Tasks & Cleanup
 @app.on_event("startup")
@@ -109,6 +120,38 @@ async def startup_event():
                 print(f"Scheduled backup failed: {e}")
     
     threading.Thread(target=daily_backup_worker, daemon=True).start()
+
+    # Start background thread to auto-disconnect Bluetooth speakers and disable backend audio toggle when client app is closed for >2 mins
+    def client_heartbeat_worker():
+        global _last_client_seen_time
+        print("DEBUG: Client heartbeat worker started.")
+        while True:
+            time.sleep(10)
+            try:
+                settings = utils.load_settings()
+                if settings.get("backend_audio_enabled", False):
+                    elapsed = time.time() - _last_client_seen_time
+                    if elapsed > 120:  # 2 minutes
+                        print(f"Heartbeat: Client inactive for {elapsed:.1f}s. Disconnecting speakers and disabling backend audio toggle...")
+                        
+                        # Disable backend audio in settings.json
+                        settings["backend_audio_enabled"] = False
+                        utils.save_settings(settings)
+                        
+                        # Disconnect Bluetooth device if connected
+                        device_name = utils._active_bt_device_name
+                        if not device_name:
+                            device_name = settings.get("selected_device", "")
+                        if device_name:
+                            try:
+                                utils.disconnect_paired_device(device_name)
+                            except Exception as ex:
+                                print(f"Heartbeat auto-disconnect error: {ex}")
+                            utils._active_bt_device_name = None
+            except Exception as e:
+                print(f"Error in client_heartbeat_worker: {e}")
+
+    threading.Thread(target=client_heartbeat_worker, daemon=True).start()
 
 @app.post("/system/backup", dependencies=[Depends(verify_auth)])
 async def trigger_manual_backup(background_tasks: BackgroundTasks):

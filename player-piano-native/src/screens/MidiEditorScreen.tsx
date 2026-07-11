@@ -557,7 +557,8 @@ export const MidiEditorScreen = () => {
   const setBackendAudioEnabled = useStore(state => state.setBackendAudioEnabled);
   const backendAudioVolume = useStore(state => state.backendAudioVolume);
   const setBackendAudioVolume = useStore(state => state.setBackendAudioVolume);
-  const [selectedDevice, setSelectedDevice] = useState('');
+  const selectedDevice = useStore(state => state.selectedDevice);
+  const setSelectedDevice = useStore(state => state.setSelectedDevice);
   const [audioDevices, setAudioDevices] = useState<any[]>([]);
 
   const pianoPlayback = useStore(state => state.pianoPlayback);
@@ -2586,20 +2587,12 @@ export const MidiEditorScreen = () => {
                 <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
 
                 <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold' }]}>
-                      Use Backend Speakers
-                    </Text>
-                    <Switch
-                      value={backendAudioEnabled}
-                      onValueChange={handleToggleBackendAudio}
-                      trackColor={{ false: themeColors.border, true: themeColors.accent }}
-                      thumbColor="#fff"
-                    />
-                  </View>
+                  <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold', marginBottom: 8 }]}>
+                    Backend Speaker Selection
+                  </Text>
 
-                  {backendAudioEnabled && (
-                    <View style={{ marginTop: 8 }}>
+                  {backendAudioEnabled ? (
+                    <View style={{ marginTop: 4 }}>
                       <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 6 }}>
                         Select Bluetooth Speaker:
                       </Text>
@@ -2644,6 +2637,10 @@ export const MidiEditorScreen = () => {
                         </ScrollView>
                       )}
                     </View>
+                  ) : (
+                    <Text style={{ color: themeColors.textMuted, fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
+                      Enable "Backend Speakers" at the top of the screen to connect a Bluetooth speaker.
+                    </Text>
                   )}
                 </View>
               </View>

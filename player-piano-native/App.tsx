@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Text, Platform, Image, AppState } from 'react-native';
+import { View, StyleSheet, Text, Platform, Image, AppState, Switch, ActivityIndicator } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,11 +31,15 @@ import { midiOrchestratorApi } from './src/services/api';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const HeaderVolumeSlider = () => {
+const HeaderControls = () => {
   const theme = useStore((state) => state.theme);
+  const backendAudioEnabled = useStore((state) => state.backendAudioEnabled);
+  const setBackendAudioEnabled = useStore((state) => state.setBackendAudioEnabled);
   const backendAudioVolume = useStore((state) => state.backendAudioVolume);
   const setBackendAudioVolume = useStore((state) => state.setBackendAudioVolume);
+  const selectedDevice = useStore((state) => state.selectedDevice);
   const themeColors = Colors[theme];
+  const [connecting, setConnecting] = React.useState(false);
 
   const handleVolumeChange = async (vol: number) => {
     setBackendAudioVolume(vol);
@@ -46,22 +50,67 @@ const HeaderVolumeSlider = () => {
     }
   };
 
+  const handleToggleBackendAudio = async (value: boolean) => {
+    setBackendAudioEnabled(value);
+    setConnecting(true);
+    try {
+      await midiOrchestratorApi.saveAudioSettings({
+        backend_audio_enabled: value,
+        selected_device: selectedDevice,
+        backend_audio_volume: backendAudioVolume
+      });
+      if (value && selectedDevice) {
+        await midiOrchestratorApi.connectBluetooth(selectedDevice);
+      } else {
+        await midiOrchestratorApi.disconnectBluetooth();
+      }
+    } catch (e) {
+      console.error('Failed to update audio settings', e);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
-      <Ionicons name="volume-medium" size={18} color={themeColors.text} />
-      <Slider
-        style={{ width: 100, height: 40 }}
-        minimumValue={0}
-        maximumValue={1}
-        minimumTrackTintColor={themeColors.accent}
-        maximumTrackTintColor={themeColors.textMuted}
-        thumbTintColor={themeColors.accent}
-        value={backendAudioVolume}
-        onValueChange={handleVolumeChange}
-      />
-      <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
-        {Math.round(backendAudioVolume * 100)}%
-      </Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
+      {/* Backend Audio Toggle */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Ionicons 
+          name={backendAudioEnabled ? "volume-high" : "volume-mute"} 
+          size={18} 
+          color={backendAudioEnabled ? themeColors.accent : themeColors.textMuted} 
+        />
+        {connecting ? (
+          <ActivityIndicator size="small" color={themeColors.accent} style={{ width: 40 }} />
+        ) : (
+          <Switch
+            value={backendAudioEnabled}
+            onValueChange={handleToggleBackendAudio}
+            trackColor={{ false: themeColors.border, true: themeColors.accent }}
+            thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+            style={Platform.OS === 'ios' ? { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] } : undefined}
+          />
+        )}
+      </View>
+
+      {/* Volume Slider (Only shown if enabled) */}
+      {backendAudioEnabled && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Slider
+            style={{ width: 100, height: 40 }}
+            minimumValue={0}
+            maximumValue={1}
+            minimumTrackTintColor={themeColors.accent}
+            maximumTrackTintColor={themeColors.textMuted}
+            thumbTintColor={themeColors.accent}
+            value={backendAudioVolume}
+            onValueChange={handleVolumeChange}
+          />
+          <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
+            {Math.round(backendAudioVolume * 100)}%
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -92,7 +141,7 @@ function MainTabs() {
           borderTopWidth: 1,
           borderTopColor: themeColors.border
         },
-        headerRight: backendAudioEnabled ? () => <HeaderVolumeSlider /> : undefined
+        headerRight: () => <HeaderControls />
       }}
       screenListeners={{
         state: (e) => {
