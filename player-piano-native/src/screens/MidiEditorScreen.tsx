@@ -553,10 +553,22 @@ export const MidiEditorScreen = () => {
   const [showSettings, setShowSettings] = useState(false);
 
   // Backend Audio / Speaker states
-  const [backendAudioEnabled, setBackendAudioEnabled] = useState(false);
+  const backendAudioEnabled = useStore(state => state.backendAudioEnabled);
+  const setBackendAudioEnabled = useStore(state => state.setBackendAudioEnabled);
+  const backendAudioVolume = useStore(state => state.backendAudioVolume);
+  const setBackendAudioVolume = useStore(state => state.setBackendAudioVolume);
   const [selectedDevice, setSelectedDevice] = useState('');
-  const [backendAudioVolume, setBackendAudioVolume] = useState(1.0);
   const [audioDevices, setAudioDevices] = useState<any[]>([]);
+
+  const pianoPlayback = useStore(state => state.pianoPlayback);
+
+  // If the piano stops playing, stop our local editor playback
+  useEffect(() => {
+    if (!pianoPlayback.isPlaying && isPlaying) {
+      console.log('MIDI Editor: Detected piano stopped playing, stopping local playback...');
+      stopPlayback();
+    }
+  }, [pianoPlayback.isPlaying, isPlaying]);
 
   // Load backend audio settings on mount
   useEffect(() => {
@@ -571,7 +583,7 @@ export const MidiEditorScreen = () => {
       }
     };
     initSettings();
-  }, []);
+  }, [setBackendAudioEnabled, setBackendAudioVolume]);
 
   // Fetch devices when settings panel is opened
   useEffect(() => {
@@ -627,40 +639,6 @@ export const MidiEditorScreen = () => {
       console.error('Failed to set volume', err);
     }
   };
-
-  useEffect(() => {
-    if (stage === 'visualizer' && backendAudioEnabled) {
-      navigation.setOptions({
-        headerRight: () => (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
-            <Ionicons name="volume-medium" size={18} color={themeColors.text} />
-            <Slider
-              style={{ width: 100, height: 40 }}
-              minimumValue={0}
-              maximumValue={1}
-              minimumTrackTintColor={themeColors.accent}
-              maximumTrackTintColor={themeColors.textMuted}
-              thumbTintColor={themeColors.accent}
-              value={backendAudioVolume}
-              onValueChange={handleVolumeChange}
-            />
-            <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
-              {Math.round(backendAudioVolume * 100)}%
-            </Text>
-          </View>
-        )
-      });
-    } else {
-      navigation.setOptions({
-        headerRight: undefined
-      });
-    }
-    return () => {
-      navigation.setOptions({
-        headerRight: undefined
-      });
-    };
-  }, [stage, backendAudioEnabled, backendAudioVolume, themeColors, navigation]);
 
   // Playback / Visualizer State
   const [notes, setNotes] = useState<Record<string, any[]>>({});

@@ -25,14 +25,52 @@ import { VoiceControl } from './src/components/VoiceControl';
 import { Colors } from './src/constants/Colors';
 import * as Notifications from 'expo-notifications';
 import { useBackingAudioSync } from './src/hooks/useBackingAudioSync';
+import Slider from '@react-native-community/slider';
+import { midiOrchestratorApi } from './src/services/api';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+
+const HeaderVolumeSlider = () => {
+  const theme = useStore((state) => state.theme);
+  const backendAudioVolume = useStore((state) => state.backendAudioVolume);
+  const setBackendAudioVolume = useStore((state) => state.setBackendAudioVolume);
+  const themeColors = Colors[theme];
+
+  const handleVolumeChange = async (vol: number) => {
+    setBackendAudioVolume(vol);
+    try {
+      await midiOrchestratorApi.setVolume(vol);
+    } catch (err) {
+      console.error('Failed to set volume', err);
+    }
+  };
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 5 }}>
+      <Ionicons name="volume-medium" size={18} color={themeColors.text} />
+      <Slider
+        style={{ width: 100, height: 40 }}
+        minimumValue={0}
+        maximumValue={1}
+        minimumTrackTintColor={themeColors.accent}
+        maximumTrackTintColor={themeColors.textMuted}
+        thumbTintColor={themeColors.accent}
+        value={backendAudioVolume}
+        onValueChange={handleVolumeChange}
+      />
+      <Text style={{ fontSize: 11, color: themeColors.text, width: 32, textAlign: 'right' }}>
+        {Math.round(backendAudioVolume * 100)}%
+      </Text>
+    </View>
+  );
+};
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const theme = useStore((state) => state.theme);
   const setCurrentTab = useStore((state) => state.setCurrentTab);
+  const backendAudioEnabled = useStore((state) => state.backendAudioEnabled);
   const themeColors = Colors[theme];
   
   return (
@@ -53,7 +91,8 @@ function MainTabs() {
           backgroundColor: themeColors.background,
           borderTopWidth: 1,
           borderTopColor: themeColors.border
-        }
+        },
+        headerRight: backendAudioEnabled ? () => <HeaderVolumeSlider /> : undefined
       }}
       screenListeners={{
         state: (e) => {

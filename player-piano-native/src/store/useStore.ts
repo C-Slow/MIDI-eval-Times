@@ -63,6 +63,9 @@ interface AppState {
     duration: number;
   };
 
+  backendAudioEnabled: boolean;
+  backendAudioVolume: number;
+
   // Piano State (Hardware)
   pianoPlayback: {
     isPlaying: boolean;
@@ -88,6 +91,8 @@ interface AppState {
   setPianoStatus: (connected: boolean, target: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setCurrentTab: (tab: string) => void;
+  setBackendAudioEnabled: (enabled: boolean) => void;
+  setBackendAudioVolume: (volume: number) => void;
   
   // Global Clean Modal
   cleanModal: {
@@ -133,6 +138,9 @@ export const useStore = create<AppState>((set) => ({
     position: 0,
     duration: 0,
   },
+
+  backendAudioEnabled: false,
+  backendAudioVolume: 1.0,
 
   pianoPlayback: {
     isPlaying: false,
@@ -188,6 +196,8 @@ export const useStore = create<AppState>((set) => ({
     SecureStore.setItemAsync('theme', theme);
   },
   setCurrentTab: (currentTab) => set({ currentTab }),
+  setBackendAudioEnabled: (backendAudioEnabled) => set({ backendAudioEnabled }),
+  setBackendAudioVolume: (backendAudioVolume) => set({ backendAudioVolume }),
 
   initialize: async () => {
     const serverUrl = await SecureStore.getItemAsync('serverUrl');
@@ -202,6 +212,15 @@ export const useStore = create<AppState>((set) => ({
     }
     if (theme) set({ theme });
     if (midiOrchestrateOffset) set({ midiOrchestrateOffset: parseInt(midiOrchestrateOffset, 10) || 0 });
+
+    try {
+      const { midiOrchestratorApi } = require('../services/api');
+      const settings = await midiOrchestratorApi.getAudioSettings();
+      set({ 
+        backendAudioEnabled: settings.backend_audio_enabled ?? false,
+        backendAudioVolume: settings.backend_audio_volume ?? 1.0
+      });
+    } catch (e) {}
   },
 
   logout: async () => {
