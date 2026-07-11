@@ -592,6 +592,29 @@ def list_audio_devices() -> list:
 
 def connect_paired_device(device_name_substring: str) -> bool:
     global _active_bt_device_name, _last_activity_timestamp
+    if not device_name_substring:
+        return False
+
+    # 1. If it's already an active/connected output device, bypass Win32 Bluetooth APIs
+    try:
+        import sounddevice as sd
+        try:
+            device_list = sd.query_devices()
+        except Exception:
+            device_list = []
+        for dev in device_list:
+            if dev['max_output_channels'] > 0:
+                name = dev['name'].strip()
+                # Check both directions for matching
+                if (device_name_substring.lower() in name.lower() or 
+                        name.lower() in device_name_substring.lower()):
+                    _last_activity_timestamp = time.time()
+                    _active_bt_device_name = name
+                    print(f"Device '{device_name_substring}' matches active output device '{name}'. Bypassing Bluetooth connection handshake.")
+                    return True
+    except Exception as e:
+        print(f"Error checking active output devices in connect_paired_device: {e}")
+
     if not IS_WINDOWS:
         return False
     try:
@@ -642,7 +665,10 @@ def connect_paired_device(device_name_substring: str) -> bool:
             while has_next:
                 name = device_info.szName
                 clean_name = re.sub(r'\s*\([^)]*\)', '', name).strip()
-                if device_name_substring.lower() in name.lower() or device_name_substring.lower() in clean_name.lower():
+                if (device_name_substring.lower() in name.lower() or 
+                    name.lower() in device_name_substring.lower() or
+                    device_name_substring.lower() in clean_name.lower() or 
+                    clean_name.lower() in device_name_substring.lower()):
                     found_target = True
                     _last_activity_timestamp = time.time()
                     _active_bt_device_name = name
