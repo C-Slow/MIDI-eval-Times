@@ -846,12 +846,86 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
                 outdata.fill(0)
                 raise sd.CallbackStop
 
-        stream = sd.OutputStream(
-            samplerate=fs, 
-            device=device_idx, 
-            channels=channels, 
-            callback=callback
-        )
+        start_time = time.time()
+        stream = None
+        for attempt in range(6):
+            try:
+                stream = sd.OutputStream(
+                    samplerate=fs, 
+                    device=device_idx, 
+                    channels=channels, 
+                    callback=callback
+                )
+                break
+            except Exception as e:
+                print(f"PortAudio open attempt {attempt+1} failed: {e}. Retrying in 0.5s...")
+                if attempt == 5:
+                    print(f"Attempting sample rate recovery/resampling fallback...")
+                    try:
+                        device_info = sd.query_devices(device_idx)
+                        default_fs = int(device_info['default_samplerate'])
+                        
+                        if fs != default_fs:
+                            print(f"Resampling audio from {fs}Hz to {default_fs}Hz...")
+                            duration = len(data) / fs
+                            num_samples = int(duration * default_fs)
+                            
+                            import numpy as np
+                            x_original = np.linspace(0, duration, len(data))
+                            x_new = np.linspace(0, duration, num_samples)
+                            
+                            resampled_channels = []
+                            for ch in range(channels):
+                                resampled_ch = np.interp(x_new, x_original, data[:, ch])
+                                resampled_channels.append(resampled_ch)
+                            data = np.column_stack(resampled_channels)
+                            fs = default_fs
+                            current_frame = 0  # reset frame pointer
+                            
+                        stream = sd.OutputStream(
+                            samplerate=fs, 
+                            device=device_idx, 
+                            channels=channels, 
+                            callback=callback
+                        )
+                        break
+                    except Exception as e2:
+                        print(f"Failed to recover/resample audio output stream: {e2}")
+                        return
+                
+                time.sleep(0.5)
+                # Re-query device in case connection state changed
+                if device_name:
+                    try:
+                        device_list = sd.query_devices()
+                        best_match_idx = None
+                        best_match_prio = -1
+                        for idx, dev in enumerate(device_list):
+                            if device_name.lower() in dev['name'].lower() and dev['max_output_channels'] > 0:
+                                api_name = sd.query_hostapis(dev['hostapi'])['name'].lower()
+                                prio = -1
+                                if 'wasapi' in api_name: prio = 2
+                                elif 'directsound' in api_name: prio = 1
+                                elif 'mme' in api_name: prio = 0
+                                if prio > best_match_prio:
+                                    best_match_prio = prio
+                                    best_match_idx = idx
+                        device_idx = best_match_idx
+                    except:
+                        pass
+        
+        if stream is None:
+            print("Failed to open audio output stream after retries.")
+            return
+
+        actual_delay_spent = time.time() - start_time
+        if actual_delay_spent > 0.05:
+            print(f"Compensating for retry delay of {actual_delay_spent:.2f} seconds...")
+            frames_to_skip = int(actual_delay_spent * fs)
+            if frames_to_skip < len(data):
+                data = data[frames_to_skip:]
+            else:
+                return
         
         with stream:
             while stream.active:
