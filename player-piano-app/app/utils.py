@@ -877,11 +877,13 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
                 audio_delay = abs(global_offset_ms) / 1000.0
                 
             device_name = settings.get("selected_device")
-            threading.Thread(
+            t_audio = threading.Thread(
                 target=_play_audio_thread, 
                 args=(audio_path, start_offset, audio_delay, stop_event, device_name),
                 daemon=True
-            ).start()
+            )
+            _current_play['audio_thread'] = t_audio
+            t_audio.start()
 
         out = _get_out(port_name)
         if not out:
@@ -961,7 +963,7 @@ def play_midi_blocking(path: str, port_name: str = None, stop_event=None, start_
 
 
 # Simple global playback controller for ad-hoc playback (not playlist manager)
-_current_play = {'thread': None, 'event': None, 'path': None, 'file': None, 'start': None, 'port': None, 'length': None, 'seek_offset': 0}
+_current_play = {'thread': None, 'event': None, 'path': None, 'file': None, 'start': None, 'port': None, 'length': None, 'seek_offset': 0, 'audio_thread': None}
 
 def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
     # stop any existing playback
@@ -1025,6 +1027,7 @@ def stop_current_play():
     
     # clear metadata
     _current_play['thread'] = None
+    _current_play['audio_thread'] = None
     _current_play['event'] = None
     _current_play['path'] = None
     _current_play['file'] = None
@@ -1035,7 +1038,10 @@ def stop_current_play():
 
 
 def playback_status():
-    if _current_play.get('thread') is None or not _current_play['thread'].is_alive():
+    midi_alive = _current_play.get('thread') is not None and _current_play['thread'].is_alive()
+    audio_alive = _current_play.get('audio_thread') is not None and _current_play['audio_thread'].is_alive()
+    
+    if not midi_alive and not audio_alive:
         return {'playing': False}
     
     start = _current_play.get('start')

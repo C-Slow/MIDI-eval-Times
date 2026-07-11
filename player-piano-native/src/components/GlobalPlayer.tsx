@@ -82,10 +82,11 @@ export const GlobalPlayer = () => {
   };
 
   const handleStop = async () => {
-    if (activePlayer === 'local') {
-      stopLocal();
-    } else {
+    stopLocal();
+    try {
       await pianoApi.stop();
+    } catch (e) {
+      console.error('Failed to stop piano/backend playback', e);
     }
   };
 
