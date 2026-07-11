@@ -411,18 +411,28 @@ export default function App() {
   // Start/stop polling based on app visibility and login state
   React.useEffect(() => {
     if (pollTimer.current) {
-      clearInterval(pollTimer.current);
+      clearTimeout(pollTimer.current);
       pollTimer.current = null;
     }
 
+    let active = true;
+
+    const runPoll = async () => {
+      if (!active) return;
+      await fetchPianoStatus();
+      if (active) {
+        pollTimer.current = setTimeout(runPoll, 2000);
+      }
+    };
+
     if (isLoggedIn && appStateVisible === 'active') {
-      fetchPianoStatus();
-      pollTimer.current = setInterval(fetchPianoStatus, 2000);
+      runPoll();
     }
 
     return () => {
+      active = false;
       if (pollTimer.current) {
-        clearInterval(pollTimer.current);
+        clearTimeout(pollTimer.current);
         pollTimer.current = null;
       }
     };

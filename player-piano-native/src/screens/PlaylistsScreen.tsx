@@ -130,11 +130,16 @@ export const PlaylistsScreen = () => {
 
   const fileMetadataMap = useMemo(() => {
     const map: Record<string, any> = {};
+    if (!expanded) return map;
+    const tracks = playlists[expanded] || [];
+    const trackSet = new Set(Array.isArray(tracks) ? tracks : []);
     [...files.processed, ...files.raw].forEach(f => {
-      map[f.name] = f.metadata;
+      if (trackSet.has(f.name)) {
+        map[f.name] = f.metadata;
+      }
     });
     return map;
-  }, [files]);
+  }, [files, playlists, expanded]);
 
   const flattenedData = useMemo(() => {
     const result: any[] = [];
@@ -401,6 +406,22 @@ export const PlaylistsScreen = () => {
     );
   }, [expanded, smartRules, themeColors, fileMetadataMap, selectedTracks, handlePlayTrack, toggleSelect]);
 
+  const getItemLayout = React.useCallback((data: any, index: number) => {
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      const item = data[i];
+      if (item?.type === 'header') {
+        offset += 58;
+      } else {
+        const meta = fileMetadataMap[item?.track] || {};
+        offset += meta.artist ? 52 : 50;
+      }
+    }
+    const currentItem = data[index];
+    const length = currentItem?.type === 'header' ? 58 : ((fileMetadataMap[currentItem?.track] || {}).artist ? 52 : 50);
+    return { length, offset, index };
+  }, [fileMetadataMap]);
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* Create Playlist Modal */}
@@ -463,8 +484,9 @@ export const PlaylistsScreen = () => {
       ) : (
         <FlatList
           data={flattenedData}
-          keyExtractor={(item, index) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}-${index}`}
+          keyExtractor={(item) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}`}
           renderItem={renderItem}
+          getItemLayout={getItemLayout}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, alignItems: 'center' }}>
