@@ -561,12 +561,23 @@ export const MidiEditorScreen = () => {
   const [audioDevices, setAudioDevices] = useState<any[]>([]);
 
   const pianoPlayback = useStore(state => state.pianoPlayback);
+  const pianoStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (pianoPlayback.isPlaying) {
+      pianoStartedRef.current = true;
+    }
+  }, [pianoPlayback.isPlaying]);
 
   // If the piano stops playing, stop our local editor playback
   useEffect(() => {
-    if (!pianoPlayback.isPlaying && isPlaying) {
-      console.log('MIDI Editor: Detected piano stopped playing, stopping local playback...');
-      stopPlayback();
+    if (isPlaying) {
+      if (!pianoPlayback.isPlaying && pianoStartedRef.current) {
+        console.log('MIDI Editor: Detected piano stopped playing, stopping local playback...');
+        stopPlayback();
+      }
+    } else {
+      pianoStartedRef.current = false;
     }
   }, [pianoPlayback.isPlaying, isPlaying]);
 
