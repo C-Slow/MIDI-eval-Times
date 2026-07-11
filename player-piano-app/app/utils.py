@@ -945,6 +945,8 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
     _current_play['event'] = stop_event
     _log(f"Playback started for {path} at offset {start_offset} with audio_path={audio_path} and offset={global_offset_ms}ms")
     
+    audio_stop_event = Event()
+    
     try:
         mid = mido.MidiFile(path)
         settings = load_settings()
@@ -958,7 +960,7 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
             device_name = settings.get("selected_device")
             t_audio = threading.Thread(
                 target=_play_audio_thread, 
-                args=(audio_path, start_offset, audio_delay, stop_event, device_name),
+                args=(audio_path, start_offset, audio_delay, audio_stop_event, device_name),
                 daemon=True
             )
             _current_play['audio_thread'] = t_audio
@@ -1023,6 +1025,7 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
     except Exception as e:
         _log(f"Playback error: {e}")
     finally:
+        audio_stop_event.set()
         _log("Playback internal finished")
 
 
