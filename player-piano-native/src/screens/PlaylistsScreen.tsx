@@ -71,7 +71,7 @@ export const PlaylistsScreen = () => {
   const [smartModal, setSmartModal] = useState<{ 
     visible: boolean, 
     name: string, 
-    filterType: 'artist' | 'genre' | 'mood' | 'source' | 'rating' | 'all',
+    filterType: 'artist' | 'genre' | 'mood' | 'source' | 'rating' | 'validated' | 'all',
     filterValue: string,
     excludeDnu: boolean,
     filters?: Array<{ filter_type: string, filter_value: string }>
