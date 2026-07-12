@@ -806,9 +806,11 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
     # Gather candidates (Normal processed MIDIs + Validated MIDI Editor projects)
     candidates = []
     for fn in processed_files:
+        meta = all_meta.get(fn, {}).copy()
+        meta['validated'] = False
         candidates.append({
             'id': fn,
-            'meta': all_meta.get(fn, {})
+            'meta': meta
         })
         
     for job_id, job in midi_orchestrator.status.items():
@@ -821,7 +823,8 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
                     'mood': job.get('mood', ''),
                     'source': job.get('source', ''),
                     'rating': job.get('rating', 0),
-                    'dnu': job.get('dnu', False)
+                    'dnu': job.get('dnu', False),
+                    'validated': True
                 }
             })
             
@@ -866,6 +869,11 @@ def generate_smart_playlist_logic(name: str, filters: List[Dict[str, str]], excl
                                     break
                     except ValueError:
                         pass
+            elif f_type == 'validated':
+                f_val_bool = str(f_val).lower().strip() in ('true', '1', 'yes')
+                track_validated = bool(meta.get('validated', False))
+                if track_validated == f_val_bool:
+                    filter_match = True
             else:
                 val = str(meta.get(f_type) or '').lower().strip().replace('-', ' ').replace('_', ' ')
                 f_val_lower = str(f_val).lower().strip().replace('-', ' ').replace('_', ' ')
