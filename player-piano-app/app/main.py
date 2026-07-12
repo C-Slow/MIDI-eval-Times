@@ -1209,6 +1209,17 @@ def save_settings(settings: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post('/settings/reset_target', dependencies=[Depends(verify_auth)])
+def reset_target_device():
+    try:
+        settings = get_settings_data()
+        settings['target_device'] = ''
+        SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding='utf-8')
+        utils.set_auto_connect_target('')
+        return {'status': 'success', 'message': 'Target device reset to empty'}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/mp3/upload", dependencies=[Depends(verify_auth)])
 async def upload_mp3(file: UploadFile = File(...), route_mode: str = "piano", engine: str = "bytedance", engine_sensitivity: float = 1.0, include_other: bool = False):
     import uuid

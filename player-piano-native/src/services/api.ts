@@ -408,6 +408,10 @@ export const systemApi = {
   createBackup: async () => {
     const res = await api.post('/system/backup');
     return res.data;
+  },
+  resetTargetDevice: async () => {
+    const res = await api.post('/settings/reset_target');
+    return res.data;
   }
 };
 

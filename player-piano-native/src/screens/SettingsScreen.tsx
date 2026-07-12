@@ -15,8 +15,34 @@ export const SettingsScreen = () => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isResettingTarget, setIsResettingTarget] = useState(false);
 
   const themeColors = Colors[theme];
+
+  const handleResetTarget = async () => {
+    Alert.alert(
+      'Reset Connection Target',
+      'This will clear the target_device setting. Proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            setIsResettingTarget(true);
+            try {
+              await systemApi.resetTargetDevice();
+              Alert.alert('Reset Successful', 'The target connection device has been reset. Please reconnect.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to reset target device.');
+            } finally {
+              setIsResettingTarget(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const handleCreateBackup = async () => {
     setIsBackingUp(true);
@@ -335,6 +361,22 @@ export const SettingsScreen = () => {
           <View style={{ marginLeft: 10 }}>
             <Text style={[styles.cardTitle, { color: themeColors.text }]}>Create Backup Now</Text>
             <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>Saves snapshots of library and metadata</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.card, { backgroundColor: themeColors.surface, borderColor: themeColors.border, flexDirection: 'row', alignItems: 'center', marginTop: 10 }]} 
+          onPress={handleResetTarget}
+          disabled={isResettingTarget}
+        >
+          {isResettingTarget ? (
+            <ActivityIndicator color={themeColors.accent} size="small" />
+          ) : (
+            <Ionicons name="refresh-circle-outline" size={20} color={themeColors.accent} />
+          )}
+          <View style={{ marginLeft: 10 }}>
+            <Text style={[styles.cardTitle, { color: themeColors.text }]}>Reset Bluetooth Target</Text>
+            <Text style={{ color: themeColors.textMuted, fontSize: 11 }}>Clears target device config to resolve Bluetooth hangs</Text>
           </View>
         </TouchableOpacity>
       </View>
