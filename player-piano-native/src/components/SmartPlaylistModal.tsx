@@ -8,7 +8,7 @@ interface SmartPlaylistModalProps {
   visible: boolean;
   initialData?: {
     name: string;
-    filterType?: 'artist' | 'genre' | 'mood' | 'source' | 'rating' | 'all';
+    filterType?: 'artist' | 'genre' | 'mood' | 'source' | 'rating' | 'validated' | 'all';
     filterValue?: string;
     excludeDnu: boolean;
     filters?: Array<{ filter_type: string, filter_value: string }>;
@@ -59,7 +59,10 @@ export const SmartPlaylistModal = React.memo(({ visible, initialData, onClose, o
   const handleUpdateFilterType = (index: number, type: string) => {
     setFilters(filters.map((f, idx) => {
       if (idx === index) {
-        return { filter_type: type, filter_value: type === 'all' ? '*' : '' };
+        return { 
+          filter_type: type, 
+          filter_value: type === 'all' ? '*' : type === 'validated' ? 'true' : '' 
+        };
       }
       return f;
     }));
@@ -144,7 +147,7 @@ export const SmartPlaylistModal = React.memo(({ visible, initialData, onClose, o
                 
                 {/* Filter Type Selector Chips */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                  {['artist', 'genre', 'mood', 'source', 'rating', 'all'].map((type) => (
+                  {['artist', 'genre', 'mood', 'source', 'rating', 'validated', 'all'].map((type) => (
                     <TouchableOpacity 
                       key={type} 
                       onPress={() => handleUpdateFilterType(index, type)}
@@ -164,34 +167,83 @@ export const SmartPlaylistModal = React.memo(({ visible, initialData, onClose, o
                   <>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={[styles.label, { color: themeColors.textMuted, fontSize: 10 }]}>
-                        {filter.filter_type === 'rating' ? 'Rating (0=unrated, 1-5, or e.g. 4,5)' : 'Containing Text'}
+                        {filter.filter_type === 'rating' 
+                          ? 'Rating (0=unrated, 1-5, or e.g. 4,5)' 
+                          : filter.filter_type === 'validated'
+                          ? 'Validation Status'
+                          : 'Containing Text'}
                       </Text>
-                      {filter.filter_type !== 'rating' && (
+                      {filter.filter_type !== 'rating' && filter.filter_type !== 'validated' && (
                         <Text style={{ fontSize: 9, color: themeColors.textMuted }}>Comma-separated (OR)</Text>
                       )}
                     </View>
 
-                    <TextInput
-                      style={[
-                        styles.modalInput, 
-                        { 
-                          borderColor: themeColors.border, 
-                          backgroundColor: themeColors.background, 
-                          color: themeColors.text, 
-                          marginBottom: 8, 
-                          fontSize: 14, 
-                          padding: 10,
-                          textAlign: 'left'
-                        }
-                      ]}
-                      value={filter.filter_value}
-                      onChangeText={(val) => handleUpdateFilterValue(index, val)}
-                      placeholder={filter.filter_type === 'rating' ? "e.g. 0 or 4,5" : "e.g. Final Fantasy, Chrono Trigger"}
-                      placeholderTextColor={themeColors.textMuted}
-                      keyboardType={filter.filter_type === 'rating' ? 'default' : 'default'}
-                    />
+                    {filter.filter_type === 'validated' ? (
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+                        <TouchableOpacity
+                          style={[
+                            styles.filterChip,
+                            { 
+                              flex: 1, 
+                              height: 40, 
+                              justifyContent: 'center', 
+                              alignItems: 'center',
+                              backgroundColor: filter.filter_value.toLowerCase() === 'true' ? themeColors.accent : themeColors.surfaceSecondary,
+                              borderColor: themeColors.border,
+                              borderWidth: 1,
+                              borderRadius: 8
+                            }
+                          ]}
+                          onPress={() => handleUpdateFilterValue(index, 'true')}
+                        >
+                          <Text style={{ color: filter.filter_value.toLowerCase() === 'true' ? '#fff' : themeColors.text, fontWeight: '600', fontSize: 12 }}>
+                            Validated (Hybrid Files)
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.filterChip,
+                            { 
+                              flex: 1, 
+                              height: 40, 
+                              justifyContent: 'center', 
+                              alignItems: 'center',
+                              backgroundColor: filter.filter_value.toLowerCase() === 'false' ? themeColors.accent : themeColors.surfaceSecondary,
+                              borderColor: themeColors.border,
+                              borderWidth: 1,
+                              borderRadius: 8
+                            }
+                          ]}
+                          onPress={() => handleUpdateFilterValue(index, 'false')}
+                        >
+                          <Text style={{ color: filter.filter_value.toLowerCase() === 'false' ? '#fff' : themeColors.text, fontWeight: '600', fontSize: 12 }}>
+                            Not Validated (Normal Files)
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TextInput
+                        style={[
+                          styles.modalInput, 
+                          { 
+                            borderColor: themeColors.border, 
+                            backgroundColor: themeColors.background, 
+                            color: themeColors.text, 
+                            marginBottom: 8, 
+                            fontSize: 14, 
+                            padding: 10,
+                            textAlign: 'left'
+                          }
+                        ]}
+                        value={filter.filter_value}
+                        onChangeText={(val) => handleUpdateFilterValue(index, val)}
+                        placeholder={filter.filter_type === 'rating' ? "e.g. 0 or 4,5" : "e.g. Final Fantasy, Chrono Trigger"}
+                        placeholderTextColor={themeColors.textMuted}
+                        keyboardType={filter.filter_type === 'rating' ? 'default' : 'default'}
+                      />
+                    )}
 
-                    {filter.filter_type !== 'rating' && uniqueMetadata[filter.filter_type] && uniqueMetadata[filter.filter_type].length > 0 && (
+                    {filter.filter_type !== 'rating' && filter.filter_type !== 'validated' && uniqueMetadata[filter.filter_type] && uniqueMetadata[filter.filter_type].length > 0 && (
                       <ScrollView 
                         horizontal 
                         showsHorizontalScrollIndicator={false} 
