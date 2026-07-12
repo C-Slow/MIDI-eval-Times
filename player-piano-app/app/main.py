@@ -379,11 +379,25 @@ def list_files():
             info = _utils.get_midi_info(str(p))
             # Pull from the local dictionary instead of hitting the disk again
             meta = all_metadata.get(p.name, {})
+            
+            # Resolve creation time from raw original file if it exists, to preserve upload date across re-cleans
+            created_time = info.get('created')
+            p_path = Path(p.name)
+            raw_name = f"{p_path.stem}_original{p_path.suffix}"
+            raw_path = STORAGE_RAW / raw_name
+            if raw_path.exists():
+                try:
+                    raw_info = _utils.get_midi_info(str(raw_path))
+                    if raw_info.get('created'):
+                        created_time = raw_info.get('created')
+                except Exception:
+                    pass
+
             processed.append({
                 'name': p.name, 
                 'length': info.get('length'), 
                 'size': info.get('size'),
-                'created': info.get('created'),
+                'created': created_time,
                 'metadata': meta,
                 'playlists': file_playlists.get(p.name, [])
             })
