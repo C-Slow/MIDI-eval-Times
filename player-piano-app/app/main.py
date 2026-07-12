@@ -1061,7 +1061,8 @@ async def voice_command(audio: UploadFile = File(...)):
             f_type = result.get("filter_type")
             f_val = result.get("filter_value")
             try:
-                await anyio.to_thread.run_sync(generate_smart_playlist_logic, "Voice Request", f_type, f_val, True)
+                filters = [{'filter_type': f_type, 'filter_value': f_val}]
+                await anyio.to_thread.run_sync(generate_smart_playlist_logic, "Voice Request", filters, True)
                 # Use port_name=None to default to active BLE connection
                 req = PlayPlaylistRequest(port_name=None)
                 await anyio.to_thread.run_sync(play_playlist, req, "Voice Request")
