@@ -189,9 +189,25 @@ export const Mp3OrchestrateScreen = () => {
       if (pianoSound) { await pianoSound.unloadAsync(); setPianoSound(null); }
 
       console.log('[Orchestrate] Reading file...');
-      const base64Data = await FileSystem.readAsStringAsync(file.uri, {
-        encoding: 'base64',
-      });
+      let base64Data = '';
+      if (Platform.OS === 'web') {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const resultStr = reader.result as string;
+            const base64 = resultStr.split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Data = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: 'base64',
+        });
+      }
 
       console.log('[Orchestrate] Uploading with mode:', uploadRouteMode, 'engine:', uploadEngine, 'sensitivity:', uploadSensitivity, 'includeOther:', uploadIncludeOther);
       const res = await mp3Api.upload(file.name || 'audio.mp3', base64Data, uploadRouteMode, uploadEngine, uploadSensitivity, uploadIncludeOther);

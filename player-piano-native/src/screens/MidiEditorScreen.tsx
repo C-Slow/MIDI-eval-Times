@@ -1061,10 +1061,26 @@ export const MidiEditorScreen = () => {
         }
 
         try {
-          // Read file content as Base64 to guarantee 100% network upload stability on Android
-          const base64Data = await FileSystem.readAsStringAsync(asset.uri, {
-            encoding: 'base64'
-          });
+          // Read file content as Base64 (using browser FileReader on Web, FileSystem on Mobile)
+          let base64Data = '';
+          if (Platform.OS === 'web') {
+            const response = await fetch(asset.uri);
+            const blob = await response.blob();
+            base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const resultStr = reader.result as string;
+                const base64 = resultStr.split(',')[1];
+                resolve(base64);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          } else {
+            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: 'base64',
+            });
+          }
 
           const data = await midiOrchestratorApi.uploadBase64(asset.name, base64Data);
           uploadedJobs.push(data);

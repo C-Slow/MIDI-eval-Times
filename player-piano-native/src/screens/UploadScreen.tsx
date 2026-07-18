@@ -41,10 +41,26 @@ export const UploadScreen = () => {
         setProgress(p => ({ ...p, current: i + 1 }));
         console.log(`[Upload] (${i+1}/${totalFiles}) Processing: ${file.name}`);
 
-        // Read file as Base64 to ensure maximum reliability on Android
-        const base64Data = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: 'base64',
-        });
+        // Read file as Base64 (using browser FileReader on Web, FileSystem on Mobile)
+        let base64Data = '';
+        if (Platform.OS === 'web') {
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+          base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const resultStr = reader.result as string;
+              const base64 = resultStr.split(',')[1];
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } else {
+          base64Data = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: 'base64',
+          });
+        }
 
         // Use standard JSON POST which is much more stable than Multipart on Android
         const response = await fetch(`${serverUrl}/upload_base64`, {
