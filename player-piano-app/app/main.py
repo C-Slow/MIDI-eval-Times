@@ -185,6 +185,16 @@ except Exception:
 STATIC_DIR = Path(__file__).resolve().parent / 'static'
 if STATIC_DIR.exists():
     app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
+    app.mount('/_expo', StaticFiles(directory=str(STATIC_DIR / '_expo')), name='_expo')
+    app.mount('/assets', StaticFiles(directory=str(STATIC_DIR / 'assets')), name='assets')
+
+@app.get('/favicon.ico')
+def get_favicon():
+    return FileResponse(STATIC_DIR / 'favicon.ico')
+
+@app.get('/metadata.json')
+def get_metadata():
+    return FileResponse(STATIC_DIR / 'metadata.json')
 
 # Initialize playlist manager
 PLAYLISTS_FILE = str(Path(__file__).resolve().parents[2] / 'storage' / 'playlists.json')
