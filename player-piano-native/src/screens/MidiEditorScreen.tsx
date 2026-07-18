@@ -895,24 +895,80 @@ export const MidiEditorScreen = () => {
 
   const handleSelectMp3Vocals = async (mp3JobId: string) => {
     try {
-      setLoading(true);
       setShowMp3ImportModal(false);
       const job = mp3Jobs.find(j => j.job_id === mp3JobId);
       const origName = job?.original_name || job?.filename || 'Untitled MP3 Job';
-      setImportedVocalsJobId(mp3JobId);
-      setImportedVocalsOriginalName(origName);
-      setImportedVocalsEnabled(true);
-      setImportedVocalsDelayMs(0);
-      setImportedVocalsVolumeFactor(1.0);
-      setImportedVocalsBreaklines([]);
       
-      const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
-      setVocalsWaveformEnvelope(waveData.envelope || null);
+      const applySelection = async (keep: boolean) => {
+        try {
+          setLoading(true);
+          setImportedVocalsJobId(mp3JobId);
+          setImportedVocalsOriginalName(origName);
+          setImportedVocalsEnabled(true);
+          
+          if (!keep) {
+            setImportedVocalsDelayMs(0);
+            setImportedVocalsVolumeFactor(1.0);
+            setImportedVocalsBreaklines([]);
+          }
+          
+          const waveData = await midiOrchestratorApi.getVocalsWaveform(mp3JobId);
+          setVocalsWaveformEnvelope(waveData.envelope || null);
+        } catch (e: any) {
+          console.error(e);
+          Alert.alert('Waveform Error', 'Could not load vocal waveform details.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      if (importedVocalsBreaklines && importedVocalsBreaklines.length > 0) {
+        if (Platform.OS === 'web') {
+          const retain = window.confirm(
+            'Would you like to RETAIN your existing breakline sync adjustments for the new track?\n\n' +
+            'Click OK to Retain adjustments.\n' +
+            'Click Cancel to choose Clear or Cancel.'
+          );
+          if (retain) {
+            await applySelection(true);
+          } else {
+            const clear = window.confirm(
+              'Would you like to CLEAR all adjustments for the new track?\n\n' +
+              'Click OK to Clear adjustments.\n' +
+              'Click Cancel to Abort track swapping.'
+            );
+            if (clear) {
+              await applySelection(false);
+            }
+          }
+        } else {
+          Alert.alert(
+            'Existing Adjustments',
+            'Would you like to retain your existing breakline sync adjustments for the new track?',
+            [
+              {
+                text: 'Retain Adjustments',
+                onPress: () => applySelection(true),
+              },
+              {
+                text: 'Clear Adjustments',
+                onPress: () => applySelection(false),
+                style: 'destructive',
+              },
+              {
+                text: 'Cancel',
+                onPress: () => {},
+                style: 'cancel',
+              }
+            ]
+          );
+        }
+      } else {
+        await applySelection(false);
+      }
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Waveform Error', 'Could not load vocal waveform details.');
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', 'An unexpected error occurred while selecting the track.');
     }
   };
 
