@@ -351,13 +351,19 @@ function MainTabs() {
 }
 
 // Configure how notifications behave
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+if (Platform.OS !== 'web') {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch (e) {
+    console.warn('Failed to set notification handler:', e);
+  }
+}
 
 const REMOTE_ID = 'yamaha-remote-control';
 
@@ -439,6 +445,7 @@ export default function App() {
   }, [isLoggedIn, appStateVisible, fetchPianoStatus]);
 
   const showRemote = React.useCallback(async () => {
+    if (Platform.OS === 'web') return;
     try {
       await Notifications.scheduleNotificationAsync({
         identifier: REMOTE_ID,
@@ -460,24 +467,26 @@ export default function App() {
         // Initialize store
         initialize();
         
-        // Setup Notifications
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') {
-          await Notifications.requestPermissionsAsync();
-        }
+        // Setup Notifications (Only on mobile)
+        if (Platform.OS !== 'web') {
+          const { status } = await Notifications.getPermissionsAsync();
+          if (status !== 'granted') {
+            await Notifications.requestPermissionsAsync();
+          }
 
-        Notifications.setNotificationCategoryAsync('player_controls', [
-          {
-            identifier: 'skip',
-            buttonTitle: 'Skip Track',
-            options: { opensAppToForeground: false },
-          },
-          {
-            identifier: 'stop',
-            buttonTitle: 'Stop All',
-            options: { opensAppToForeground: false },
-          },
-        ]);
+          Notifications.setNotificationCategoryAsync('player_controls', [
+            {
+              identifier: 'skip',
+              buttonTitle: 'Skip Track',
+              options: { opensAppToForeground: false },
+            },
+            {
+              identifier: 'stop',
+              buttonTitle: 'Stop All',
+              options: { opensAppToForeground: false },
+            },
+          ]);
+        }
 
         // Artificial delay for the "Full Splash Experience"
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -490,23 +499,28 @@ export default function App() {
 
     prepare();
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      const action = response.actionIdentifier;
-      const { pianoApi } = require('./src/services/api');
-      try {
-        if (action === 'skip') {
-          await pianoApi.next();
-        } else if (action === 'stop') {
-          await pianoApi.stop();
-          stopAll();
+    let subscription: any;
+    if (Platform.OS !== 'web') {
+      subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+        const action = response.actionIdentifier;
+        const { pianoApi } = require('./src/services/api');
+        try {
+          if (action === 'skip') {
+            await pianoApi.next();
+          } else if (action === 'stop') {
+            await pianoApi.stop();
+            stopAll();
+          }
+        } catch (e) {
+          console.error("Notification action failed", e);
         }
-      } catch (e) {
-        console.error("Notification action failed", e);
-      }
-    });
+      });
+    }
 
     return () => {
-      subscription.remove();
+      if (subscription) {
+        subscription.remove();
+      }
     };
   }, [initialize, stopAll]);
 
@@ -525,14 +539,18 @@ export default function App() {
     }
   }, [theme, themeColors]);
 
-  const onLayoutRootView = React.useCallback(async () => {
+  // Handle splash screen hiding cross-platform via useEffect
+  React.useEffect(() => {
     if (appIsReady) {
-      // Hide the native splash immediately
-      await SplashScreen.hideAsync().catch(() => {});
-      // Fade out the manual splash
-      setTimeout(() => setShowManualSplash(false), 400);
+      SplashScreen.hideAsync().catch(() => {});
+      const timer = setTimeout(() => setShowManualSplash(false), 400);
+      return () => clearTimeout(timer);
     }
   }, [appIsReady]);
+
+  const onLayoutRootView = React.useCallback(async () => {
+    // Keep as a fallback no-op or layout trigger
+  }, []);
 
   if (!appIsReady) {
     // While app is NOT ready, we are still showing the NATIVE splash screen

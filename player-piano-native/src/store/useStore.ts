@@ -1,6 +1,65 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
+const webStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  }
+};
+
+const getSecureItem = async (key: string): Promise<string | null> => {
+  if (isWeb) {
+    return webStorage.getItem(key);
+  }
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch (e) {
+    console.warn(`SecureStore.getItemAsync failed for key ${key}:`, e);
+    return null;
+  }
+};
+
+const setSecureItem = async (key: string, value: string): Promise<void> => {
+  if (isWeb) {
+    webStorage.setItem(key, value);
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch (e) {
+    console.warn(`SecureStore.setItemAsync failed for key ${key}:`, e);
+  }
+};
+
+const deleteSecureItem = async (key: string): Promise<void> => {
+  if (isWeb) {
+    webStorage.removeItem(key);
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch (e) {
+    console.warn(`SecureStore.deleteItemAsync failed for key ${key}:`, e);
+  }
+};
 
 const getDefaultServerUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -169,19 +228,19 @@ export const useStore = create<AppState>((set) => ({
   midiOrchestrateOffset: 0,
   setMidiOrchestrateOffset: (midiOrchestrateOffset) => {
     set({ midiOrchestrateOffset });
-    SecureStore.setItemAsync('midiOrchestrateOffset', String(midiOrchestrateOffset));
+    setSecureItem('midiOrchestrateOffset', String(midiOrchestrateOffset));
   },
 
   setServerUrl: (serverUrl) => {
     set({ serverUrl });
-    SecureStore.setItemAsync('serverUrl', serverUrl);
+    setSecureItem('serverUrl', serverUrl);
   },
   setToken: (token) => {
     set({ token });
     if (token) {
-      SecureStore.setItemAsync('token', token);
+      setSecureItem('token', token);
     } else {
-      SecureStore.deleteItemAsync('token');
+      deleteSecureItem('token');
     }
   },
   setFiles: (files) => set({ files }),
@@ -196,7 +255,7 @@ export const useStore = create<AppState>((set) => ({
   setPianoStatus: (isPianoConnected, targetDevice) => set({ isPianoConnected, targetDevice }),
   setTheme: (theme) => {
     set({ theme });
-    SecureStore.setItemAsync('theme', theme);
+    setSecureItem('theme', theme);
   },
   setCurrentTab: (currentTab) => set({ currentTab }),
   setBackendAudioEnabled: (backendAudioEnabled) => set({ backendAudioEnabled }),
@@ -204,18 +263,22 @@ export const useStore = create<AppState>((set) => ({
   setSelectedDevice: (selectedDevice) => set({ selectedDevice }),
 
   initialize: async () => {
-    const serverUrl = await SecureStore.getItemAsync('serverUrl');
-    const token = await SecureStore.getItemAsync('token');
-    const theme = await SecureStore.getItemAsync('theme') as 'light' | 'dark' | null;
-    const midiOrchestrateOffset = await SecureStore.getItemAsync('midiOrchestrateOffset');
-    if (serverUrl) set({ serverUrl });
-    if (token && token !== 'null' && token !== 'undefined') {
-      set({ token, isLoggedIn: true });
-    } else {
-      set({ token: null, isLoggedIn: false });
+    try {
+      const serverUrl = await getSecureItem('serverUrl');
+      const token = await getSecureItem('token');
+      const theme = await getSecureItem('theme') as 'light' | 'dark' | null;
+      const midiOrchestrateOffset = await getSecureItem('midiOrchestrateOffset');
+      if (serverUrl) set({ serverUrl });
+      if (token && token !== 'null' && token !== 'undefined') {
+        set({ token, isLoggedIn: true });
+      } else {
+        set({ token: null, isLoggedIn: false });
+      }
+      if (theme) set({ theme });
+      if (midiOrchestrateOffset) set({ midiOrchestrateOffset: parseInt(midiOrchestrateOffset, 10) || 0 });
+    } catch (e) {
+      console.warn('Failed to load secure store items:', e);
     }
-    if (theme) set({ theme });
-    if (midiOrchestrateOffset) set({ midiOrchestrateOffset: parseInt(midiOrchestrateOffset, 10) || 0 });
 
     try {
       const { midiOrchestratorApi } = require('../services/api');
@@ -229,7 +292,7 @@ export const useStore = create<AppState>((set) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync('token');
+    await deleteSecureItem('token');
     set({ token: null, isLoggedIn: false });
   }
 }));
