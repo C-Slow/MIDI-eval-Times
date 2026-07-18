@@ -2595,6 +2595,12 @@ export const MidiEditorScreen = () => {
                   </Text>
                   {importedVocalsJobId ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                       <TouchableOpacity 
+                         onPress={handleOpenMp3ImportModal}
+                         style={{ marginRight: 2 }}
+                       >
+                         <Ionicons name="swap-horizontal" size={18} color={themeColors.text} />
+                       </TouchableOpacity>
                       <Switch
                         value={importedVocalsEnabled}
                         onValueChange={setImportedVocalsEnabled}
