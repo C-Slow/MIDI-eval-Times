@@ -35,3 +35,19 @@ Open `config.json` in a text editor and look for the `"menuLinks"` array (or add
 2. Open the Jellyfin web app or native application on any client (PC, mobile device, or Smart TV).
 3. Look for the **Player Piano** icon (represented by a music note) in the left sidebar menu.
 4. Click/tap it to load the compiled Expo workstation directly inside the Jellyfin UI, giving you full control over the piano playback.
+
+---
+
+## 📺 LG TV (webOS) Integration & Alternatives
+
+For LG Smart TV (webOS) users, exposing the workstation inside the native LG Jellyfin app may not always render correctly due to webOS webview/sandbox constraints. You have two main options:
+
+1. **Standalone TV Browser Bookmark (Simpler & Recommended):**
+   * Open the built-in web browser on your LG TV.
+   * Navigate directly to your local server URL (e.g., `http://192.168.1.15:8000/`).
+   * Add the page as a TV browser bookmark for instant, full-screen remote control.
+
+2. **Custom LG Jellyfin App Embed (Advanced):**
+   * If you prefer to launch the control panel directly within the native LG TV Jellyfin client, you can modify, compile, and sideload a custom webOS client.
+   * Follow the guidelines and patch steps in the fork repository at [jellyfin-webos](https://github.com/C-Slow/jellyfin-webos) to embed your local workstation directly inside your custom LG TV build.
+
