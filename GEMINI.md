@@ -56,6 +56,7 @@ This project is a native mobile ecosystem designed to manage and play MIDI files
 - **Utility Scripts:** Keep small utility scripts under `tools/` or top-level `scripts/` so they can be tracked without large assets.
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.
 - **UI Changes:** For UI changes, prefer lightweight vanilla JS and keep static assets inside `player-piano-app/app/static/`.
+- **Cross-Platform Compatibility:** When making modifications to the React Native Expo project (`player-piano-native`), always ensure changes are fully compatible with both the native mobile app and the compiled web application. Native-only modules (e.g., `expo-file-system`, `expo-notifications`) must be guarded with platform checks (e.g., `Platform.OS === 'web'`) and provided with standard web API fallbacks when running in a browser.
 - **Stop and Ask:** Always stop and ask questions to clarify ambiguities or ask for examples instead of guessing.
 - **Planning First:** Before implementing *any* changes, you MUST talk to the user, explain what you plan to do and why first, and wait for explicit confirmation of the plan. Do not edit/write codebase files or run command-line actions that alter repository state before aligning on the plan.
 - **One Task at a Time:** Focus on a single item from the implementation plan.
