@@ -57,7 +57,7 @@ This project is a native mobile ecosystem designed to manage and play MIDI files
 - **Dependencies:** Run linters/tests in a virtual environment; if you add new dependencies, update `player-piano-app/requirements.txt`.
 - **UI Changes:** For UI changes, prefer lightweight vanilla JS and keep static assets inside `player-piano-app/app/static/`.
 - **Stop and Ask:** Always stop and ask questions to clarify ambiguities or ask for examples instead of guessing.
-- **Planning First:** Before implementing any significant change, especially after a user question, provide a concise plan or strategy for approval.
+- **Planning First:** Before implementing *any* changes, you MUST talk to the user, explain what you plan to do and why first, and wait for explicit confirmation of the plan. Do not edit/write codebase files or run command-line actions that alter repository state before aligning on the plan.
 - **One Task at a Time:** Focus on a single item from the implementation plan.
 
 
