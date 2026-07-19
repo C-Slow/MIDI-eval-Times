@@ -3,6 +3,7 @@
     "name": "MIDI-eval Times",
     "slug": "player-piano-native",
     "version": "1.0.1",
+    "description": "A complete management and playback ecosystem for Yamaha Disklavier pianos. It syncs hybrid MIDI and MP3 backing tracks via a Bluetooth adapter, featuring smart playlists and track editing, all controlled seamlessly through a web dashboard or a dedicated Android app.",
     "runtimeVersion": {
       "policy": "appVersion"
     },

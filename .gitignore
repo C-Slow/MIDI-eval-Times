@@ -46,3 +46,6 @@ Midi-Projects/
 # Ignore large downloaded models and binaries
 storage/rvc_models/
 fluidsynth/
+storage/screenshots/
+GEMINI.md
+

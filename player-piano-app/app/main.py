@@ -66,7 +66,10 @@ async def verify_auth(authorization: Optional[str] = Header(None), token: Option
 
 _last_client_seen_time = time.time()
 
-app = FastAPI(title='MIDI-eval Times')
+app = FastAPI(
+    title='MIDI-eval Times',
+    description="A complete management and playback ecosystem for Yamaha Disklavier pianos. It syncs hybrid MIDI and MP3 backing tracks via a Bluetooth adapter, featuring smart playlists and track editing, all controlled seamlessly through a web dashboard or a dedicated Android app."
+)
 
 app.add_middleware(
     CORSMiddleware,
