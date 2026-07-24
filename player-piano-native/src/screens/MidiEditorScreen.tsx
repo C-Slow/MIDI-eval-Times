@@ -1257,61 +1257,71 @@ export const MidiEditorScreen = () => {
 
   // Delete Job
   const handleDeleteJob = async (jobId: string) => {
+    const doDelete = async () => {
+      try {
+        setLoading(true);
+        await midiOrchestratorApi.deleteJob(jobId);
+        setSelectedJobs(prev => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
+        await fetchJobs();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this MIDI Orchestration job?')) {
+        doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Job',
       'Are you sure you want to delete this MIDI Orchestration job?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await midiOrchestratorApi.deleteJob(jobId);
-              setSelectedJobs(prev => {
-                const next = new Set(prev);
-                next.delete(jobId);
-                return next;
-              });
-              await fetchJobs();
-            } catch (e) {
-              console.error(e);
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
+        { text: 'Delete', style: 'destructive', onPress: doDelete }
       ]
     );
   };
 
   const handleBulkDelete = () => {
     if (selectedJobs.size === 0) return;
+    const doDelete = async () => {
+      try {
+        setLoading(true);
+        const list = Array.from(selectedJobs);
+        for (const id of list) {
+          await midiOrchestratorApi.deleteJob(id);
+        }
+        setSelectedJobs(new Set());
+        await fetchJobs();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete ${selectedJobs.size} MIDI Orchestration jobs?`)) {
+        doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Bulk Delete',
       `Delete ${selectedJobs.size} MIDI Orchestration jobs?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const list = Array.from(selectedJobs);
-              for (const id of list) {
-                await midiOrchestratorApi.deleteJob(id);
-              }
-              setSelectedJobs(new Set());
-              await fetchJobs();
-            } catch (e) {
-              console.error(e);
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
+        { text: 'Delete', style: 'destructive', onPress: doDelete }
       ]
     );
   };

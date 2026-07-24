@@ -103,10 +103,11 @@ This application has been developed experimentally over a long period. As such, 
 * **AI Vocal Synthesis (Male/Female Tracks):** The options to generate male or female vocal tracks within the MIDI Editor were part of an experiment to see if AI voice models could render high-quality singing from MIDI notes. Currently, the generated vocals do not sound production-grade, but the options are left in the workspace for future experimentation.
 * **Roadmap:** Planned future updates and optimizations:
   * **Section Deletion:** Direct deletion of MIDI/MP3 sections utilizing A/B loop lines.
-  * **Note Muting:** Option to mute individual MIDI notes within the editor.
-  * **Button Hold-to-Repeat:** Add a hold-to-repeat gesture on the `+` and `-` timing adjustment buttons in the MIDI Editor to speed up multi-second backing offset adjustments.
+  * **Selective Note Muting:** Option to select and mute individual MIDI notes or note ranges within the editor note grid.
+  * **Selective Note Output Routing:** Ability to long-press and drag a selection box (via mouse rectangle or touch gesture) over a section of notes on non-MP3 backing tracks to dynamically change their playback routing (e.g., routing a selected group of notes to the physical piano for a few bars before automatically reverting back to speaker playback).
   * **Smart Speaker Pre-Connection:** A background process to check the upcoming song in the playlist; if it is a validated hybrid track (`validated === true`), the system will pre-connect to the backend speaker system to eliminate sleep/standby latency before playback starts.
-  * **Midi Editor Playlist Tags:** Display playlist tag labels in the MIDI Editor file list screen, identical to the main Files Screen view.
+  * **Button Hold-to-Repeat:** *(Completed)* Hold-to-repeat gesture on timing adjustment buttons in the MIDI Editor to speed up backing offset adjustments.
+  * **Midi Editor Playlist Tags:** *(Completed)* Display playlist tag labels in the MIDI Editor file list screen, identical to the main Files Screen view.
 
 ---
 

@@ -265,16 +265,25 @@ export const FilesScreen = () => {
 
   const handleBulkDelete = () => {
     if (selectedFiles.size === 0) return;
+    const doDelete = async () => {
+      setLoading(true);
+      try {
+        for (const fn of Array.from(selectedFiles)) await fileApi.deleteFile(fn);
+        clearSelection();
+        await fetchFiles();
+      } finally { setLoading(false); }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete ${selectedFiles.size} file(s)?`)) {
+        doDelete();
+      }
+      return;
+    }
+
     Alert.alert('Bulk Delete', `Delete ${selectedFiles.size} files?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        setLoading(true);
-        try {
-          for (const fn of Array.from(selectedFiles)) await fileApi.deleteFile(fn);
-          clearSelection();
-          await fetchFiles();
-        } finally { setLoading(false); }
-      }}
+      { text: 'Delete', style: 'destructive', onPress: doDelete }
     ]);
   };
 const openCleanSettings = () => {
