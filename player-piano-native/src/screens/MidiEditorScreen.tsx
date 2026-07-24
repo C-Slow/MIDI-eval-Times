@@ -23,7 +23,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Audio } from 'expo-av';
 import { useStore } from '../store/useStore';
-import { midiOrchestratorApi, pianoApi, mp3Api } from '../services/api';
+import { midiOrchestratorApi, pianoApi, mp3Api, playlistApi } from '../services/api';
 import { Colors } from '../constants/Colors';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setAudioMode } from '../services/audioMode';
@@ -32,6 +32,68 @@ import { useNavigation } from '@react-navigation/native';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PIXELS_PER_SECOND = 40; // Timeline scale
 const LANE_HEIGHT = 80;
+
+const getPlaylistColor = (name: string) => {
+  const colors = ['#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#E91E63', '#00BCD4', '#009688', '#FF5722', '#673AB7', '#3F51B5'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const HoldableButton = ({ onPressAction, children, style, delayMs = 350, intervalMs = 60, ...props }: any) => {
+  const timerRef = useRef<any>(null);
+  const intervalRef = useRef<any>(null);
+  const isHoldingRef = useRef(false);
+  const actionRef = useRef(onPressAction);
+  actionRef.current = onPressAction;
+
+  const stopRepeat = React.useCallback(() => {
+    isHoldingRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const startRepeat = React.useCallback(() => {
+    if (isHoldingRef.current) return;
+    isHoldingRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    actionRef.current();
+    timerRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => {
+        actionRef.current();
+      }, intervalMs);
+    }, delayMs);
+  }, [delayMs, intervalMs]);
+
+  useEffect(() => {
+    return () => stopRepeat();
+  }, [stopRepeat]);
+
+  return (
+    <TouchableOpacity
+      {...props}
+      style={style}
+      onPressIn={startRepeat}
+      onPressOut={stopRepeat}
+      onMouseDown={startRepeat}
+      onMouseUp={stopRepeat}
+      onMouseLeave={stopRepeat}
+      onTouchStart={startRepeat}
+      onTouchEnd={stopRepeat}
+      onResponderRelease={stopRepeat}
+      onResponderTerminate={stopRepeat}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+};
 
 interface NoteGridProps {
   lanesData: any[];
@@ -337,7 +399,7 @@ const NoteGrid = React.memo(({
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       {/* Decrements */}
                       {[-50, -10].map(val => (
-                        <TouchableOpacity
+                        <HoldableButton
                           key={`bctrl-${val}`}
                           style={{
                             backgroundColor: 'rgba(255,255,255,0.15)',
@@ -345,10 +407,10 @@ const NoteGrid = React.memo(({
                             paddingVertical: 2,
                             borderRadius: 3
                           }}
-                          onPress={() => onUpdateBreakline(index, val)}
+                          onPressAction={() => onUpdateBreakline(index, val)}
                         >
                           <Text style={{ color: '#fff', fontSize: 8 }}>{val}</Text>
-                        </TouchableOpacity>
+                        </HoldableButton>
                       ))}
 
                       {/* Delete Breakline button */}
@@ -366,7 +428,7 @@ const NoteGrid = React.memo(({
 
                       {/* Increments */}
                       {[10, 50].map(val => (
-                        <TouchableOpacity
+                        <HoldableButton
                           key={`bctrl-${val}`}
                           style={{
                             backgroundColor: 'rgba(255,255,255,0.15)',
@@ -374,10 +436,10 @@ const NoteGrid = React.memo(({
                             paddingVertical: 2,
                             borderRadius: 3
                           }}
-                          onPress={() => onUpdateBreakline(index, val)}
+                          onPressAction={() => onUpdateBreakline(index, val)}
                         >
                           <Text style={{ color: '#fff', fontSize: 8 }}>{`+${val}`}</Text>
-                        </TouchableOpacity>
+                        </HoldableButton>
                       ))}
                     </View>
                   </View>
@@ -1065,8 +1127,26 @@ export const MidiEditorScreen = () => {
   // Load jobs list
   const fetchJobs = async () => {
     try {
-      const data = await midiOrchestratorApi.listJobs();
-      setJobs(data);
+      const [data, pData] = await Promise.all([
+        midiOrchestratorApi.listJobs(),
+        playlistApi.listPlaylists().catch(() => ({}))
+      ]);
+      if (pData) {
+        useStore.getState().setPlaylists(pData);
+      }
+      const storePlaylists = pData || useStore.getState().playlists || {};
+      const enrichedJobs = data.map((j: any) => {
+        const plSet = new Set<string>(j.playlists || []);
+        const hybridKey = `hybrid:${j.job_id}`;
+        Object.entries(storePlaylists).forEach(([plName, plValue]: [string, any]) => {
+          const tracks = Array.isArray(plValue) ? plValue : plValue?.tracks || [];
+          if (tracks.includes(hybridKey) || (j.filename && tracks.includes(j.filename))) {
+            plSet.add(plName);
+          }
+        });
+        return { ...j, playlists: Array.from(plSet) };
+      });
+      setJobs(enrichedJobs);
     } catch (e) {
       console.error('Failed to load midi jobs', e);
     }
@@ -1714,23 +1794,23 @@ export const MidiEditorScreen = () => {
                   
                   {/* Delay controls */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <TouchableOpacity 
+                    <HoldableButton 
                       style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
-                      onPress={() => setImportedVocalsDelayMs(prev => prev - 50)}
+                      onPressAction={() => setImportedVocalsDelayMs(prev => prev - 50)}
                     >
                       <Text style={{ fontSize: 9, color: themeColors.text }}>-50</Text>
-                    </TouchableOpacity>
+                    </HoldableButton>
                     
                     <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>
                       {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
                     </Text>
                     
-                    <TouchableOpacity 
+                    <HoldableButton 
                       style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
-                      onPress={() => setImportedVocalsDelayMs(prev => prev + 50)}
+                      onPressAction={() => setImportedVocalsDelayMs(prev => prev + 50)}
                     >
                       <Text style={{ fontSize: 9, color: themeColors.text }}>+50</Text>
-                    </TouchableOpacity>
+                    </HoldableButton>
                   </View>
                 </View>
               );
@@ -2014,8 +2094,8 @@ export const MidiEditorScreen = () => {
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
                           {item.playlists?.map((pl: string) => (
-                            <View key={pl} style={[styles.cleanBadge, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                              <Text style={[styles.cleanBadgeText, { color: '#4CAF50' }]}>{pl.toUpperCase()}</Text>
+                            <View key={pl} style={[styles.statusTag, { backgroundColor: getPlaylistColor(pl) }]}>
+                              <Text style={styles.statusTagText}>{pl.substring(0, 4).toUpperCase()}</Text>
                             </View>
                           ))}
                         </View>
@@ -2490,21 +2570,27 @@ export const MidiEditorScreen = () => {
             <View style={styles.delayControls}>
               <Text style={[styles.delayLabel, { color: themeColors.textMuted }]}>Speaker Sync</Text>
               <View style={styles.delayButtonsRow}>
-                <TouchableOpacity 
+                <HoldableButton 
                   style={[styles.offsetBtn, { backgroundColor: themeColors.surfaceSecondary }]}
-                  onPress={() => setGlobalOffset(globalOffset - 10)}
+                  onPressAction={() => {
+                    const current = useStore.getState().midiOrchestrateOffset;
+                    setGlobalOffset(current - 10);
+                  }}
                 >
                   <Text style={[styles.offsetBtnText, { color: themeColors.text }]}>-10ms</Text>
-                </TouchableOpacity>
+                </HoldableButton>
                 <Text style={[styles.offsetValue, { color: themeColors.text, fontWeight: '700' }]}>
                   {globalOffset >= 0 ? `+${globalOffset}` : globalOffset}ms
                 </Text>
-                <TouchableOpacity 
+                <HoldableButton 
                   style={[styles.offsetBtn, { backgroundColor: themeColors.surfaceSecondary }]}
-                  onPress={() => setGlobalOffset(globalOffset + 10)}
+                  onPressAction={() => {
+                    const current = useStore.getState().midiOrchestrateOffset;
+                    setGlobalOffset(current + 10);
+                  }}
                 >
                   <Text style={[styles.offsetBtnText, { color: themeColors.text }]}>+10ms</Text>
-                </TouchableOpacity>
+                </HoldableButton>
               </View>
             </View>
           </View>
@@ -3523,6 +3609,16 @@ const styles = StyleSheet.create({
   cleanBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  statusTag: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  statusTagText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '800',
   },
   bottomSheetContent: {
     width: '100%',

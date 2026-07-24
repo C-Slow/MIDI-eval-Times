@@ -316,7 +316,7 @@ export const midiOrchestratorApi = {
     melodyFactor: number = 1.0,
     vocalMaleTracks: number[] = [],
     vocalFemaleTracks: number[] = [],
-    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number }
+    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }> }
   ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,
@@ -394,7 +394,7 @@ export const midiOrchestratorApi = {
     const res = await api.get(`/midi-orchestrator/metadata/${jobId}`);
     return res.data;
   },
-  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; source?: string; dnu?: boolean; playlists?: string[] }) => {
+  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; source?: string; dnu?: boolean; playlists?: string[]; validated?: boolean }) => {
     const res = await api.post(`/midi-orchestrator/metadata/${jobId}`, metadata);
     return res.data;
   },

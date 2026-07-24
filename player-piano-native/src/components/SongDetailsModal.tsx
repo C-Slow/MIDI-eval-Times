@@ -6,7 +6,13 @@ import { Colors } from '../constants/Colors';
 import { useStore } from '../store/useStore';
 import { settingsApi } from '../services/api';
 
-// ... (SongDetailsModalProps unchanged)
+interface SongDetailsModalProps {
+  visible: boolean;
+  filenames: string[];
+  onClose: () => void;
+  onSave?: () => void;
+  onCleanPress?: (filename: string) => void;
+}
 
 export const SongDetailsModal = ({ visible, filenames, onClose, onSave, onCleanPress }: SongDetailsModalProps) => {
   const theme = useStore(state => state.theme);

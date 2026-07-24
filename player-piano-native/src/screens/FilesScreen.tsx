@@ -769,6 +769,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 10 },
   modalSubtitle: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
   modalInput: { borderWidth: 1, borderRadius: 8, padding: 15, fontSize: 18, textAlign: 'center' },
+  modalInputGroup: { width: '100%' },
   modalButtons: { flexDirection: 'row', gap: 10, width: '100%' },
   modalBtn: { padding: 15, borderRadius: 8, alignItems: 'center', justifyContent: 'center', minHeight: 50 },
   modalBtnFull: { width: '100%' },

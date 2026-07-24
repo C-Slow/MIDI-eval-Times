@@ -175,6 +175,8 @@ class PlaylistManager:
                             self._stop_requested = True
                             break
 
+                        self.check_upcoming_speaker_preconnect()
+
                         utils.play_midi_blocking(
                             path, 
                             port_name, 
@@ -212,6 +214,30 @@ class PlaylistManager:
         utils._current_play['thread'] = t 
         t.start()
 
+    def check_upcoming_speaker_preconnect(self):
+        """
+        Check the upcoming song in the playlist; if it is a validated hybrid track (validated === true),
+        pre-connect to the backend speaker system to eliminate sleep/standby latency before playback starts.
+        """
+        if not self.active_tracks:
+            return
+        next_idx = self.current_index + 1
+        if next_idx >= len(self.active_tracks) and self.repeat:
+            next_idx = 0
+        if 0 <= next_idx < len(self.active_tracks):
+            upcoming_fn = self.active_tracks[next_idx]
+            if upcoming_fn.startswith("hybrid:"):
+                job_id = upcoming_fn.split(":", 1)[1]
+                from app.main import midi_orchestrator
+                job = midi_orchestrator.status.get(job_id)
+                if job and job.get("status") == "completed" and job.get("validated", False):
+                    from app.utils import load_settings, connect_paired_device, _active_bt_device_name
+                    settings = load_settings()
+                    selected_device = settings.get("selected_device", "")
+                    if selected_device and not _active_bt_device_name:
+                        print(f"Smart Speaker Pre-Connection: Upcoming track '{upcoming_fn}' is validated hybrid. Pre-connecting speaker '{selected_device}'...")
+                        connect_paired_device(selected_device)
+
     def seek(self, offset: float):
         if not self.play_thread or not self.play_thread.is_alive() or self.current_playlist_name is None:
             return
@@ -235,8 +261,30 @@ class PlaylistManager:
         if playing and self.start_time:
             elapsed = time.time() - self.start_time
             
-        from app.utils import load_settings
+        from app.utils import load_settings, connect_paired_device, _active_bt_device_name
         settings = load_settings()
+
+        upcoming_file = None
+        upcoming_validated = False
+        if playing and self.active_tracks:
+            next_idx = self.current_index + 1
+            if next_idx >= len(self.active_tracks) and self.repeat:
+                next_idx = 0
+            if 0 <= next_idx < len(self.active_tracks):
+                upcoming_file = self.active_tracks[next_idx]
+                if upcoming_file.startswith("hybrid:"):
+                    job_id = upcoming_file.split(":", 1)[1]
+                    from app.main import midi_orchestrator
+                    job = midi_orchestrator.status.get(job_id)
+                    if job and job.get("status") == "completed" and job.get("validated", False):
+                        upcoming_validated = True
+
+        if playing and upcoming_validated:
+            selected_device = settings.get("selected_device", "")
+            if selected_device and not _active_bt_device_name:
+                print(f"Smart Speaker Pre-Connection (status check): Pre-connecting to speaker '{selected_device}'...")
+                connect_paired_device(selected_device)
+
         return {
             'playing': playing,
             'current_playlist': self.current_playlist_name,
@@ -245,5 +293,7 @@ class PlaylistManager:
             'elapsed': elapsed,
             'length': self.track_length,
             'repeat': self.repeat,
+            'upcoming_file': upcoming_file,
+            'upcoming_validated': upcoming_validated,
             'backend_audio_enabled': settings.get("backend_audio_enabled", False)
         }

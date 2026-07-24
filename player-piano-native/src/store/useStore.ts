@@ -93,6 +93,7 @@ interface FileInfo {
     source?: string;
     is_game_or_movie?: boolean;
     gemini_analysis?: any;
+    original_name?: string;
   };
 }
 
