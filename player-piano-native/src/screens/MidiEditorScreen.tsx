@@ -581,6 +581,77 @@ export const MidiEditorScreen = () => {
   const [mp3Jobs, setMp3Jobs] = useState<any[]>([]);
   const [showMp3ImportModal, setShowMp3ImportModal] = useState(false);
 
+  // Drag reordering state for MP3 Vocals track
+  const [mp3VocalsPosition, setMp3VocalsPosition] = useState<number | null>(null);
+  const [isDraggingMp3Vocals, setIsDraggingMp3Vocals] = useState<boolean>(false);
+
+  const dragStartYRef = useRef<number>(0);
+  const mp3StartPosRef = useRef<number>(0);
+  const longPressTimerRef = useRef<any>(null);
+
+  const startMp3Drag = (clientY: number) => {
+    dragStartYRef.current = clientY;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      const currentIdx = getLanesData.findIndex(l => l.index === -99);
+      if (currentIdx !== -1) {
+        mp3StartPosRef.current = currentIdx;
+        setIsDraggingMp3Vocals(true);
+      }
+    }, 200);
+  };
+
+  const moveMp3Drag = (clientY: number) => {
+    if (!isDraggingMp3Vocals && longPressTimerRef.current) {
+      if (Math.abs(clientY - dragStartYRef.current) > 15) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
+    if (isDraggingMp3Vocals) {
+      const dy = clientY - dragStartYRef.current;
+      const stepDelta = Math.round(dy / LANE_HEIGHT);
+      const totalLanes = getLanesData.length;
+      const newPos = Math.max(0, Math.min(totalLanes - 1, mp3StartPosRef.current + stepDelta));
+      setMp3VocalsPosition(newPos);
+    }
+  };
+
+  const endMp3Drag = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setIsDraggingMp3Vocals(false);
+  };
+
+  useEffect(() => {
+    if (!isDraggingMp3Vocals) return;
+    const handleWindowMove = (e: MouseEvent | TouchEvent) => {
+      const pageY = 'touches' in e && e.touches[0] ? e.touches[0].pageY : (e as MouseEvent).pageY;
+      if (pageY !== undefined) {
+        moveMp3Drag(pageY);
+      }
+    };
+    const handleWindowEnd = () => {
+      endMp3Drag();
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('mousemove', handleWindowMove);
+      window.addEventListener('mouseup', handleWindowEnd);
+      window.addEventListener('touchmove', handleWindowMove);
+      window.addEventListener('touchend', handleWindowEnd);
+      return () => {
+        window.removeEventListener('mousemove', handleWindowMove);
+        window.removeEventListener('mouseup', handleWindowEnd);
+        window.removeEventListener('touchmove', handleWindowMove);
+        window.removeEventListener('touchend', handleWindowEnd);
+      };
+    }
+  }, [isDraggingMp3Vocals]);
+
   const loopConfigRef = useRef({ enabled: false, start: null as number | null, end: null as number | null });
   useEffect(() => {
     loopConfigRef.current = { enabled: loopEnabled, start: loopStartMs, end: loopEndMs };
@@ -1252,6 +1323,7 @@ export const MidiEditorScreen = () => {
       Alert.alert('Processing', 'This file is currently being processed. Please wait...');
       return;
     }
+    setMp3VocalsPosition(null);
     openUnifiedWorkspace(job.job_id);
   };
 
@@ -1724,7 +1796,7 @@ export const MidiEditorScreen = () => {
     });
 
     if (importedVocalsJobId) {
-      lanes.push({
+      const vocalsLane = {
         index: -99,
         name: "🎙️ MP3 Vocals",
         program: -1,
@@ -1736,11 +1808,17 @@ export const MidiEditorScreen = () => {
         minPitch: 0,
         maxPitch: 0,
         pitchRange: 1
-      });
+      };
+
+      const targetPos = (mp3VocalsPosition !== null && mp3VocalsPosition >= 0 && mp3VocalsPosition <= lanes.length)
+        ? mp3VocalsPosition
+        : lanes.length;
+
+      lanes.splice(targetPos, 0, vocalsLane);
     }
 
     return lanes;
-  }, [currentJob, notes, importedVocalsJobId]);
+  }, [currentJob, notes, importedVocalsJobId, mp3VocalsPosition]);
 
   // Timeline render item notes
   const renderVisualizerTimeline = () => {
@@ -1776,11 +1854,49 @@ export const MidiEditorScreen = () => {
             
             if (lane.index === -99) {
               return (
-                <View key="-99" style={[styles.sidebarLane, { height: 120, borderBottomColor: themeColors.border, paddingHorizontal: 10, justifyContent: 'center' }]}>
+                <View 
+                  key="-99" 
+                  style={[
+                    styles.sidebarLane, 
+                    { 
+                      height: 120, 
+                      borderBottomColor: themeColors.border, 
+                      paddingHorizontal: 10, 
+                      justifyContent: 'center',
+                      backgroundColor: isDraggingMp3Vocals ? 'rgba(232, 67, 147, 0.25)' : themeColors.surface,
+                      borderColor: isDraggingMp3Vocals ? '#e84393' : 'transparent',
+                      borderWidth: isDraggingMp3Vocals ? 2 : 0,
+                      elevation: isDraggingMp3Vocals ? 8 : 0,
+                      zIndex: isDraggingMp3Vocals ? 999 : 1,
+                      ...(Platform.OS === 'web' ? { cursor: isDraggingMp3Vocals ? 'grabbing' : 'grab' } as any : {})
+                    }
+                  ]}
+                  onPressIn={(e: any) => startMp3Drag(e.nativeEvent?.pageY || e.pageY || 0)}
+                  onPressOut={endMp3Drag}
+                  onMouseDown={(e: any) => startMp3Drag(e.pageY || e.clientY || 0)}
+                  onMouseUp={endMp3Drag}
+                  onTouchStart={(e: any) => startMp3Drag(e.touches?.[0]?.pageY || e.nativeEvent?.pageY || 0)}
+                  onTouchEnd={endMp3Drag}
+                >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
-                      🎙️ MP3 Vocals
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
+                      <Ionicons 
+                        name="reorder-two" 
+                        size={18} 
+                        color={isDraggingMp3Vocals ? "#e84393" : themeColors.textMuted} 
+                        style={{ marginRight: 4 }} 
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
+                          🎙️ MP3 Vocals
+                        </Text>
+                        {isDraggingMp3Vocals ? (
+                          <Text style={{ fontSize: 9, color: '#e84393', fontWeight: 'bold' }}>Dragging track...</Text>
+                        ) : (
+                          <Text style={{ fontSize: 8, color: themeColors.textMuted }}>Hold & drag up/down</Text>
+                        )}
+                      </View>
+                    </View>
                     <TouchableOpacity 
                       style={[
                         styles.allocToggleBtn, 
