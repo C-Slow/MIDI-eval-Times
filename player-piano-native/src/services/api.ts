@@ -316,7 +316,7 @@ export const midiOrchestratorApi = {
     melodyFactor: number = 1.0,
     vocalMaleTracks: number[] = [],
     vocalFemaleTracks: number[] = [],
-    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }> }
+    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }>; position?: number }
   ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,

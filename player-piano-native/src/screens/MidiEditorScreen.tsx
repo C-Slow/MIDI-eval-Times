@@ -15,7 +15,8 @@ import {
   Platform,
   KeyboardAvoidingView,
   Switch,
-  Pressable
+  Pressable,
+  PanResponder
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,7 +41,7 @@ const getPlaylistColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-const HoldableButton = ({ onPressAction, children, style, delayMs = 350, intervalMs = 60, ...props }: any) => {
+const HoldableButton = ({ onPressAction, children, style, delayMs = 350, intervalMs = 90, ...props }: any) => {
   const timerRef = useRef<any>(null);
   const intervalRef = useRef<any>(null);
   const isHoldingRef = useRef(false);
@@ -123,6 +124,93 @@ interface NoteGridProps {
   onLongPressVocals: (locationX: number) => void;
 }
 
+const InstrumentLanesContent = React.memo(({
+  lanesData,
+  laneOffsets,
+  laneHeights,
+  themeColors,
+  pianoTracks,
+  speakerTracks,
+  vocalMaleTracks,
+  vocalFemaleTracks,
+}: any) => {
+  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
+    if (isPiano) return themeColors.accent;
+    if (isSpeaker) return '#a29bfe';
+    if (isMale) return '#0984e3';
+    if (isFemale) return '#e84393';
+    return themeColors.textMuted;
+  };
+  const verticalPadding = 8;
+  const usableLaneHeight = LANE_HEIGHT - (verticalPadding * 2);
+
+  return (
+    <>
+      {lanesData.map((lane: any, laneIdx: number) => {
+        if (lane.index === -99) return null;
+        const topPos = laneOffsets[laneIdx];
+        const currentLaneHeight = laneHeights[laneIdx];
+
+        const isPiano = pianoTracks.has(lane.index);
+        const isSpeaker = speakerTracks.has(lane.index);
+        const isMale = vocalMaleTracks.has(lane.index);
+        const isFemale = vocalFemaleTracks.has(lane.index);
+        const color = getTrackColor(lane.index, isPiano, isSpeaker, isMale, isFemale);
+
+        return (
+          <View 
+            key={lane.index} 
+            style={[
+              styles.laneTimeline, 
+              { 
+                height: currentLaneHeight, 
+                top: topPos, 
+                borderBottomColor: themeColors.border 
+              }
+            ]}
+          >
+            {lane.notes.map((note: any, noteIdx: number) => {
+              const noteWidth = Math.max(2, (note.end - note.start) * PIXELS_PER_SECOND);
+              const noteLeft = note.start * PIXELS_PER_SECOND;
+              const normalizedPitch = (note.pitch - lane.minPitch) / lane.pitchRange;
+              const noteTop = verticalPadding + (usableLaneHeight * (1 - normalizedPitch));
+
+              return (
+                <View
+                  key={noteIdx}
+                  style={[
+                    styles.note,
+                    {
+                      left: noteLeft,
+                      width: noteWidth,
+                      top: noteTop,
+                      height: 4,
+                      backgroundColor: color,
+                    }
+                  ]}
+                />
+              );
+            })}
+          </View>
+        );
+      })}
+    </>
+  );
+}, (prev, next) => {
+  if (prev.lanesData !== next.lanesData) return false;
+  if (prev.themeColors !== next.themeColors) return false;
+  if (prev.pianoTracks !== next.pianoTracks) return false;
+  if (prev.speakerTracks !== next.speakerTracks) return false;
+  if (prev.vocalMaleTracks !== next.vocalMaleTracks) return false;
+  if (prev.vocalFemaleTracks !== next.vocalFemaleTracks) return false;
+  if (prev.laneOffsets.length !== next.laneOffsets.length) return false;
+  for (let i = 0; i < prev.laneOffsets.length; i++) {
+    if (prev.laneOffsets[i] !== next.laneOffsets[i]) return false;
+    if (prev.laneHeights[i] !== next.laneHeights[i]) return false;
+  }
+  return true;
+});
+
 const NoteGrid = React.memo(({
   lanesData,
   pianoTracks,
@@ -150,25 +238,15 @@ const NoteGrid = React.memo(({
   onDeleteLoopEnd,
   onLongPressVocals,
 }: NoteGridProps) => {
-  const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
-    if (isPiano) return themeColors.accent; // Vibrant Blue/Cyan
-    if (isSpeaker) return '#a29bfe'; // Light purple for strings/speakers
-    if (isMale) return '#0984e3'; // Vibrant blue for male vocals
-    if (isFemale) return '#e84393'; // Vibrant pink for female vocals
-    return themeColors.textMuted;
-  };
-
   const verticalPadding = 8;
   const usableLaneHeight = LANE_HEIGHT - (verticalPadding * 2);
 
-  // Pre-sort breaklines for segment calculations
   const sortedBreaks = useMemo(() => {
     return [...(importedVocalsBreaklines || [])].sort((a, b) => a.time_ms - b.time_ms);
   }, [importedVocalsBreaklines]);
 
   return (
     <View style={{ width: timelineWidth, height: totalHeight, position: 'absolute', top: 0, left: 0 }}>
-      {/* Loop Bound Highlight Area */}
       {loopStartMs !== null && (
         <View 
           style={{
@@ -187,79 +265,6 @@ const NoteGrid = React.memo(({
         />
       )}
 
-      {/* Piecewise Vocal Breaklines vertical dashed lines */}
-      {sortedBreaks.map((b, idx) => {
-        const left = (b.time_ms / 1000) * PIXELS_PER_SECOND;
-        
-        return (
-          <View
-            key={`break-${idx}`}
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left,
-              width: 1,
-              borderStyle: 'dashed',
-              borderWidth: 1.5,
-              borderColor: '#e84393',
-              zIndex: 10
-            }}
-          />
-        );
-      })}
-
-      {/* Loop Markers X Buttons for Deletion */}
-      {loopStartMs !== null && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 5,
-            left: (loopStartMs / 1000) * PIXELS_PER_SECOND - 10,
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            backgroundColor: '#e74c3c',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 105,
-            elevation: 2,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.2,
-            shadowRadius: 1.41,
-          }}
-          onPress={onDeleteLoopStart}
-        >
-          <Ionicons name="close" size={12} color="#fff" />
-        </TouchableOpacity>
-      )}
-
-      {loopEndMs !== null && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 5,
-            left: (loopEndMs / 1000) * PIXELS_PER_SECOND - 10,
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            backgroundColor: '#e74c3c',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 105,
-            elevation: 2,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.2,
-            shadowRadius: 1.41,
-          }}
-          onPress={onDeleteLoopEnd}
-        >
-          <Ionicons name="close" size={12} color="#fff" />
-        </TouchableOpacity>
-      )}
-
       {/* Finetune Marker Line */}
       {finetuneTimeMs !== null && finetuneMode !== null && (
         <View 
@@ -275,7 +280,26 @@ const NoteGrid = React.memo(({
         />
       )}
 
-      {/* Consolidated parent vertical grid lines */}
+      {(importedVocalsBreaklines || []).map((breakline: any, idx: number) => {
+        const left = (breakline.time_ms / 1000) * PIXELS_PER_SECOND;
+        return (
+          <View 
+            key={`breakline-line-${idx}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left,
+              width: 1,
+              borderStyle: 'dashed',
+              borderWidth: 1.5,
+              borderColor: '#e84393',
+              zIndex: 10
+            }}
+          />
+        );
+      })}
+
       {Array.from({ length: Math.ceil(durationSec / 5) }).map((_, i) => (
         <View 
           key={`grid-${i}`} 
@@ -291,169 +315,10 @@ const NoteGrid = React.memo(({
       ))}
 
       {lanesData.map((lane: any, laneIdx: number) => {
+        if (lane.index !== -99) return null;
         const topPos = laneOffsets[laneIdx];
         const currentLaneHeight = laneHeights[laneIdx];
-        const usableLaneHeight = currentLaneHeight - (verticalPadding * 2);
-
-        if (lane.index === -99) {
-          const waveformColor = importedVocalsEnabled ? '#e84393' : 'rgba(120, 120, 120, 0.4)';
-          
-          return (
-            <View 
-              key={lane.index} 
-              style={[
-                styles.laneTimeline, 
-                { 
-                  height: currentLaneHeight, 
-                  top: topPos, 
-                  borderBottomColor: themeColors.border,
-                  backgroundColor: 'rgba(232, 67, 147, 0.05)'
-                }
-              ]}
-            >
-              {/* Pressable vocal lane area for long-press */}
-              <Pressable
-                onLongPress={(evt) => {
-                  onLongPressVocals(evt.nativeEvent.locationX);
-                }}
-                style={{ position: 'absolute', top: 0, left: 0, width: timelineWidth, height: 70 }}
-              >
-                <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-                  {vocalsWaveformEnvelope ? (
-                    vocalsWaveformEnvelope.map((val: number, idx: number) => {
-                      const tMs = idx * 100; // 10 points per sec = 100ms per point
-                      
-                      // Compute dynamic segment offset based on audio boundaries
-                      let offsetMs = importedVocalsDelayMs;
-                      for (const b of sortedBreaks) {
-                        const audioBoundary = b.time_ms - offsetMs;
-                        if (tMs > audioBoundary) {
-                          offsetMs = b.offset_ms;
-                        } else {
-                          break;
-                        }
-                      }
-                      
-                      const delayOffsetPx = (offsetMs / 1000) * PIXELS_PER_SECOND;
-                      const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
-                      if (left < -10 || left > timelineWidth + 10) return null;
-                      
-                      // Center waveform in top 70px envelope region
-                      const barHeight = Math.max(2, val * (70 - verticalPadding * 2));
-                      const barTop = verticalPadding + ((70 - verticalPadding * 2) - barHeight) / 2;
-                      
-                      return (
-                        <View
-                          key={idx}
-                          style={{
-                            position: 'absolute',
-                            left,
-                            width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
-                            top: barTop,
-                            height: barHeight,
-                            backgroundColor: waveformColor,
-                            borderRadius: 1
-                          }}
-                        />
-                      );
-                    })
-                  ) : (
-                    <Text style={{ position: 'absolute', left: 20, top: 25, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
-                      No waveform data loaded. Long-press here to place markers.
-                    </Text>
-                  )}
-                </View>
-              </Pressable>
-
-              {/* Inline Breakline Alignment Controllers in the bottom 50px of expanded lane */}
-              {sortedBreaks.map((b, index) => {
-                const left = (b.time_ms / 1000) * PIXELS_PER_SECOND;
-                
-                return (
-                  <View
-                    key={`inline-ctrl-${index}`}
-                    style={{
-                      position: 'absolute',
-                      left: left - 65, // Center the 130px wide controller row
-                      width: 130,
-                      top: 72,
-                      height: 44,
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: 'rgba(30, 30, 30, 0.9)',
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: '#e84393',
-                      zIndex: 100,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3.84,
-                      elevation: 5,
-                    }}
-                  >
-                    <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold', marginBottom: 2 }}>
-                      {b.offset_ms >= 0 ? `+${b.offset_ms}` : b.offset_ms} ms
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {/* Decrements */}
-                      {[-50, -10].map(val => (
-                        <HoldableButton
-                          key={`bctrl-${val}`}
-                          style={{
-                            backgroundColor: 'rgba(255,255,255,0.15)',
-                            paddingHorizontal: 4,
-                            paddingVertical: 2,
-                            borderRadius: 3
-                          }}
-                          onPressAction={() => onUpdateBreakline(index, val)}
-                        >
-                          <Text style={{ color: '#fff', fontSize: 8 }}>{val}</Text>
-                        </HoldableButton>
-                      ))}
-
-                      {/* Delete Breakline button */}
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#e74c3c',
-                          paddingHorizontal: 5,
-                          paddingVertical: 2,
-                          borderRadius: 3
-                        }}
-                        onPress={() => onDeleteBreakline(index)}
-                      >
-                        <Ionicons name="close" size={10} color="#fff" />
-                      </TouchableOpacity>
-
-                      {/* Increments */}
-                      {[10, 50].map(val => (
-                        <HoldableButton
-                          key={`bctrl-${val}`}
-                          style={{
-                            backgroundColor: 'rgba(255,255,255,0.15)',
-                            paddingHorizontal: 4,
-                            paddingVertical: 2,
-                            borderRadius: 3
-                          }}
-                          onPressAction={() => onUpdateBreakline(index, val)}
-                        >
-                          <Text style={{ color: '#fff', fontSize: 8 }}>{`+${val}`}</Text>
-                        </HoldableButton>
-                      ))}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          );
-        }
-
-        const isPiano = pianoTracks.has(lane.index);
-        const isSpeaker = speakerTracks.has(lane.index);
-        const isMale = vocalMaleTracks.has(lane.index);
-        const isFemale = vocalFemaleTracks.has(lane.index);
-        const color = getTrackColor(lane.index, isPiano, isSpeaker, isMale, isFemale);
+        const waveformColor = importedVocalsEnabled ? '#e84393' : 'rgba(120, 120, 120, 0.4)';
 
         return (
           <View 
@@ -463,36 +328,161 @@ const NoteGrid = React.memo(({
               { 
                 height: currentLaneHeight, 
                 top: topPos, 
-                borderBottomColor: themeColors.border 
+                borderBottomColor: themeColors.border,
+                backgroundColor: 'rgba(232, 67, 147, 0.05)'
               }
             ]}
           >
-            {/* Note Blocks */}
-            {lane.notes.map((note: any, noteIdx: number) => {
-              const noteWidth = Math.max(2, (note.end - note.start) * PIXELS_PER_SECOND);
-              const noteLeft = note.start * PIXELS_PER_SECOND;
-              const normalizedPitch = (note.pitch - lane.minPitch) / lane.pitchRange;
-              const noteTop = verticalPadding + (usableLaneHeight * (1 - normalizedPitch));
+            {/* Pressable vocal lane area for long-press */}
+            <Pressable
+              onLongPress={(evt) => {
+                onLongPressVocals(evt.nativeEvent.locationX);
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, width: timelineWidth, height: 70 }}
+            >
+              <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                {vocalsWaveformEnvelope && vocalsWaveformEnvelope.length > 0 ? (
+                  vocalsWaveformEnvelope.map((val: number, idx: number) => {
+                    const tMs = idx * 100; // 10 points per sec = 100ms per point
+                    
+                    // Compute dynamic segment offset based on audio boundaries
+                    let offsetMs = importedVocalsDelayMs;
+                    if (sortedBreaks.length > 0) {
+                      for (const b of sortedBreaks) {
+                        const audioBoundary = b.time_ms - offsetMs;
+                        if (tMs > audioBoundary) {
+                          offsetMs = b.offset_ms;
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    
+                    const delayOffsetPx = (offsetMs / 1000) * PIXELS_PER_SECOND;
+                    const left = idx * 0.1 * PIXELS_PER_SECOND + delayOffsetPx;
+                    if (left < -10 || left > timelineWidth + 10) return null;
+                    
+                    // Center waveform in top 70px envelope region
+                    const barHeight = Math.max(2, val * (70 - verticalPadding * 2));
+                    const barTop = verticalPadding + ((70 - verticalPadding * 2) - barHeight) / 2;
+                    
+                    return (
+                      <View
+                        key={idx}
+                        style={{
+                          position: 'absolute',
+                          left,
+                          width: Math.max(1, 0.1 * PIXELS_PER_SECOND - 1),
+                          top: barTop,
+                          height: barHeight,
+                          backgroundColor: waveformColor,
+                          borderRadius: 1
+                        }}
+                      />
+                    );
+                  })
+                ) : (
+                  <Text style={{ position: 'absolute', left: 20, top: 25, fontSize: 11, color: themeColors.textMuted, fontStyle: 'italic' }}>
+                    No waveform data loaded. Long-press here to place markers.
+                  </Text>
+                )}
+              </View>
+            </Pressable>
 
+            {/* Inline Breakline Alignment Controllers in the bottom 50px of expanded lane */}
+            {sortedBreaks.map((b, index) => {
+              const left = (b.time_ms / 1000) * PIXELS_PER_SECOND;
+              
               return (
                 <View
-                  key={noteIdx}
-                  style={[
-                    styles.note,
-                    {
-                      left: noteLeft,
-                      width: noteWidth,
-                      top: noteTop,
-                      height: 4,
-                      backgroundColor: color,
-                    }
-                  ]}
-                />
+                  key={`inline-ctrl-${index}`}
+                  style={{
+                    position: 'absolute',
+                    left: left - 65, // Center the 130px wide controller row
+                    width: 130,
+                    top: 72,
+                    height: 44,
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: '#e84393',
+                    zIndex: 100,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3.84,
+                    elevation: 5,
+                  }}
+                >
+                  <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold', marginBottom: 2 }}>
+                    {b.offset_ms >= 0 ? `+${b.offset_ms}` : b.offset_ms} ms
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {/* Decrements */}
+                    {[-50, -10].map(val => (
+                      <HoldableButton
+                        key={`bctrl-${val}`}
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.15)',
+                          paddingHorizontal: 4,
+                          paddingVertical: 2,
+                          borderRadius: 3
+                        }}
+                        onPressAction={() => onUpdateBreakline(index, val)}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 8 }}>{val}</Text>
+                      </HoldableButton>
+                    ))}
+
+                    {/* Delete Breakline button */}
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#e74c3c',
+                        paddingHorizontal: 5,
+                        paddingVertical: 2,
+                        borderRadius: 3
+                      }}
+                      onPress={() => onDeleteBreakline(index)}
+                    >
+                      <Ionicons name="close" size={10} color="#fff" />
+                    </TouchableOpacity>
+
+                    {/* Increments */}
+                    {[10, 50].map(val => (
+                      <HoldableButton
+                        key={`bctrl-${val}`}
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.15)',
+                          paddingHorizontal: 4,
+                          paddingVertical: 2,
+                          borderRadius: 3
+                        }}
+                        onPressAction={() => onUpdateBreakline(index, val)}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 8 }}>{`+${val}`}</Text>
+                      </HoldableButton>
+                    ))}
+                  </View>
+                </View>
               );
             })}
           </View>
         );
       })}
+
+      <InstrumentLanesContent
+        lanesData={lanesData}
+        laneOffsets={laneOffsets}
+        laneHeights={laneHeights}
+        themeColors={themeColors}
+        pianoTracks={pianoTracks}
+        speakerTracks={speakerTracks}
+        vocalMaleTracks={vocalMaleTracks}
+        vocalFemaleTracks={vocalFemaleTracks}
+      />
     </View>
   );
 }, (prevProps, nextProps) => {
@@ -588,69 +578,6 @@ export const MidiEditorScreen = () => {
   const dragStartYRef = useRef<number>(0);
   const mp3StartPosRef = useRef<number>(0);
   const longPressTimerRef = useRef<any>(null);
-
-  const startMp3Drag = (clientY: number) => {
-    dragStartYRef.current = clientY;
-    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-    longPressTimerRef.current = setTimeout(() => {
-      const currentIdx = getLanesData.findIndex(l => l.index === -99);
-      if (currentIdx !== -1) {
-        mp3StartPosRef.current = currentIdx;
-        setIsDraggingMp3Vocals(true);
-      }
-    }, 200);
-  };
-
-  const moveMp3Drag = (clientY: number) => {
-    if (!isDraggingMp3Vocals && longPressTimerRef.current) {
-      if (Math.abs(clientY - dragStartYRef.current) > 15) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-      return;
-    }
-    if (isDraggingMp3Vocals) {
-      const dy = clientY - dragStartYRef.current;
-      const stepDelta = Math.round(dy / LANE_HEIGHT);
-      const totalLanes = getLanesData.length;
-      const newPos = Math.max(0, Math.min(totalLanes - 1, mp3StartPosRef.current + stepDelta));
-      setMp3VocalsPosition(newPos);
-    }
-  };
-
-  const endMp3Drag = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    setIsDraggingMp3Vocals(false);
-  };
-
-  useEffect(() => {
-    if (!isDraggingMp3Vocals) return;
-    const handleWindowMove = (e: MouseEvent | TouchEvent) => {
-      const pageY = 'touches' in e && e.touches[0] ? e.touches[0].pageY : (e as MouseEvent).pageY;
-      if (pageY !== undefined) {
-        moveMp3Drag(pageY);
-      }
-    };
-    const handleWindowEnd = () => {
-      endMp3Drag();
-    };
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.addEventListener('mousemove', handleWindowMove);
-      window.addEventListener('mouseup', handleWindowEnd);
-      window.addEventListener('touchmove', handleWindowMove);
-      window.addEventListener('touchend', handleWindowEnd);
-      return () => {
-        window.removeEventListener('mousemove', handleWindowMove);
-        window.removeEventListener('mouseup', handleWindowEnd);
-        window.removeEventListener('touchmove', handleWindowMove);
-        window.removeEventListener('touchend', handleWindowEnd);
-      };
-    }
-  }, [isDraggingMp3Vocals]);
 
   const loopConfigRef = useRef({ enabled: false, start: null as number | null, end: null as number | null });
   useEffect(() => {
@@ -962,6 +889,7 @@ export const MidiEditorScreen = () => {
     setImportedVocalsEnabled(impVoc?.enabled ?? true);
     setImportedVocalsVolumeFactor(impVoc?.volume_factor ?? 1.0);
     setImportedVocalsBreaklines(impVoc?.breaklines || []);
+    setMp3VocalsPosition(impVoc?.position ?? null);
     setVocalsWaveformEnvelope(null);
     setLoopStartMs(null);
     setLoopEndMs(null);
@@ -1613,7 +1541,8 @@ export const MidiEditorScreen = () => {
           delay_ms: importedVocalsDelayMs,
           enabled: importedVocalsEnabled,
           volume_factor: importedVocalsVolumeFactor,
-          breaklines: importedVocalsBreaklines
+          breaklines: importedVocalsBreaklines,
+          position: mp3VocalsPosition ?? undefined
         } : undefined
       );
       await fetchJobs();
@@ -1820,6 +1749,123 @@ export const MidiEditorScreen = () => {
     return lanes;
   }, [currentJob, notes, importedVocalsJobId, mp3VocalsPosition]);
 
+  const isDraggingMp3Ref = useRef(isDraggingMp3Vocals);
+  isDraggingMp3Ref.current = isDraggingMp3Vocals;
+  const getLanesDataRef = useRef<any[]>([]);
+  getLanesDataRef.current = getLanesData;
+
+  const startMp3Drag = (clientY: number) => {
+    dragStartYRef.current = clientY;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      const currentIdx = getLanesData.findIndex(l => l.index === -99);
+      if (currentIdx !== -1) {
+        mp3StartPosRef.current = currentIdx;
+        setIsDraggingMp3Vocals(true);
+      }
+    }, 200);
+  };
+
+  const moveMp3Drag = (clientY: number) => {
+    if (!isDraggingMp3Vocals && longPressTimerRef.current) {
+      if (Math.abs(clientY - dragStartYRef.current) > 15) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
+    if (isDraggingMp3Vocals) {
+      const dy = clientY - dragStartYRef.current;
+      const stepDelta = Math.round(dy / LANE_HEIGHT);
+      const totalLanes = getLanesData.length;
+      const newPos = Math.max(0, Math.min(totalLanes - 1, mp3StartPosRef.current + stepDelta));
+      setMp3VocalsPosition(newPos);
+    }
+  };
+
+  const endMp3Drag = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setIsDraggingMp3Vocals(false);
+  };
+
+  const mp3PanResponder = useMemo(() => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return isDraggingMp3Ref.current || Math.abs(gestureState.dy) > 10;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => isDraggingMp3Ref.current,
+      onPanResponderGrant: (evt) => {
+        dragStartYRef.current = evt.nativeEvent.pageY;
+        const currentIdx = getLanesDataRef.current.findIndex(l => l.index === -99);
+        if (currentIdx !== -1) {
+          mp3StartPosRef.current = currentIdx;
+        }
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = setTimeout(() => {
+          setIsDraggingMp3Vocals(true);
+        }, 200);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (!isDraggingMp3Ref.current) {
+          if (Math.abs(gestureState.dy) > 15 && longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+          return;
+        }
+        const stepDelta = Math.round(gestureState.dy / LANE_HEIGHT);
+        const totalLanes = getLanesDataRef.current.length;
+        const newPos = Math.max(0, Math.min(totalLanes - 1, mp3StartPosRef.current + stepDelta));
+        setMp3VocalsPosition(newPos);
+      },
+      onPanResponderRelease: () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+        setIsDraggingMp3Vocals(false);
+      },
+      onPanResponderTerminate: () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+        setIsDraggingMp3Vocals(false);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingMp3Vocals) return;
+    const handleWindowMove = (e: MouseEvent | TouchEvent) => {
+      const pageY = 'touches' in e && e.touches[0] ? e.touches[0].pageY : (e as MouseEvent).pageY;
+      if (pageY !== undefined) {
+        moveMp3Drag(pageY);
+      }
+    };
+    const handleWindowEnd = () => {
+      endMp3Drag();
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('mousemove', handleWindowMove);
+      window.addEventListener('mouseup', handleWindowEnd);
+      window.addEventListener('touchmove', handleWindowMove);
+      window.addEventListener('touchend', handleWindowEnd);
+      return () => {
+        window.removeEventListener('mousemove', handleWindowMove);
+        window.removeEventListener('mouseup', handleWindowEnd);
+        window.removeEventListener('touchmove', handleWindowMove);
+        window.removeEventListener('touchend', handleWindowEnd);
+      };
+    }
+  }, [isDraggingMp3Vocals]);
+
   // Timeline render item notes
   const renderVisualizerTimeline = () => {
     const durationSec = playbackDuration / 1000 || currentJob?.tracks[0]?.duration || 180;
@@ -1861,28 +1907,41 @@ export const MidiEditorScreen = () => {
                     { 
                       height: 120, 
                       borderBottomColor: themeColors.border, 
-                      paddingHorizontal: 10, 
+                      paddingHorizontal: 8, 
                       justifyContent: 'center',
                       backgroundColor: isDraggingMp3Vocals ? 'rgba(232, 67, 147, 0.25)' : themeColors.surface,
                       borderColor: isDraggingMp3Vocals ? '#e84393' : 'transparent',
                       borderWidth: isDraggingMp3Vocals ? 2 : 0,
                       elevation: isDraggingMp3Vocals ? 8 : 0,
                       zIndex: isDraggingMp3Vocals ? 999 : 1,
-                      ...(Platform.OS === 'web' ? { cursor: isDraggingMp3Vocals ? 'grabbing' : 'grab' } as any : {})
                     }
                   ]}
-                  onPressIn={(e: any) => startMp3Drag(e.nativeEvent?.pageY || e.pageY || 0)}
-                  onPressOut={endMp3Drag}
-                  onMouseDown={(e: any) => startMp3Drag(e.pageY || e.clientY || 0)}
-                  onMouseUp={endMp3Drag}
-                  onTouchStart={(e: any) => startMp3Drag(e.touches?.[0]?.pageY || e.nativeEvent?.pageY || 0)}
-                  onTouchEnd={endMp3Drag}
                 >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  {/* Top Half: Drag Handle & Track Info (Only Area with Drag Listener) */}
+                  <View 
+                    {...mp3PanResponder.panHandlers}
+                    onTouchStart={(e: any) => startMp3Drag(e.touches?.[0]?.pageY || e.nativeEvent?.pageY || 0)}
+                    onTouchEnd={endMp3Drag}
+                    {...(Platform.OS === 'web' ? {
+                      onMouseDown: (e: any) => startMp3Drag(e.pageY || e.clientY || 0),
+                      onMouseUp: endMp3Drag
+                    } as any : {})}
+                    style={{ 
+                      flexDirection: 'row', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      marginBottom: 8,
+                      paddingVertical: 6,
+                      paddingHorizontal: 4,
+                      borderRadius: 6,
+                      backgroundColor: 'rgba(232, 67, 147, 0.08)',
+                      ...(Platform.OS === 'web' ? { cursor: isDraggingMp3Vocals ? 'grabbing' : 'grab' } as any : {})
+                    }}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
                       <Ionicons 
                         name="reorder-two" 
-                        size={18} 
+                        size={20} 
                         color={isDraggingMp3Vocals ? "#e84393" : themeColors.textMuted} 
                         style={{ marginRight: 4 }} 
                       />
@@ -1893,7 +1952,7 @@ export const MidiEditorScreen = () => {
                         {isDraggingMp3Vocals ? (
                           <Text style={{ fontSize: 9, color: '#e84393', fontWeight: 'bold' }}>Dragging track...</Text>
                         ) : (
-                          <Text style={{ fontSize: 8, color: themeColors.textMuted }}>Hold & drag up/down</Text>
+                          <Text style={{ fontSize: 8, color: themeColors.textMuted }}>Hold header to drag</Text>
                         )}
                       </View>
                     </View>
@@ -1908,24 +1967,24 @@ export const MidiEditorScreen = () => {
                     </TouchableOpacity>
                   </View>
                   
-                  {/* Delay controls */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  {/* Bottom Half: Delay controls (Isolated from Drag Handlers) */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
                     <HoldableButton 
-                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
                       onPressAction={() => setImportedVocalsDelayMs(prev => prev - 50)}
                     >
-                      <Text style={{ fontSize: 9, color: themeColors.text }}>-50</Text>
+                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>-50</Text>
                     </HoldableButton>
                     
-                    <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>
+                    <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
                       {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
                     </Text>
                     
                     <HoldableButton 
-                      style={{ padding: 4, backgroundColor: themeColors.border, borderRadius: 4 }}
+                      style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
                       onPressAction={() => setImportedVocalsDelayMs(prev => prev + 50)}
                     >
-                      <Text style={{ fontSize: 9, color: themeColors.text }}>+50</Text>
+                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>+50</Text>
                     </HoldableButton>
                   </View>
                 </View>

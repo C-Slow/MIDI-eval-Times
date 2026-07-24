@@ -1420,6 +1420,7 @@ class ImportedVocalsConfig(BaseModel):
     enabled: bool = True
     volume_factor: float = 1.0
     breaklines: Optional[List[BreaklineConfig]] = []
+    position: Optional[int] = None
 
 class ProcessMidiRequest(BaseModel):
     piano_tracks: List[int]
