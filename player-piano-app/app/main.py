@@ -265,22 +265,34 @@ async def process_uploaded_file(raw_path: Path, original_filename: str):
                 new_base = slug
                 new_name = f"{new_base}.mid"
                 
-                # Check for duplicate names and find a unique suffix
+                # Check for duplicate names and find a unique suffix, excluding our current upload files
                 counter = 1
-                while (STORAGE_PROCESSED / new_name).exists() or (STORAGE_RAW / f"{new_name.replace('.mid', '')}_original.mid").exists():
-                    new_name = f"{new_base}-{counter}.mid"
+                curr_proc_path = (STORAGE_PROCESSED / final_filename).resolve()
+                curr_raw_path = raw_path.resolve()
+                
+                while True:
+                    target_proc = STORAGE_PROCESSED / new_name
+                    target_raw = STORAGE_RAW / f"{new_base}_original.mid"
+                    
+                    proc_conflict = target_proc.exists() and target_proc.resolve() != curr_proc_path
+                    raw_conflict = target_raw.exists() and target_raw.resolve() != curr_raw_path
+                    
+                    if not proc_conflict and not raw_conflict:
+                        break
+                        
+                    new_base = f"{slug}-{counter}"
+                    new_name = f"{new_base}.mid"
                     counter += 1
                 
-                new_base = new_name.replace('.mid', '')
-                
                 # Rename processed
-                os.rename(STORAGE_PROCESSED / final_filename, STORAGE_PROCESSED / new_name)
+                if (STORAGE_PROCESSED / final_filename).exists() and (STORAGE_PROCESSED / final_filename).resolve() != (STORAGE_PROCESSED / new_name).resolve():
+                    os.rename(STORAGE_PROCESSED / final_filename, STORAGE_PROCESSED / new_name)
                 
                 # Rename original to match
                 old_raw_path = raw_path
                 new_raw_name = f"{new_base}_original.mid"
                 new_raw_path = STORAGE_RAW / new_raw_name
-                if not new_raw_path.exists():
+                if old_raw_path.exists() and old_raw_path.resolve() != new_raw_path.resolve():
                     os.rename(old_raw_path, new_raw_path)
                     print(f"DEBUG: Renamed raw to: {new_raw_name}")
                 
