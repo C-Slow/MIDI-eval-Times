@@ -131,8 +131,8 @@ async def startup_event():
         while True:
             time.sleep(10)
             try:
-                playback_status = utils.get_playback_status()
-                if playback_status.get("is_playing"):
+                playback_status = utils.playback_status()
+                if playback_status.get("playing"):
                     _last_client_seen_time = time.time()
                     continue
 
@@ -1226,7 +1226,7 @@ def get_settings():
     except Exception:
         return {}
 
-@app.post('/settings', dependencies=[Depends(verify_auth)])
+@app.post('/settings')
 def save_settings(settings: dict):
     try:
         existing = get_settings_data()
