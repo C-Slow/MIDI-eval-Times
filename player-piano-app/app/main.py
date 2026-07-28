@@ -318,14 +318,28 @@ class Base64UploadRequest(BaseModel):
     engine: Optional[str] = "bytedance"
     engine_sensitivity: Optional[float] = 1.0
     include_other: Optional[bool] = False
+def get_unique_upload_path(filename: str):
+    p = Path(filename)
+    stem = p.stem
+    if stem.endswith('_original'):
+        stem = stem[:-9]
+    ext = p.suffix if p.suffix.lower() in ('.mid', '.midi') else '.mid'
+
+    candidate = stem
+    counter = 1
+    while (STORAGE_RAW / f"{candidate}_original{ext}").exists() or (STORAGE_PROCESSED / f"{candidate}{ext}").exists():
+        candidate = f"{stem}-{counter}"
+        counter += 1
+
+    raw_filename = f"{candidate}_original{ext}"
+    return raw_filename, STORAGE_RAW / raw_filename
+
 @app.post('/upload_base64', dependencies=[Depends(verify_auth)])
 async def upload_base64(req: Base64UploadRequest):
     import base64
     print(f"DEBUG: Received Base64 upload for: {req.filename}")
     try:
-        p = Path(req.filename)
-        new_name = f"{p.stem}_original{p.suffix}"
-        dest = STORAGE_RAW / new_name
+        new_name, dest = get_unique_upload_path(req.filename)
         
         file_data = base64.b64decode(req.data)
         dest.write_bytes(file_data)
@@ -347,9 +361,7 @@ def login(req: LoginRequest):
 
 @app.post('/upload', dependencies=[Depends(verify_auth)])
 async def upload(file: UploadFile = File(...)):
-    p = Path(file.filename)
-    new_name = f"{p.stem}_original{p.suffix}"
-    dest = STORAGE_RAW / new_name
+    new_name, dest = get_unique_upload_path(file.filename)
     with open(dest, 'wb') as f:
         shutil.copyfileobj(file.file, f)
     
