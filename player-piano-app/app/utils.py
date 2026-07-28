@@ -412,8 +412,10 @@ def load_settings() -> dict:
 def save_settings(settings: dict):
     try:
         os.makedirs(os.path.dirname(SETTINGS_JSON), exist_ok=True)
+        existing = load_settings()
+        existing.update(settings)
         with open(SETTINGS_JSON, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, indent=2)
+            json.dump(existing, f, indent=2)
     except Exception as e:
         print(f"Error saving settings: {e}")
 

@@ -84,7 +84,7 @@ app.add_middleware(
 async def update_last_client_seen(request, call_next):
     global _last_client_seen_time
     path = request.url.path
-    if any(p in path for p in ["/queue/status", "/playback/status", "/midi/status"]):
+    if not any(path.startswith(prefix) for prefix in ["/static/", "/_expo/", "/assets/"]) and path != "/favicon.ico":
         _last_client_seen_time = time.time()
     response = await call_next(request)
     return response
@@ -131,6 +131,11 @@ async def startup_event():
         while True:
             time.sleep(10)
             try:
+                playback_status = utils.get_playback_status()
+                if playback_status.get("is_playing"):
+                    _last_client_seen_time = time.time()
+                    continue
+
                 settings = utils.load_settings()
                 if settings.get("backend_audio_enabled", False):
                     elapsed = time.time() - _last_client_seen_time
@@ -1221,10 +1226,12 @@ def get_settings():
     except Exception:
         return {}
 
-@app.post('/settings')
+@app.post('/settings', dependencies=[Depends(verify_auth)])
 def save_settings(settings: dict):
     try:
-        SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding='utf-8')
+        existing = get_settings_data()
+        existing.update(settings)
+        SETTINGS_FILE.write_text(json.dumps(existing, indent=2), encoding='utf-8')
         if 'target_device' in settings:
             utils.set_auto_connect_target(settings['target_device'])
         return {'status': 'saved'}
