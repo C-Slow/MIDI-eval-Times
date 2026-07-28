@@ -20,47 +20,78 @@ export const SettingsScreen = () => {
   const themeColors = Colors[theme];
 
   const handleResetTarget = async () => {
-    Alert.alert(
-      'Reset Connection Target',
-      'This will clear the target_device setting. Proceed?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            setIsResettingTarget(true);
-            try {
-              await systemApi.resetTargetDevice();
-              Alert.alert('Reset Successful', 'The target connection device has been reset. Please reconnect.');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to reset target device.');
-            } finally {
-              setIsResettingTarget(false);
-            }
-          }
+    const confirmMessage = 'This will clear the target_device setting. Proceed?';
+    const performReset = async () => {
+      setIsResettingTarget(true);
+      try {
+        await systemApi.resetTargetDevice();
+        if (Platform.OS === 'web') {
+          window.alert('The target connection device has been reset. Please reconnect.');
+        } else {
+          Alert.alert('Reset Successful', 'The target connection device has been reset. Please reconnect.');
         }
-      ]
-    );
+      } catch (error) {
+        if (Platform.OS === 'web') {
+          window.alert('Failed to reset target device.');
+        } else {
+          Alert.alert('Error', 'Failed to reset target device.');
+        }
+      } finally {
+        setIsResettingTarget(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        await performReset();
+      }
+    } else {
+      Alert.alert(
+        'Reset Connection Target',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
+            onPress: performReset
+          }
+        ]
+      );
+    }
   };
 
   const handleCreateBackup = async () => {
     setIsBackingUp(true);
     try {
       await systemApi.createBackup();
-      Alert.alert('Backup Started', 'The server is creating a backup in the background.');
+      if (Platform.OS === 'web') {
+        window.alert('The server is creating a backup in the background.');
+      } else {
+        Alert.alert('Backup Started', 'The server is creating a backup in the background.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to trigger backup.');
+      if (Platform.OS === 'web') {
+        window.alert('Failed to trigger backup.');
+      } else {
+        Alert.alert('Error', 'Failed to trigger backup.');
+      }
     } finally {
       setIsBackingUp(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: logout }
-    ]);
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to log out?')) {
+        logout();
+      }
+    } else {
+      Alert.alert('Logout', 'Are you sure you want to log out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: logout }
+      ]);
+    }
   };
 
   const checkStatus = async () => {
@@ -81,9 +112,17 @@ export const SettingsScreen = () => {
     setIsSavingKey(true);
     try {
       await settingsApi.saveGeminiKey(geminiKey);
-      Alert.alert('Success', 'Gemini API key saved.');
+      if (Platform.OS === 'web') {
+        window.alert('Gemini API key saved.');
+      } else {
+        Alert.alert('Success', 'Gemini API key saved.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to save Gemini key.');
+      if (Platform.OS === 'web') {
+        window.alert('Failed to save Gemini key.');
+      } else {
+        Alert.alert('Error', 'Failed to save Gemini key.');
+      }
     } finally {
       setIsSavingKey(false);
     }
@@ -128,7 +167,11 @@ export const SettingsScreen = () => {
       const results = await midiApi.scan();
       setDevices(results);
     } catch (error) {
-      Alert.alert('Scan Failed', 'Could not scan for Bluetooth devices.');
+      if (Platform.OS === 'web') {
+        window.alert('Could not scan for Bluetooth devices.');
+      } else {
+        Alert.alert('Scan Failed', 'Could not scan for Bluetooth devices.');
+      }
     } finally {
       setScanning(false);
     }
@@ -138,45 +181,76 @@ export const SettingsScreen = () => {
     try {
       await midiApi.connect(name);
       setPianoStatus(false, name);
-      Alert.alert('Connecting', `Searching for ${name}...`);
+      if (Platform.OS === 'web') {
+        window.alert(`Searching for ${name}...`);
+      } else {
+        Alert.alert('Connecting', `Searching for ${name}...`);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update target device.');
+      if (Platform.OS === 'web') {
+        window.alert('Failed to update target device.');
+      } else {
+        Alert.alert('Error', 'Failed to update target device.');
+      }
     }
   };
 
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
-      Alert.alert('Validation Error', 'Password cannot be empty.');
+      if (Platform.OS === 'web') {
+        window.alert('Password cannot be empty.');
+      } else {
+        Alert.alert('Validation Error', 'Password cannot be empty.');
+      }
       return;
     }
     
-    Alert.alert(
-      'Update Password',
-      'This will change the master password. You will need to log in again on all devices. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Update & Logout', 
-          style: 'destructive', 
-          onPress: async () => {
-            setIsSavingPassword(true);
-            try {
-              const currentSettings = await settingsApi.getSettings();
-              currentSettings.password = newPassword.trim();
-              await settingsApi.saveSettings(currentSettings);
-              
-              Alert.alert('Success', 'Password updated successfully. Logging out...', [
-                { text: 'OK', onPress: logout }
-              ]);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to update password.');
-            } finally {
-              setIsSavingPassword(false);
-            }
-          } 
+    const confirmMessage = 'This will change the master password. You will need to log in again on all devices. Continue?';
+
+    const performUpdate = async () => {
+      setIsSavingPassword(true);
+      try {
+        const currentSettings = await settingsApi.getSettings();
+        currentSettings.password = newPassword.trim();
+        await settingsApi.saveSettings(currentSettings);
+        
+        if (Platform.OS === 'web') {
+          window.alert('Password updated successfully. Logging out...');
+          logout();
+        } else {
+          Alert.alert('Success', 'Password updated successfully. Logging out...', [
+            { text: 'OK', onPress: logout }
+          ]);
         }
-      ]
-    );
+      } catch (error) {
+        if (Platform.OS === 'web') {
+          window.alert('Failed to update password.');
+        } else {
+          Alert.alert('Error', 'Failed to update password.');
+        }
+      } finally {
+        setIsSavingPassword(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMessage)) {
+        await performUpdate();
+      }
+    } else {
+      Alert.alert(
+        'Update Password',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Update & Logout', 
+            style: 'destructive', 
+            onPress: performUpdate 
+          }
+        ]
+      );
+    }
   };
 
   return (
