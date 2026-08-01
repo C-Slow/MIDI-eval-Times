@@ -3062,9 +3062,9 @@ export const MidiEditorScreen = () => {
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         {[
-                          { label: 'Small (40%)', val: 0.4 },
-                          { label: 'Concert Hall (75%)', val: 0.75 },
-                          { label: 'Cathedral (95%)', val: 0.95 }
+                          { label: 'Studio (35%)', val: 0.35 },
+                          { label: 'Concert Hall (55%)', val: 0.55 },
+                          { label: 'Cathedral (80%)', val: 0.80 }
                         ].map((preset) => {
                           const isSel = Math.abs(reverbRoomSize - preset.val) < 0.08;
                           return (

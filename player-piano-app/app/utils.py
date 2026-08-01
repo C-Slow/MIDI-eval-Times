@@ -114,9 +114,9 @@ def render_midi_to_wav_with_soundfont(
     if reverb_enabled is None:
         reverb_enabled = bool(settings.get("reverb_enabled", True))
     if reverb_room_size is None:
-        reverb_room_size = float(settings.get("reverb_room_size", 0.75))
+        reverb_room_size = float(settings.get("reverb_room_size", 0.55))
     if reverb_level is None:
-        reverb_level = float(settings.get("reverb_level", 0.55))
+        reverb_level = float(settings.get("reverb_level", 0.25))
     if polyphony is None:
         polyphony = int(settings.get("polyphony", 512))
     if interpolation is None:
@@ -150,9 +150,9 @@ def render_midi_to_wav_with_soundfont(
         cmd.extend([
             '-R', '1',
             '-o', f'synth.reverb.room-size={reverb_room_size}',
-            '-o', 'synth.reverb.damp=0.30',
+            '-o', 'synth.reverb.damp=0.65',
             '-o', f'synth.reverb.level={reverb_level}',
-            '-o', 'synth.reverb.width=0.90'
+            '-o', 'synth.reverb.width=0.85'
         ])
     else:
         cmd.extend(['-R', '0'])
