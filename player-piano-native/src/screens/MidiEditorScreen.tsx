@@ -621,6 +621,12 @@ export const MidiEditorScreen = () => {
   const setSelectedDevice = useStore(state => state.setSelectedDevice);
   const [audioDevices, setAudioDevices] = useState<any[]>([]);
 
+  // SoundFont & DSP Audio Quality states
+  const [soundfonts, setSoundfonts] = useState<string[]>([]);
+  const [activeSoundfont, setActiveSoundfont] = useState<string>('SGM-V2.01.sf2');
+  const [reverbEnabled, setReverbEnabled] = useState<boolean>(true);
+  const [reverbRoomSize, setReverbRoomSize] = useState<number>(0.75);
+
   const pianoPlayback = useStore(state => state.pianoPlayback);
   const pianoStartedRef = useRef(false);
 
@@ -650,6 +656,9 @@ export const MidiEditorScreen = () => {
         setBackendAudioEnabled(data.backend_audio_enabled);
         setSelectedDevice(data.selected_device);
         setBackendAudioVolume(data.backend_audio_volume ?? 1.0);
+        if (data.active_soundfont) setActiveSoundfont(data.active_soundfont);
+        if (data.reverb_enabled !== undefined) setReverbEnabled(data.reverb_enabled);
+        if (data.reverb_room_size !== undefined) setReverbRoomSize(data.reverb_room_size);
       } catch (err) {
         console.error('Failed to fetch backend audio settings', err);
       }
@@ -657,20 +666,64 @@ export const MidiEditorScreen = () => {
     initSettings();
   }, [setBackendAudioEnabled, setBackendAudioVolume]);
 
-  // Fetch devices when settings panel is opened
+  // Fetch devices and soundfonts when settings panel is opened
   useEffect(() => {
     if (showSettings) {
-      const fetchDevices = async () => {
+      const fetchDevicesAndSoundfonts = async () => {
         try {
-          const data = await midiOrchestratorApi.getAudioDevices();
-          setAudioDevices(data.devices || []);
+          const [devicesRes, sfRes] = await Promise.all([
+            midiOrchestratorApi.getAudioDevices(),
+            midiOrchestratorApi.getSoundfonts()
+          ]);
+          setAudioDevices(devicesRes.devices || []);
+          if (sfRes.soundfonts) setSoundfonts(sfRes.soundfonts);
+          if (sfRes.active_soundfont) setActiveSoundfont(sfRes.active_soundfont);
         } catch (err) {
-          console.error('Failed to fetch audio devices', err);
+          console.error('Failed to fetch audio devices or soundfonts', err);
         }
       };
-      fetchDevices();
+      fetchDevicesAndSoundfonts();
     }
   }, [showSettings]);
+
+  const handleSelectSoundfont = async (sf: string) => {
+    setActiveSoundfont(sf);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
+        active_soundfont: sf,
+        reverb_enabled: reverbEnabled,
+        reverb_room_size: reverbRoomSize
+      });
+    } catch (err) {
+      console.error('Failed to save soundfont setting', err);
+    }
+  };
+
+  const handleToggleReverb = async (enabled: boolean) => {
+    setReverbEnabled(enabled);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
+        active_soundfont: activeSoundfont,
+        reverb_enabled: enabled,
+        reverb_room_size: reverbRoomSize
+      });
+    } catch (err) {
+      console.error('Failed to save reverb setting', err);
+    }
+  };
+
+  const handleChangeReverbRoomSize = async (size: number) => {
+    setReverbRoomSize(size);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
+        active_soundfont: activeSoundfont,
+        reverb_enabled: reverbEnabled,
+        reverb_room_size: size
+      });
+    } catch (err) {
+      console.error('Failed to save reverb room size setting', err);
+    }
+  };
 
   const handleToggleBackendAudio = async (enabled: boolean) => {
     setBackendAudioEnabled(enabled);
@@ -2932,64 +2985,105 @@ export const MidiEditorScreen = () => {
                   </View>
                 )}
 
-                {/* Backend Speaker Control Section */}
+                {/* Symphony SoundFont & DSP Audio Quality Section */}
                 <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
 
                 <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
-                  <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold', marginBottom: 8 }]}>
-                    Backend Speaker Selection
+                  <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold', marginBottom: 6 }]}>
+                    Symphony SoundFont & Audio Quality
                   </Text>
-
-                  {backendAudioEnabled ? (
-                    <View style={{ marginTop: 4 }}>
-                      <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 6 }}>
-                        Select Bluetooth Speaker:
-                      </Text>
-                      {audioDevices.length === 0 ? (
-                        <Text style={{ color: themeColors.textMuted, fontSize: 11, fontStyle: 'italic' }}>
-                          No paired Bluetooth devices found. Make sure it is paired in Windows settings.
-                        </Text>
-                      ) : (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                          {audioDevices.map((device: any) => {
-                            const isSelected = selectedDevice === device.name;
-                            return (
-                              <TouchableOpacity
-                                key={device.name}
-                                style={[
-                                  {
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    borderRadius: 8,
-                                    borderWidth: 1,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 6
-                                  },
-                                  isSelected 
-                                    ? { backgroundColor: themeColors.accentLight, borderColor: themeColors.accent } 
-                                    : { backgroundColor: themeColors.surface, borderColor: themeColors.border }
-                                ]}
-                                onPress={() => handleSelectDevice(device.name)}
-                              >
-                                <Ionicons 
-                                  name={device.index >= 0 ? "bluetooth" : "bluetooth-outline"} 
-                                  size={14} 
-                                  color={isSelected ? themeColors.accent : themeColors.textMuted} 
-                                />
-                                <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: isSelected ? '600' : '400' }}>
-                                  {device.name} {device.index >= 0 ? '(connected)' : ''}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </ScrollView>
-                      )}
-                    </View>
-                  ) : (
-                    <Text style={{ color: themeColors.textMuted, fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>
-                      Enable "Backend Speakers" at the top of the screen to connect a Bluetooth speaker.
+                  <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 8 }}>
+                    Active SoundFont Engine:
+                  </Text>
+                  {soundfonts.length === 0 ? (
+                    <Text style={{ color: themeColors.textMuted, fontSize: 11, fontStyle: 'italic' }}>
+                      Scanning soundfonts in storage...
                     </Text>
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingBottom: 6 }}>
+                      {soundfonts.map((sf: string) => {
+                        const isSelected = activeSoundfont === sf;
+                        return (
+                          <TouchableOpacity
+                            key={sf}
+                            style={[
+                              {
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6
+                              },
+                              isSelected 
+                                ? { backgroundColor: themeColors.accentLight, borderColor: themeColors.accent } 
+                                : { backgroundColor: themeColors.surface, borderColor: themeColors.border }
+                            ]}
+                            onPress={() => handleSelectSoundfont(sf)}
+                          >
+                            <Ionicons 
+                              name={isSelected ? "disc" : "disc-outline"} 
+                              size={14} 
+                              color={isSelected ? themeColors.accent : themeColors.textMuted} 
+                            />
+                            <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: isSelected ? '600' : '400' }}>
+                              {sf}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
+
+                  {/* Reverb Toggle & Room Size */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
+                      <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: '600' }}>
+                        Concert Hall Reverb DSP
+                      </Text>
+                    </View>
+                    <Switch
+                      value={reverbEnabled}
+                      onValueChange={handleToggleReverb}
+                      trackColor={{ false: themeColors.border, true: themeColors.accent }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  {reverbEnabled && (
+                    <View style={{ marginTop: 8 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 11, color: themeColors.textMuted }}>Hall Room Size:</Text>
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
+                          {Math.round(reverbRoomSize * 100)}%
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {[
+                          { label: 'Small (40%)', val: 0.4 },
+                          { label: 'Concert Hall (75%)', val: 0.75 },
+                          { label: 'Cathedral (95%)', val: 0.95 }
+                        ].map((preset) => {
+                          const isSel = Math.abs(reverbRoomSize - preset.val) < 0.08;
+                          return (
+                            <TouchableOpacity
+                              key={preset.label}
+                              style={[
+                                styles.presetBadge,
+                                isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
+                              ]}
+                              onPress={() => handleChangeReverbRoomSize(preset.val)}
+                            >
+                              <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
+                                {preset.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
                   )}
                 </View>
               </View>

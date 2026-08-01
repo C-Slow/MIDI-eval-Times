@@ -27,71 +27,130 @@ RENDER_CACHE = os.path.join(PROJECT_ROOT, 'storage', 'render_cache')
 STORAGE_RAW = os.path.join(PROJECT_ROOT, 'storage', 'raw')
 STORAGE_PROCESSED = os.path.join(PROJECT_ROOT, 'storage', 'processed')
 
-def render_midi_to_wav(midi_path: str) -> str:
-    """Render MIDI to WAV using FluidSynth and the Salamander SoundFont."""
-    import subprocess
-    
-    os.makedirs(RENDER_CACHE, exist_ok=True)
-    filename = os.path.basename(midi_path)
-    wav_path = os.path.join(RENDER_CACHE, filename + '.wav')
-    
-    # Check if we already have a fresh render
-    if os.path.exists(wav_path):
-        if os.path.getmtime(wav_path) > os.path.getmtime(midi_path):
-            return wav_path
-            
-    _log(f"Rendering {filename} to WAV...")
-    
-    if not os.path.exists(FLUIDSYNTH_BIN):
-        _log(f"FluidSynth not found at {FLUIDSYNTH_BIN}")
-        raise FileNotFoundError(f"FluidSynth not found at {FLUIDSYNTH_BIN}")
-    if not os.path.exists(SOUNDFONT):
-        _log(f"SoundFont not found at {SOUNDFONT}")
-        raise FileNotFoundError(f"SoundFont not found at {SOUNDFONT}")
-
-    # Use direct subprocess with correct argument order for newer FluidSynth versions
-    # Added -g 5.0 for maximum volume boost
-    cmd = [
-        FLUIDSYNTH_BIN,
-        '-ni',
-        '-g', '5.0',
-        '-F', wav_path,
-        '-r', '44100',
-        SOUNDFONT,
-        midi_path
-    ]
-    
+def get_available_soundfonts() -> List[str]:
+    """Scan storage directory for valid .sf2 / .sf3 soundfonts."""
+    storage_dir = os.path.join(PROJECT_ROOT, 'storage')
+    if not os.path.exists(storage_dir):
+        return []
+    valid = []
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            _log(f"FluidSynth error: {result.stderr}")
-            raise RuntimeError(f"FluidSynth failed: {result.stderr}")
-            
-        _log(f"Render complete: {wav_path}")
-        return wav_path
+        soundfont_candidates = [f for f in os.listdir(storage_dir) if f.lower().endswith(('.sf2', '.sf3'))]
+        for sf in soundfont_candidates:
+            sf_path = os.path.join(storage_dir, sf)
+            try:
+                with open(sf_path, 'rb') as f:
+                    header = f.read(100)
+                if b'<!DOCTYPE html>' in header or b'<html' in header:
+                    continue
+                if sf_path and os.path.getsize(sf_path) > 1000:
+                    valid.append(sf)
+            except Exception:
+                pass
     except Exception as e:
-        _log(f"Rendering failed for {filename}: {str(e)}")
-        raise e
+        _log(f"Error scanning soundfonts: {e}")
+    return sorted(valid)
 
 
-def render_midi_to_wav_with_soundfont(midi_path: str, soundfont_path: str, out_wav_path: str) -> str:
-    """Render MIDI to WAV using FluidSynth and a specific SoundFont."""
+def get_active_soundfont_path() -> str:
+    """Get path to the active soundfont from settings or priority fallback list."""
+    settings = load_settings()
+    configured_sf = settings.get("active_soundfont")
+    storage_dir = os.path.join(PROJECT_ROOT, 'storage')
+    if configured_sf:
+        sf_path = os.path.join(storage_dir, configured_sf)
+        if os.path.exists(sf_path):
+            try:
+                with open(sf_path, 'rb') as f:
+                    header = f.read(100)
+                if not (b'<!DOCTYPE html>' in header or b'<html' in header):
+                    return sf_path
+            except Exception:
+                pass
+            
+    # Priority fallback list
+    priority_list = [
+        "SGM-V2.01.sf2",
+        "FluidR3_GM.sf2",
+        "ChoriumRevA.sf2",
+        "Arachno.sf2",
+        "Salamander.sf2",
+        "GeneralUser_GS.sf2"
+    ]
+    for sf_name in priority_list:
+        sf_path = os.path.join(storage_dir, sf_name)
+        if os.path.exists(sf_path):
+            try:
+                with open(sf_path, 'rb') as f:
+                    header = f.read(100)
+                if not (b'<!DOCTYPE html>' in header or b'<html' in header):
+                    return sf_path
+            except Exception:
+                pass
+    return SOUNDFONT
+
+
+def render_midi_to_wav_with_soundfont(
+    midi_path: str, 
+    soundfont_path: str, 
+    out_wav_path: str,
+    gain: float = None,
+    reverb_enabled: bool = None,
+    reverb_room_size: float = None,
+    reverb_level: float = None,
+    polyphony: int = None,
+    interpolation: int = None
+) -> str:
+    """Render MIDI to WAV using FluidSynth with optimized audio parameters."""
     import subprocess
     
     if not os.path.exists(FLUIDSYNTH_BIN):
         raise FileNotFoundError(f"FluidSynth not found at {FLUIDSYNTH_BIN}")
     if not os.path.exists(soundfont_path):
         raise FileNotFoundError(f"SoundFont not found at {soundfont_path}")
-        
+
+    settings = load_settings()
+    if gain is None:
+        gain = float(settings.get("synth_gain", 1.8))
+    if reverb_enabled is None:
+        reverb_enabled = bool(settings.get("reverb_enabled", True))
+    if reverb_room_size is None:
+        reverb_room_size = float(settings.get("reverb_room_size", 0.75))
+    if reverb_level is None:
+        reverb_level = float(settings.get("reverb_level", 0.55))
+    if polyphony is None:
+        polyphony = int(settings.get("polyphony", 512))
+    if interpolation is None:
+        interpolation = int(settings.get("interpolation", 7))
+
     cmd = [
         FLUIDSYNTH_BIN,
         '-ni',
-        '-g', '3.0',
+        '-g', str(gain),
+        '-r', '48000',
+        '-o', f'synth.polyphony={polyphony}',
+        '-o', f'synth.interpolation={interpolation}',
+        '-o', 'synth.cpu-cores=4',
+    ]
+
+    if reverb_enabled:
+        cmd.extend([
+            '-R', '1',
+            '-o', f'synth.reverb.room-size={reverb_room_size}',
+            '-o', 'synth.reverb.damp=0.30',
+            '-o', f'synth.reverb.level={reverb_level}',
+            '-o', 'synth.reverb.width=0.90'
+        ])
+    else:
+        cmd.extend(['-R', '0'])
+
+    cmd.extend([
+        '-C', '1',
+        '-o', 'synth.chorus.depth=3.0',
+        '-o', 'synth.chorus.level=0.30',
         '-F', out_wav_path,
-        '-r', '44100',
         soundfont_path,
         midi_path
-    ]
+    ])
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -104,6 +163,21 @@ def render_midi_to_wav_with_soundfont(midi_path: str, soundfont_path: str, out_w
     except Exception as e:
         _log(f"Rendering failed: {str(e)}")
         raise e
+
+
+def render_midi_to_wav(midi_path: str) -> str:
+    """Render MIDI to WAV using FluidSynth and the active GM/Orchestral SoundFont."""
+    os.makedirs(RENDER_CACHE, exist_ok=True)
+    filename = os.path.basename(midi_path)
+    wav_path = os.path.join(RENDER_CACHE, filename + '.wav')
+    
+    if os.path.exists(wav_path):
+        if os.path.getmtime(wav_path) > os.path.getmtime(midi_path):
+            return wav_path
+            
+    _log(f"Rendering {filename} to WAV...")
+    active_sf = get_active_soundfont_path()
+    return render_midi_to_wav_with_soundfont(midi_path, active_sf, wav_path)
 
 
 def _log(msg):

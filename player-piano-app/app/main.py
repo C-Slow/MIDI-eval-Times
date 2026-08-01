@@ -1869,14 +1869,37 @@ class AudioSettingsRequest(BaseModel):
     backend_audio_enabled: bool
     selected_device: str
     backend_audio_volume: float
+    active_soundfont: Optional[str] = None
+    reverb_enabled: Optional[bool] = True
+    reverb_room_size: Optional[float] = 0.75
+    reverb_level: Optional[float] = 0.55
+    polyphony: Optional[int] = 512
+    synth_gain: Optional[float] = 1.8
+
+@app.get("/midi-orchestrator/soundfonts", dependencies=[Depends(verify_auth)])
+def get_midi_orchestrator_soundfonts():
+    fonts = utils.get_available_soundfonts()
+    active_sf_path = utils.get_active_soundfont_path()
+    active_sf_name = os.path.basename(active_sf_path)
+    return {
+        "soundfonts": fonts,
+        "active_soundfont": active_sf_name
+    }
 
 @app.get("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
 def get_midi_orchestrator_audio_settings():
     settings = utils.load_settings()
+    active_sf_name = os.path.basename(utils.get_active_soundfont_path())
     return {
         "backend_audio_enabled": settings.get("backend_audio_enabled", False),
         "selected_device": settings.get("selected_device", ""),
-        "backend_audio_volume": settings.get("backend_audio_volume", 1.0)
+        "backend_audio_volume": settings.get("backend_audio_volume", 1.0),
+        "active_soundfont": settings.get("active_soundfont", active_sf_name),
+        "reverb_enabled": settings.get("reverb_enabled", True),
+        "reverb_room_size": settings.get("reverb_room_size", 0.75),
+        "reverb_level": settings.get("reverb_level", 0.55),
+        "polyphony": settings.get("polyphony", 512),
+        "synth_gain": settings.get("synth_gain", 1.8),
     }
 
 @app.post("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
@@ -1885,6 +1908,19 @@ def save_midi_orchestrator_audio_settings(req: AudioSettingsRequest):
     settings["backend_audio_enabled"] = req.backend_audio_enabled
     settings["selected_device"] = req.selected_device
     settings["backend_audio_volume"] = req.backend_audio_volume
+    if req.active_soundfont is not None:
+        settings["active_soundfont"] = req.active_soundfont
+    if req.reverb_enabled is not None:
+        settings["reverb_enabled"] = req.reverb_enabled
+    if req.reverb_room_size is not None:
+        settings["reverb_room_size"] = req.reverb_room_size
+    if req.reverb_level is not None:
+        settings["reverb_level"] = req.reverb_level
+    if req.polyphony is not None:
+        settings["polyphony"] = req.polyphony
+    if req.synth_gain is not None:
+        settings["synth_gain"] = req.synth_gain
+        
     utils.save_settings(settings)
     utils._backend_audio_volume = req.backend_audio_volume
     return {"status": "success", "settings": settings}

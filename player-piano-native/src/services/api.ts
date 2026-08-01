@@ -362,15 +362,32 @@ export const midiOrchestratorApi = {
     const res = await api.post(`/midi-orchestrator/play/${jobId}?offset=${offset}`);
     return res.data;
   },
+  getSoundfonts: async () => {
+    const res = await api.get('/midi-orchestrator/soundfonts');
+    return res.data;
+  },
   getAudioSettings: async () => {
     const res = await api.get('/midi-orchestrator/audio-settings');
     return res.data;
   },
-  saveAudioSettings: async (backendAudioEnabled: boolean, selectedDevice: string, backendAudioVolume: number) => {
+  saveAudioSettings: async (
+    backendAudioEnabled: boolean, 
+    selectedDevice: string, 
+    backendAudioVolume: number,
+    extraSettings: {
+      active_soundfont?: string;
+      reverb_enabled?: boolean;
+      reverb_room_size?: number;
+      reverb_level?: number;
+      polyphony?: number;
+      synth_gain?: number;
+    } = {}
+  ) => {
     const res = await api.post('/midi-orchestrator/audio-settings', {
       backend_audio_enabled: backendAudioEnabled,
       selected_device: selectedDevice,
-      backend_audio_volume: backendAudioVolume
+      backend_audio_volume: backendAudioVolume,
+      ...extraSettings
     });
     return res.data;
   },
