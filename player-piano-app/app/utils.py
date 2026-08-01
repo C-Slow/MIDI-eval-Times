@@ -89,13 +89,17 @@ def get_active_soundfont_path() -> str:
     return SOUNDFONT
 
 
-def normalize_wav_file(wav_path: str, target_peak_db: float = -0.5):
+def normalize_wav_file(wav_path: str, target_peak_db: float = None):
     """Normalize a 16-bit WAV file so peaks top out cleanly below 0 dBFS without clipping."""
     import wave
     import struct
     try:
         if not os.path.exists(wav_path):
             return
+        if target_peak_db is None:
+            settings = load_settings()
+            target_peak_db = float(settings.get("peak_ceiling_db", -6.0))
+
         with wave.open(wav_path, 'rb') as wf:
             params = wf.getparams()
             if params.sampwidth != 2:
@@ -107,10 +111,8 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = -0.5):
         if max_val <= 0:
             return
 
-        target_max = int(32767 * (10 ** (target_peak_db / 20.0)))
+        target_max = int(32767.0 * (10.0 ** (target_peak_db / 20.0)))
         scale = target_max / float(max_val)
-        if scale >= 1.0 and max_val <= target_max:
-            return
 
         norm_samples = [max(-32768, min(32767, int(s * scale))) for s in samples]
         norm_frames = struct.pack(f"<{len(norm_samples)}h", *norm_samples)
@@ -118,7 +120,7 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = -0.5):
         with wave.open(wav_path, 'wb') as wf:
             wf.setparams(params)
             wf.writeframes(norm_frames)
-        _log(f"Normalized {os.path.basename(wav_path)} (peak scale: {scale:.2f})")
+        _log(f"Normalized {os.path.basename(wav_path)} to {target_peak_db:.1f} dBFS (scale: {scale:.2f})")
     except Exception as e:
         _log(f"Peak normalization skipped: {e}")
 

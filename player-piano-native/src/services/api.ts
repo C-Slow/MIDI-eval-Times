@@ -381,6 +381,7 @@ export const midiOrchestratorApi = {
       reverb_level?: number;
       polyphony?: number;
       synth_gain?: number;
+      peak_ceiling_db?: number;
     } = {}
   ) => {
     const res = await api.post('/midi-orchestrator/audio-settings', {

@@ -508,12 +508,16 @@ class MidiOrchestrator:
                     padded = np.stack([padded, padded], axis=1)
             mixed_data += padded
             
-        # Prevent clipping by normalizing
+        # Prevent clipping and apply peak ceiling headroom
+        settings = utils.load_settings()
+        peak_ceiling_db = float(settings.get("peak_ceiling_db", -6.0))
+        target_max = 32767.0 * (10.0 ** (peak_ceiling_db / 20.0))
+
         max_val = np.max(np.abs(mixed_data))
-        if max_val > 32767.0:
-            mixed_data = (mixed_data / max_val) * 32767.0
-            
-        mixed_int = mixed_data.astype(np.int16)
+        if max_val > 0:
+            mixed_data = (mixed_data / max_val) * target_max
+
+        mixed_int = np.clip(mixed_data, -32768.0, 32767.0).astype(np.int16)
         wavfile.write(str(output_path), rate, mixed_int)
 
     def _process_task(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str, rhythm_factor: float, melody_factor: float, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None):

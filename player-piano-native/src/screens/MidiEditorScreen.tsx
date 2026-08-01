@@ -627,6 +627,8 @@ export const MidiEditorScreen = () => {
   const [reverbEnabled, setReverbEnabled] = useState<boolean>(true);
   const [reverbRoomSize, setReverbRoomSize] = useState<number>(0.75);
 
+  const [peakCeilingDb, setPeakCeilingDb] = useState<number>(-6.0);
+
   const pianoPlayback = useStore(state => state.pianoPlayback);
   const pianoStartedRef = useRef(false);
 
@@ -659,6 +661,7 @@ export const MidiEditorScreen = () => {
         if (data.active_soundfont) setActiveSoundfont(data.active_soundfont);
         if (data.reverb_enabled !== undefined) setReverbEnabled(data.reverb_enabled);
         if (data.reverb_room_size !== undefined) setReverbRoomSize(data.reverb_room_size);
+        if (data.peak_ceiling_db !== undefined) setPeakCeilingDb(data.peak_ceiling_db);
       } catch (err) {
         console.error('Failed to fetch backend audio settings', err);
       }
@@ -692,7 +695,8 @@ export const MidiEditorScreen = () => {
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: sf,
         reverb_enabled: reverbEnabled,
-        reverb_room_size: reverbRoomSize
+        reverb_room_size: reverbRoomSize,
+        peak_ceiling_db: peakCeilingDb
       });
     } catch (err) {
       console.error('Failed to save soundfont setting', err);
@@ -705,7 +709,8 @@ export const MidiEditorScreen = () => {
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: activeSoundfont,
         reverb_enabled: enabled,
-        reverb_room_size: reverbRoomSize
+        reverb_room_size: reverbRoomSize,
+        peak_ceiling_db: peakCeilingDb
       });
     } catch (err) {
       console.error('Failed to save reverb setting', err);
@@ -718,10 +723,25 @@ export const MidiEditorScreen = () => {
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: activeSoundfont,
         reverb_enabled: reverbEnabled,
-        reverb_room_size: size
+        reverb_room_size: size,
+        peak_ceiling_db: peakCeilingDb
       });
     } catch (err) {
       console.error('Failed to save reverb room size setting', err);
+    }
+  };
+
+  const handleChangePeakCeiling = async (db: number) => {
+    setPeakCeilingDb(db);
+    try {
+      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
+        active_soundfont: activeSoundfont,
+        reverb_enabled: reverbEnabled,
+        reverb_room_size: reverbRoomSize,
+        peak_ceiling_db: db
+      });
+    } catch (err) {
+      console.error('Failed to save peak ceiling setting', err);
     }
   };
 
@@ -3085,6 +3105,40 @@ export const MidiEditorScreen = () => {
                       </View>
                     </View>
                   )}
+
+                  {/* Peak Volume Ceiling / Headroom */}
+                  <View style={{ marginTop: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 11, color: themeColors.textMuted }}>Peak Volume Headroom:</Text>
+                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
+                        {peakCeilingDb.toFixed(1)} dB
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {[
+                        { label: 'Subtle (-9 dB)', val: -9.0 },
+                        { label: 'Balanced (-6 dB)', val: -6.0 },
+                        { label: 'Loud (-3 dB)', val: -3.0 },
+                        { label: 'Max (0 dB)', val: 0.0 }
+                      ].map((preset) => {
+                        const isSel = Math.abs(peakCeilingDb - preset.val) < 0.5;
+                        return (
+                          <TouchableOpacity
+                            key={preset.label}
+                            style={[
+                              styles.presetBadge,
+                              isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
+                            ]}
+                            onPress={() => handleChangePeakCeiling(preset.val)}
+                          >
+                            <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
+                              {preset.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>

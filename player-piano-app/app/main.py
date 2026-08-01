@@ -1871,10 +1871,11 @@ class AudioSettingsRequest(BaseModel):
     backend_audio_volume: float
     active_soundfont: Optional[str] = None
     reverb_enabled: Optional[bool] = True
-    reverb_room_size: Optional[float] = 0.75
-    reverb_level: Optional[float] = 0.55
+    reverb_room_size: Optional[float] = 0.55
+    reverb_level: Optional[float] = 0.25
     polyphony: Optional[int] = 512
-    synth_gain: Optional[float] = 1.8
+    synth_gain: Optional[float] = 0.7
+    peak_ceiling_db: Optional[float] = -6.0
 
 @app.get("/midi-orchestrator/soundfonts", dependencies=[Depends(verify_auth)])
 def get_midi_orchestrator_soundfonts():
@@ -1896,10 +1897,11 @@ def get_midi_orchestrator_audio_settings():
         "backend_audio_volume": settings.get("backend_audio_volume", 1.0),
         "active_soundfont": settings.get("active_soundfont", active_sf_name),
         "reverb_enabled": settings.get("reverb_enabled", True),
-        "reverb_room_size": settings.get("reverb_room_size", 0.75),
-        "reverb_level": settings.get("reverb_level", 0.55),
+        "reverb_room_size": settings.get("reverb_room_size", 0.55),
+        "reverb_level": settings.get("reverb_level", 0.25),
         "polyphony": settings.get("polyphony", 512),
-        "synth_gain": settings.get("synth_gain", 1.8),
+        "synth_gain": settings.get("synth_gain", 0.7),
+        "peak_ceiling_db": settings.get("peak_ceiling_db", -6.0),
     }
 
 @app.post("/midi-orchestrator/audio-settings", dependencies=[Depends(verify_auth)])
@@ -1920,6 +1922,8 @@ def save_midi_orchestrator_audio_settings(req: AudioSettingsRequest):
         settings["polyphony"] = req.polyphony
     if req.synth_gain is not None:
         settings["synth_gain"] = req.synth_gain
+    if req.peak_ceiling_db is not None:
+        settings["peak_ceiling_db"] = req.peak_ceiling_db
         
     utils.save_settings(settings)
     utils._backend_audio_volume = req.backend_audio_volume
