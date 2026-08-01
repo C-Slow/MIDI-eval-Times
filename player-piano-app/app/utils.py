@@ -89,6 +89,40 @@ def get_active_soundfont_path() -> str:
     return SOUNDFONT
 
 
+def normalize_wav_file(wav_path: str, target_peak_db: float = -0.5):
+    """Normalize a 16-bit WAV file so peaks top out cleanly below 0 dBFS without clipping."""
+    import wave
+    import struct
+    try:
+        if not os.path.exists(wav_path):
+            return
+        with wave.open(wav_path, 'rb') as wf:
+            params = wf.getparams()
+            if params.sampwidth != 2:
+                return
+            frames = wf.readframes(params.nframes)
+
+        samples = list(struct.unpack(f"<{len(frames)//2}h", frames))
+        max_val = max(abs(s) for s in samples) if samples else 0
+        if max_val <= 0:
+            return
+
+        target_max = int(32767 * (10 ** (target_peak_db / 20.0)))
+        scale = target_max / float(max_val)
+        if scale >= 1.0 and max_val <= target_max:
+            return
+
+        norm_samples = [max(-32768, min(32767, int(s * scale))) for s in samples]
+        norm_frames = struct.pack(f"<{len(norm_samples)}h", *norm_samples)
+
+        with wave.open(wav_path, 'wb') as wf:
+            wf.setparams(params)
+            wf.writeframes(norm_frames)
+        _log(f"Normalized {os.path.basename(wav_path)} (peak scale: {scale:.2f})")
+    except Exception as e:
+        _log(f"Peak normalization skipped: {e}")
+
+
 def render_midi_to_wav_with_soundfont(
     midi_path: str, 
     soundfont_path: str, 
@@ -110,7 +144,7 @@ def render_midi_to_wav_with_soundfont(
 
     settings = load_settings()
     if gain is None:
-        gain = float(settings.get("synth_gain", 1.8))
+        gain = float(settings.get("synth_gain", 0.7))
     if reverb_enabled is None:
         reverb_enabled = bool(settings.get("reverb_enabled", True))
     if reverb_room_size is None:
@@ -172,6 +206,7 @@ def render_midi_to_wav_with_soundfont(
             _log(f"FluidSynth error: {result.stderr}")
             raise RuntimeError(f"FluidSynth failed: {result.stderr}")
             
+        normalize_wav_file(out_wav_path, target_peak_db=-0.5)
         _log(f"Render complete: {out_wav_path}")
         return out_wav_path
     except Exception as e:
