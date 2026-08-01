@@ -1679,6 +1679,10 @@ class MidiOrchestratorMetadataUpdate(BaseModel):
     dnu: Optional[bool] = None
     playlists: Optional[List[str]] = None
     validated: Optional[bool] = None
+    soundfont: Optional[str] = None
+    reverb_enabled: Optional[bool] = None
+    reverb_room_size: Optional[float] = None
+    peak_ceiling_db: Optional[float] = None
 
 @app.get("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
 async def get_midi_orchestrator_metadata(job_id: str):
@@ -1695,7 +1699,11 @@ async def get_midi_orchestrator_metadata(job_id: str):
         "source": job.get("source", ""),
         "dnu": job.get("dnu", False),
         "validated": job.get("validated", False),
-        "playlists": job.get("playlists", [])
+        "playlists": job.get("playlists", []),
+        "soundfont": job.get("soundfont"),
+        "reverb_enabled": job.get("reverb_enabled"),
+        "reverb_room_size": job.get("reverb_room_size"),
+        "peak_ceiling_db": job.get("peak_ceiling_db")
     }
 
 @app.post("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
@@ -1713,6 +1721,10 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     if req.dnu is not None: updates["dnu"] = req.dnu
     if req.playlists is not None: updates["playlists"] = req.playlists
     if req.validated is not None: updates["validated"] = req.validated
+    if req.soundfont is not None: updates["soundfont"] = req.soundfont
+    if req.reverb_enabled is not None: updates["reverb_enabled"] = req.reverb_enabled
+    if req.reverb_room_size is not None: updates["reverb_room_size"] = req.reverb_room_size
+    if req.peak_ceiling_db is not None: updates["peak_ceiling_db"] = req.peak_ceiling_db
     
     midi_orchestrator.status[job_id].update(updates)
     midi_orchestrator._save_db()

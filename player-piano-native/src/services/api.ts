@@ -428,7 +428,7 @@ export const midiOrchestratorApi = {
     const res = await api.get(`/midi-orchestrator/metadata/${jobId}`);
     return res.data;
   },
-  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; source?: string; dnu?: boolean; playlists?: string[]; validated?: boolean }) => {
+  updateMetadata: async (jobId: string, metadata: { artist?: string; comments?: string; rating?: number; genre?: string; mood?: string; source?: string; dnu?: boolean; playlists?: string[]; validated?: boolean; soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number }) => {
     const res = await api.post(`/midi-orchestrator/metadata/${jobId}`, metadata);
     return res.data;
   },

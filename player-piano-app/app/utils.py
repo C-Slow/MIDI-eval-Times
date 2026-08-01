@@ -95,7 +95,8 @@ def resolve_soundfont_path(sf_filename: str = None) -> str:
         return get_active_soundfont_path()
     if os.path.isabs(sf_filename) and os.path.exists(sf_filename):
         return sf_filename
-    candidate = os.path.join(STORAGE_DIR, sf_filename)
+    storage_dir = os.path.join(PROJECT_ROOT, 'storage')
+    candidate = os.path.join(storage_dir, sf_filename)
     if os.path.exists(candidate):
         try:
             with open(candidate, 'rb') as f:

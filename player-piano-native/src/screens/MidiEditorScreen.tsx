@@ -692,6 +692,9 @@ export const MidiEditorScreen = () => {
   const handleSelectSoundfont = async (sf: string) => {
     setActiveSoundfont(sf);
     try {
+      if (selectedJobId) {
+        await midiOrchestratorApi.updateMetadata(selectedJobId, { soundfont: sf });
+      }
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: sf,
         reverb_enabled: reverbEnabled,
@@ -706,6 +709,9 @@ export const MidiEditorScreen = () => {
   const handleToggleReverb = async (enabled: boolean) => {
     setReverbEnabled(enabled);
     try {
+      if (selectedJobId) {
+        await midiOrchestratorApi.updateMetadata(selectedJobId, { reverb_enabled: enabled });
+      }
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: activeSoundfont,
         reverb_enabled: enabled,
@@ -720,6 +726,9 @@ export const MidiEditorScreen = () => {
   const handleChangeReverbRoomSize = async (size: number) => {
     setReverbRoomSize(size);
     try {
+      if (selectedJobId) {
+        await midiOrchestratorApi.updateMetadata(selectedJobId, { reverb_room_size: size });
+      }
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: activeSoundfont,
         reverb_enabled: reverbEnabled,
@@ -734,6 +743,9 @@ export const MidiEditorScreen = () => {
   const handleChangePeakCeiling = async (db: number) => {
     setPeakCeilingDb(db);
     try {
+      if (selectedJobId) {
+        await midiOrchestratorApi.updateMetadata(selectedJobId, { peak_ceiling_db: db });
+      }
       await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
         active_soundfont: activeSoundfont,
         reverb_enabled: reverbEnabled,
