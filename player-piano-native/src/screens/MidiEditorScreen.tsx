@@ -1533,6 +1533,29 @@ export const MidiEditorScreen = () => {
     });
   };
 
+  const selectAllTracksForRole = (role: 'speakers' | 'piano' | 'off') => {
+    const validTrackIndices = getLanesData
+      .filter((l: any) => l.index >= 0)
+      .map((l: any) => l.index);
+
+    if (role === 'speakers') {
+      setSpeakerTracks(new Set(validTrackIndices));
+      setPianoTracks(new Set());
+      setVocalMaleTracks(new Set());
+      setVocalFemaleTracks(new Set());
+    } else if (role === 'piano') {
+      setPianoTracks(new Set(validTrackIndices));
+      setSpeakerTracks(new Set());
+      setVocalMaleTracks(new Set());
+      setVocalFemaleTracks(new Set());
+    } else {
+      setPianoTracks(new Set());
+      setSpeakerTracks(new Set());
+      setVocalMaleTracks(new Set());
+      setVocalFemaleTracks(new Set());
+    }
+  };
+
   const stopPreview = async () => {
     if (previewSoundRef.current) {
       try {
@@ -1575,7 +1598,7 @@ export const MidiEditorScreen = () => {
       const initialStatus = {
         shouldPlay: true,
         progressUpdateIntervalMillis: 100,
-        positionMillis: (loopEnabled && loopStartMs !== null) ? loopStartMs : 0
+        positionMillis: loopStartMs !== null ? loopStartMs : 0
       };
 
       const { sound } = await Audio.Sound.createAsync(
@@ -1651,12 +1674,13 @@ export const MidiEditorScreen = () => {
           } else {
             previewSoundRef.current?.setPositionAsync(lStart);
           }
-          setPlaybackPos(lStart);
           return;
         }
       }
 
-      setPlaybackPos(status.positionMillis);
+      if (!isSeekingRef.current) {
+        setPlaybackPos(status.positionMillis || 0);
+      }
       setPlaybackDuration(status.durationMillis || 0);
 
       // Scroll timeline to playhead
@@ -1684,7 +1708,7 @@ export const MidiEditorScreen = () => {
       setSystemBusy(true);
       setIsPlaying(true);
 
-      if (loopEnabled && loopStartMs !== null) {
+      if (loopStartMs !== null) {
         await soundRef.current.setPositionAsync(loopStartMs);
         setPlaybackPos(loopStartMs);
       }
@@ -2850,6 +2874,83 @@ export const MidiEditorScreen = () => {
                   <Text style={[styles.offsetBtnText, { color: themeColors.text }]}>+10ms</Text>
                 </HoldableButton>
               </View>
+            </View>
+          </View>
+
+          {/* Quick Track Selection & Routing Bar */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: themeColors.surfaceSecondary,
+            borderBottomWidth: 1,
+            borderBottomColor: themeColors.border
+          }}>
+            <Text style={{ fontSize: 11, fontWeight: 'bold', color: themeColors.textMuted }}>
+              Track Routing:
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: speakerTracks.size === getLanesData.filter(l => l.index >= 0).length ? themeColors.accent : themeColors.surface,
+                  borderWidth: 1,
+                  borderColor: themeColors.border
+                }}
+                onPress={() => selectAllTracksForRole('speakers')}
+              >
+                <Ionicons name="volume-high" size={12} color={speakerTracks.size === getLanesData.filter(l => l.index >= 0).length ? '#fff' : themeColors.text} />
+                <Text style={{ fontSize: 11, color: speakerTracks.size === getLanesData.filter(l => l.index >= 0).length ? '#fff' : themeColors.text, fontWeight: '600' }}>
+                  All Speakers
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: pianoTracks.size === getLanesData.filter(l => l.index >= 0).length ? '#00b894' : themeColors.surface,
+                  borderWidth: 1,
+                  borderColor: themeColors.border
+                }}
+                onPress={() => selectAllTracksForRole('piano')}
+              >
+                <Ionicons name="musical-notes" size={12} color={pianoTracks.size === getLanesData.filter(l => l.index >= 0).length ? '#fff' : themeColors.text} />
+                <Text style={{ fontSize: 11, color: pianoTracks.size === getLanesData.filter(l => l.index >= 0).length ? '#fff' : themeColors.text, fontWeight: '600' }}>
+                  All Piano
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) ? '#ff7675' : themeColors.surface,
+                  borderWidth: 1,
+                  borderColor: themeColors.border
+                }}
+                onPress={() => selectAllTracksForRole('off')}
+              >
+                <Ionicons name="volume-mute" size={12} color={(pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) ? '#fff' : themeColors.text} />
+                <Text style={{ fontSize: 11, color: (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) ? '#fff' : themeColors.text, fontWeight: '600' }}>
+                  Mute All / Off
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
