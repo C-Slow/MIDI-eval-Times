@@ -294,12 +294,39 @@ class MidiOrchestrator:
             print(f"Error extracting track notes: {e}")
             return {}
 
-    def start_processing(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str = "light", rhythm_factor: float = 1.0, melody_factor: float = 1.0, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None, imported_vocals: Dict = None):
+    def start_processing(
+        self, 
+        job_id: str, 
+        piano_tracks: List[int], 
+        speaker_tracks: List[int], 
+        pedal_preset: str = "light", 
+        rhythm_factor: float = 1.0, 
+        melody_factor: float = 1.0, 
+        vocal_male_tracks: List[int] = None, 
+        vocal_female_tracks: List[int] = None, 
+        imported_vocals: Dict = None,
+        soundfont: str = None,
+        reverb_enabled: bool = None,
+        reverb_room_size: float = None,
+        peak_ceiling_db: float = None
+    ):
         if job_id not in self.status:
             raise ValueError("Job not found.")
             
         vocal_male_tracks = vocal_male_tracks or []
         vocal_female_tracks = vocal_female_tracks or []
+
+        # Resolve defaults if not provided
+        settings = utils.load_settings()
+        if not soundfont:
+            active_sf_path = utils.get_active_soundfont_path()
+            soundfont = os.path.basename(active_sf_path)
+        if reverb_enabled is None:
+            reverb_enabled = bool(settings.get("reverb_enabled", True))
+        if reverb_room_size is None:
+            reverb_room_size = float(settings.get("reverb_room_size", 0.55))
+        if peak_ceiling_db is None:
+            peak_ceiling_db = float(settings.get("peak_ceiling_db", -6.0))
             
         self.status[job_id].update({
             "status": "processing",
@@ -311,7 +338,11 @@ class MidiOrchestrator:
             "pedal_preset": pedal_preset,
             "rhythm_factor": rhythm_factor,
             "melody_factor": melody_factor,
-            "imported_vocals": imported_vocals
+            "imported_vocals": imported_vocals,
+            "soundfont": soundfont,
+            "reverb_enabled": reverb_enabled,
+            "reverb_room_size": reverb_room_size,
+            "peak_ceiling_db": peak_ceiling_db
         })
         self._save_db()
         
@@ -617,11 +648,19 @@ class MidiOrchestrator:
             if backing_pm.instruments:
                 backing_pm.write(str(backing_out_path))
                 
-                # Render instruments using SoundFont
+                # Render instruments using job's assigned SoundFont and DSP parameters
+                job_info = self.status.get(job_id, {})
+                job_sf_name = job_info.get("soundfont")
+                target_sf_path = utils.resolve_soundfont_path(job_sf_name)
+                job_reverb_enabled = job_info.get("reverb_enabled")
+                job_reverb_room_size = job_info.get("reverb_room_size")
+                
                 utils.render_midi_to_wav_with_soundfont(
                     str(backing_out_path), 
-                    str(self.soundfont_path), 
-                    str(backing_insts_wav_path)
+                    target_sf_path, 
+                    str(backing_insts_wav_path),
+                    reverb_enabled=job_reverb_enabled,
+                    reverb_room_size=job_reverb_room_size
                 )
                 
                 # Clean up intermediate midi

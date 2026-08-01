@@ -968,6 +968,17 @@ export const MidiEditorScreen = () => {
     setLoopEndMs(null);
     setLoopEnabled(false);
 
+    // Load per-job soundfont & audio parameters, falling back to global settings
+    try {
+      const globalAudio = await midiOrchestratorApi.getAudioSettings().catch(() => ({}));
+      setActiveSoundfont(job.soundfont || globalAudio.active_soundfont || 'SGM-V2.01.sf2');
+      setReverbEnabled(job.reverb_enabled ?? globalAudio.reverb_enabled ?? true);
+      setReverbRoomSize(job.reverb_room_size ?? globalAudio.reverb_room_size ?? 0.55);
+      setPeakCeilingDb(job.peak_ceiling_db ?? globalAudio.peak_ceiling_db ?? -6.0);
+    } catch (err) {
+      console.error('Failed to load per-job audio settings:', err);
+    }
+
     setLoading(true);
     try {
       if (impVoc?.mp3_job_id) {
@@ -1592,7 +1603,8 @@ export const MidiEditorScreen = () => {
         Array.from(pianoTracks), 
         Array.from(speakerTracks),
         Array.from(vocalMaleTracks),
-        Array.from(vocalFemaleTracks)
+        Array.from(vocalFemaleTracks),
+        { soundfont: activeSoundfont, reverb_enabled: reverbEnabled, reverb_room_size: reverbRoomSize }
       );
 
       const initialStatus = {
@@ -1649,7 +1661,13 @@ export const MidiEditorScreen = () => {
           volume_factor: importedVocalsVolumeFactor,
           breaklines: importedVocalsBreaklines,
           position: mp3VocalsPosition ?? undefined
-        } : undefined
+        } : undefined,
+        {
+          soundfont: activeSoundfont,
+          reverb_enabled: reverbEnabled,
+          reverb_room_size: reverbRoomSize,
+          peak_ceiling_db: peakCeilingDb
+        }
       );
       await fetchJobs();
       setStage('list');

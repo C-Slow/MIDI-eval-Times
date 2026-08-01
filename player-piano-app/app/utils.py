@@ -89,6 +89,24 @@ def get_active_soundfont_path() -> str:
     return SOUNDFONT
 
 
+def resolve_soundfont_path(sf_filename: str = None) -> str:
+    """Resolve absolute path for a given SoundFont filename, falling back to active soundfont."""
+    if not sf_filename:
+        return get_active_soundfont_path()
+    if os.path.isabs(sf_filename) and os.path.exists(sf_filename):
+        return sf_filename
+    candidate = os.path.join(STORAGE_DIR, sf_filename)
+    if os.path.exists(candidate):
+        try:
+            with open(candidate, 'rb') as f:
+                header = f.read(100)
+            if not (b'<!DOCTYPE html>' in header or b'<html' in header):
+                return candidate
+        except Exception:
+            pass
+    return get_active_soundfont_path()
+
+
 def normalize_wav_file(wav_path: str, target_peak_db: float = None):
     """Normalize a 16-bit WAV file so peaks top out cleanly below 0 dBFS without clipping."""
     import wave

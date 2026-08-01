@@ -1462,6 +1462,10 @@ class ProcessMidiRequest(BaseModel):
     rhythm_factor: Optional[float] = 1.0
     melody_factor: Optional[float] = 1.0
     imported_vocals: Optional[ImportedVocalsConfig] = None
+    soundfont: Optional[str] = None
+    reverb_enabled: Optional[bool] = None
+    reverb_room_size: Optional[float] = None
+    peak_ceiling_db: Optional[float] = None
 
 class Base64MidiUploadRequest(BaseModel):
     filename: str
@@ -1653,7 +1657,11 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             req.melody_factor,
             req.vocal_male_tracks,
             req.vocal_female_tracks,
-            imported_vocals=req.imported_vocals.dict() if req.imported_vocals else None
+            imported_vocals=req.imported_vocals.dict() if req.imported_vocals else None,
+            soundfont=req.soundfont,
+            reverb_enabled=req.reverb_enabled,
+            reverb_room_size=req.reverb_room_size,
+            peak_ceiling_db=req.peak_ceiling_db
         )
         return {"status": "started"}
     except ValueError as e:
@@ -1770,6 +1778,9 @@ async def get_midi_orchestrator_preview(
     pedal_preset: str = "light",
     rhythm_factor: float = 1.0,
     melody_factor: float = 1.0,
+    soundfont: Optional[str] = Query(None),
+    reverb_enabled: Optional[bool] = Query(None),
+    reverb_room_size: Optional[float] = Query(None),
     token: Optional[str] = None, 
     authorization: Optional[str] = Header(None),
     background_tasks: BackgroundTasks = None
@@ -1807,7 +1818,6 @@ async def get_midi_orchestrator_preview(
                 piano_notes.extend(pm.instruments[idx].notes)
                 
         if piano_notes:
-            # Piano instrument program is 0
             piano_inst = pretty_midi.Instrument(program=0, name="Piano Preview")
             piano_inst.notes = piano_notes
             preview_pm.instruments.append(piano_inst)
@@ -1821,7 +1831,7 @@ async def get_midi_orchestrator_preview(
                 new_inst.control_changes = orig_inst.control_changes
                 preview_pm.instruments.append(new_inst)
 
-        # Add vocal male tracks (render as Choir Aahs program 52 for preview)
+        # Add vocal male tracks
         for idx in vm_tracks:
             if idx < len(pm.instruments):
                 orig_inst = pm.instruments[idx]
@@ -1829,7 +1839,7 @@ async def get_midi_orchestrator_preview(
                 new_inst.notes = orig_inst.notes
                 preview_pm.instruments.append(new_inst)
 
-        # Add vocal female tracks (render as Voice Oohs program 53 for preview)
+        # Add vocal female tracks
         for idx in vf_tracks:
             if idx < len(pm.instruments):
                 orig_inst = pm.instruments[idx]
@@ -1839,11 +1849,19 @@ async def get_midi_orchestrator_preview(
                 
         preview_pm.write(str(temp_midi))
         
-        # Render to WAV using FluidSynth
+        # Resolve soundfont path for preview
+        job_info = midi_orchestrator.status.get(job_id, {})
+        sf_name = soundfont or job_info.get("soundfont")
+        sf_path = utils.resolve_soundfont_path(sf_name)
+        preview_reverb_enabled = reverb_enabled if reverb_enabled is not None else job_info.get("reverb_enabled")
+        preview_reverb_room_size = reverb_room_size if reverb_room_size is not None else job_info.get("reverb_room_size")
+        
         utils.render_midi_to_wav_with_soundfont(
             str(temp_midi),
-            str(midi_orchestrator.soundfont_path),
-            str(temp_wav)
+            sf_path,
+            str(temp_wav),
+            reverb_enabled=preview_reverb_enabled,
+            reverb_room_size=preview_reverb_room_size
         )
         
         def cleanup():

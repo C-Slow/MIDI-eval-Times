@@ -316,7 +316,8 @@ export const midiOrchestratorApi = {
     melodyFactor: number = 1.0,
     vocalMaleTracks: number[] = [],
     vocalFemaleTracks: number[] = [],
-    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }>; position?: number }
+    importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }>; position?: number },
+    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number }
   ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,
@@ -326,7 +327,11 @@ export const midiOrchestratorApi = {
       pedal_preset: pedalPreset,
       rhythm_factor: rhythmFactor,
       melody_factor: melodyFactor,
-      imported_vocals: importedVocals
+      imported_vocals: importedVocals,
+      soundfont: audioSettings?.soundfont,
+      reverb_enabled: audioSettings?.reverb_enabled,
+      reverb_room_size: audioSettings?.reverb_room_size,
+      peak_ceiling_db: audioSettings?.peak_ceiling_db
     });
     return res.data;
   },
@@ -350,13 +355,24 @@ export const midiOrchestratorApi = {
     const token = getToken();
     return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
   },
-  getPreviewUrl: (jobId: string, pianoTracks: number[], speakerTracks: number[], vocalMaleTracks: number[] = [], vocalFemaleTracks: number[] = []) => {
+  getPreviewUrl: (
+    jobId: string, 
+    pianoTracks: number[], 
+    speakerTracks: number[], 
+    vocalMaleTracks: number[] = [], 
+    vocalFemaleTracks: number[] = [],
+    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number }
+  ) => {
     const token = getToken();
     const pStr = pianoTracks.join(',');
     const sStr = speakerTracks.join(',');
     const mStr = vocalMaleTracks.join(',');
     const fStr = vocalFemaleTracks.join(',');
-    return `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&vocal_male_tracks=${encodeURIComponent(mStr)}&vocal_female_tracks=${encodeURIComponent(fStr)}&token=${encodeURIComponent(token || '')}`;
+    let url = `${getBaseUrl()}/midi-orchestrator/preview/${jobId}?piano_tracks=${encodeURIComponent(pStr)}&speaker_tracks=${encodeURIComponent(sStr)}&vocal_male_tracks=${encodeURIComponent(mStr)}&vocal_female_tracks=${encodeURIComponent(fStr)}&token=${encodeURIComponent(token || '')}`;
+    if (audioSettings?.soundfont) url += `&soundfont=${encodeURIComponent(audioSettings.soundfont)}`;
+    if (audioSettings?.reverb_enabled !== undefined) url += `&reverb_enabled=${audioSettings.reverb_enabled}`;
+    if (audioSettings?.reverb_room_size !== undefined) url += `&reverb_room_size=${audioSettings.reverb_room_size}`;
+    return url;
   },
   playMidi: async (jobId: string, offset: number = 0) => {
     const res = await api.post(`/midi-orchestrator/play/${jobId}?offset=${offset}`);
