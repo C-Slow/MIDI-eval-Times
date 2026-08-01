@@ -122,15 +122,29 @@ def render_midi_to_wav_with_soundfont(
     if interpolation is None:
         interpolation = int(settings.get("interpolation", 7))
 
+    temp_cfg_path = None
+    if interpolation is not None:
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as cfg_file:
+                cfg_file.write(f"interp {interpolation}\n")
+                temp_cfg_path = cfg_file.name
+        except Exception as e:
+            _log(f"Warning: Could not create temp interpolation config: {e}")
+
     cmd = [
         FLUIDSYNTH_BIN,
         '-ni',
+    ]
+
+    if temp_cfg_path and os.path.exists(temp_cfg_path):
+        cmd.extend(['-f', temp_cfg_path])
+
+    cmd.extend([
         '-g', str(gain),
         '-r', '48000',
         '-o', f'synth.polyphony={polyphony}',
-        '-o', f'synth.interpolation={interpolation}',
         '-o', 'synth.cpu-cores=4',
-    ]
+    ])
 
     if reverb_enabled:
         cmd.extend([
@@ -163,6 +177,12 @@ def render_midi_to_wav_with_soundfont(
     except Exception as e:
         _log(f"Rendering failed: {str(e)}")
         raise e
+    finally:
+        if temp_cfg_path and os.path.exists(temp_cfg_path):
+            try:
+                os.remove(temp_cfg_path)
+            except Exception:
+                pass
 
 
 def render_midi_to_wav(midi_path: str) -> str:
