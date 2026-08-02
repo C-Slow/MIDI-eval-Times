@@ -2038,6 +2038,16 @@ export const MidiEditorScreen = () => {
     }
   }, [isDraggingMp3Vocals]);
 
+  const panTimelineBy = (seconds: number) => {
+    const durationSec = playbackDuration / 1000 || currentJob?.tracks[0]?.duration || 180;
+    const timelineWidth = durationSec * PIXELS_PER_SECOND;
+    const deltaX = seconds * PIXELS_PER_SECOND;
+    const maxScrollX = Math.max(0, timelineWidth - SCREEN_WIDTH + 170);
+    const newX = Math.max(0, Math.min(maxScrollX, visibleScrollX + deltaX));
+    scrollRef.current?.scrollTo({ x: newX, animated: true });
+    setVisibleScrollX(newX);
+  };
+
   // Timeline render item notes
   const renderVisualizerTimeline = () => {
     const durationSec = playbackDuration / 1000 || currentJob?.tracks[0]?.duration || 180;
@@ -2055,238 +2065,319 @@ export const MidiEditorScreen = () => {
     });
 
     return (
-      <ScrollView 
-        style={[styles.verticalLanesScrollView, { backgroundColor: themeColors.background }]}
-        contentContainerStyle={{ flexGrow: 1 }}
-        removeClippedSubviews={true}
-      >
-        <View style={styles.visualizerContainer}>
-          {/* Left Track Names Sidebar */}
-          <View style={[styles.sidebar, { borderRightColor: themeColors.border, backgroundColor: themeColors.surface, height: totalHeight }]}>
-          {getLanesData.map((lane: any) => {
-            const isPiano = pianoTracks.has(lane.index);
-            const isSpeaker = speakerTracks.has(lane.index);
-            const isMale = vocalMaleTracks.has(lane.index);
-            const isFemale = vocalFemaleTracks.has(lane.index);
-            const isMuted = !isPiano && !isSpeaker && !isMale && !isFemale;
-            
-            if (lane.index === -99) {
-              return (
-                <View 
-                  key="-99" 
-                  style={[
-                    styles.sidebarLane, 
-                    { 
-                      height: 120, 
-                      borderBottomColor: themeColors.border, 
-                      paddingHorizontal: 8, 
-                      justifyContent: 'center',
-                      backgroundColor: isDraggingMp3Vocals ? 'rgba(232, 67, 147, 0.25)' : themeColors.surface,
-                      borderColor: isDraggingMp3Vocals ? '#e84393' : 'transparent',
-                      borderWidth: isDraggingMp3Vocals ? 2 : 0,
-                      elevation: isDraggingMp3Vocals ? 8 : 0,
-                      zIndex: isDraggingMp3Vocals ? 999 : 1,
-                    }
-                  ]}
-                >
-                  {/* Top Half: Drag Handle & Track Info (Only Area with Drag Listener) */}
+      <View style={{ flex: 1, position: 'relative' }}>
+        <ScrollView 
+          style={[styles.verticalLanesScrollView, { backgroundColor: themeColors.background }]}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 60 }}
+          removeClippedSubviews={true}
+        >
+          <View style={styles.visualizerContainer}>
+            {/* Left Track Names Sidebar */}
+            <View style={[styles.sidebar, { borderRightColor: themeColors.border, backgroundColor: themeColors.surface, height: totalHeight }]}>
+            {getLanesData.map((lane: any) => {
+              const isPiano = pianoTracks.has(lane.index);
+              const isSpeaker = speakerTracks.has(lane.index);
+              const isMale = vocalMaleTracks.has(lane.index);
+              const isFemale = vocalFemaleTracks.has(lane.index);
+              const isMuted = !isPiano && !isSpeaker && !isMale && !isFemale;
+              
+              if (lane.index === -99) {
+                return (
                   <View 
-                    {...mp3PanResponder.panHandlers}
-                    onTouchStart={(e: any) => startMp3Drag(e.touches?.[0]?.pageY || e.nativeEvent?.pageY || 0)}
-                    onTouchEnd={endMp3Drag}
-                    {...(Platform.OS === 'web' ? {
-                      onMouseDown: (e: any) => startMp3Drag(e.pageY || e.clientY || 0),
-                      onMouseUp: endMp3Drag
-                    } as any : {})}
-                    style={{ 
-                      flexDirection: 'row', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      marginBottom: 8,
-                      paddingVertical: 6,
-                      paddingHorizontal: 4,
-                      borderRadius: 6,
-                      backgroundColor: 'rgba(232, 67, 147, 0.08)',
-                      ...(Platform.OS === 'web' ? { cursor: isDraggingMp3Vocals ? 'grabbing' : 'grab' } as any : {})
-                    }}
+                    key="-99" 
+                    style={[
+                      styles.sidebarLane, 
+                      { 
+                        height: 120, 
+                        borderBottomColor: themeColors.border, 
+                        paddingHorizontal: 8, 
+                        justifyContent: 'center',
+                        backgroundColor: isDraggingMp3Vocals ? 'rgba(232, 67, 147, 0.25)' : themeColors.surface,
+                        borderColor: isDraggingMp3Vocals ? '#e84393' : 'transparent',
+                        borderWidth: isDraggingMp3Vocals ? 2 : 0,
+                        elevation: isDraggingMp3Vocals ? 8 : 0,
+                        zIndex: isDraggingMp3Vocals ? 999 : 1,
+                      }
+                    ]}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
-                      <Ionicons 
-                        name="reorder-two" 
-                        size={20} 
-                        color={isDraggingMp3Vocals ? "#e84393" : themeColors.textMuted} 
-                        style={{ marginRight: 4 }} 
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
-                          🎙️ MP3 Vocals
-                        </Text>
-                        {isDraggingMp3Vocals ? (
-                          <Text style={{ fontSize: 9, color: '#e84393', fontWeight: 'bold' }}>Dragging track...</Text>
-                        ) : (
-                          <Text style={{ fontSize: 8, color: themeColors.textMuted }}>Hold header to drag</Text>
-                        )}
+                    {/* Top Half: Drag Handle & Track Info (Only Area with Drag Listener) */}
+                    <View 
+                      {...mp3PanResponder.panHandlers}
+                      onTouchStart={(e: any) => startMp3Drag(e.touches?.[0]?.pageY || e.nativeEvent?.pageY || 0)}
+                      onTouchEnd={endMp3Drag}
+                      {...(Platform.OS === 'web' ? {
+                        onMouseDown: (e: any) => startMp3Drag(e.pageY || e.clientY || 0),
+                        onMouseUp: endMp3Drag
+                      } as any : {})}
+                      style={{ 
+                        flexDirection: 'row', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        marginBottom: 8,
+                        paddingVertical: 6,
+                        paddingHorizontal: 4,
+                        borderRadius: 6,
+                        backgroundColor: 'rgba(232, 67, 147, 0.08)',
+                        ...(Platform.OS === 'web' ? { cursor: isDraggingMp3Vocals ? 'grabbing' : 'grab' } as any : {})
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
+                        <Ionicons 
+                          name="reorder-two" 
+                          size={20} 
+                          color={isDraggingMp3Vocals ? "#e84393" : themeColors.textMuted} 
+                          style={{ marginRight: 4 }} 
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, fontWeight: 'bold' }]} numberOfLines={1}>
+                            🎙️ MP3 Vocals
+                          </Text>
+                          {isDraggingMp3Vocals ? (
+                            <Text style={{ fontSize: 9, color: '#e84393', fontWeight: 'bold' }}>Dragging track...</Text>
+                          ) : (
+                            <Text style={{ fontSize: 8, color: themeColors.textMuted }}>Hold header to drag</Text>
+                          )}
+                        </View>
                       </View>
+                      <TouchableOpacity 
+                        style={[
+                          styles.allocToggleBtn, 
+                          importedVocalsEnabled ? { backgroundColor: '#e84393' } : { backgroundColor: themeColors.border }
+                        ]}
+                        onPress={() => setImportedVocalsEnabled(!importedVocalsEnabled)}
+                      >
+                        <Ionicons name={importedVocalsEnabled ? "volume-high" : "volume-mute"} size={12} color="#fff" />
+                      </TouchableOpacity>
                     </View>
+                    
+                    {/* Bottom Half: Delay controls (Isolated from Drag Handlers) */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+                      <HoldableButton 
+                        style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
+                        onPressAction={() => setImportedVocalsDelayMs(prev => prev - 50)}
+                      >
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>-50</Text>
+                      </HoldableButton>
+                      
+                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
+                        {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
+                      </Text>
+                      
+                      <HoldableButton 
+                        style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
+                        onPressAction={() => setImportedVocalsDelayMs(prev => prev + 50)}
+                      >
+                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>+50</Text>
+                      </HoldableButton>
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
+                  <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
+                    {lane.name}
+                  </Text>
+                  
+                  {/* 5-Way Live Toggle Row */}
+                  <View style={styles.allocationRow}>
+                    {/* Piano */}
                     <TouchableOpacity 
                       style={[
                         styles.allocToggleBtn, 
-                        importedVocalsEnabled ? { backgroundColor: '#e84393' } : { backgroundColor: themeColors.border }
+                        isPiano && { backgroundColor: themeColors.accent }
                       ]}
-                      onPress={() => setImportedVocalsEnabled(!importedVocalsEnabled)}
+                      onPress={() => handleToggleTrackRole(lane.index, 'piano')}
                     >
-                      <Ionicons name={importedVocalsEnabled ? "volume-high" : "volume-mute"} size={12} color="#fff" />
+                      <Ionicons name="musical-notes" size={12} color={isPiano ? "#fff" : themeColors.textMuted} />
                     </TouchableOpacity>
-                  </View>
-                  
-                  {/* Bottom Half: Delay controls (Isolated from Drag Handlers) */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
-                    <HoldableButton 
-                      style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
-                      onPressAction={() => setImportedVocalsDelayMs(prev => prev - 50)}
+
+                    {/* Speakers (Instruments) */}
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        isSpeaker && { backgroundColor: '#a29bfe' }
+                      ]}
+                      onPress={() => handleToggleTrackRole(lane.index, 'speakers')}
                     >
-                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>-50</Text>
-                    </HoldableButton>
-                    
-                    <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
-                      {importedVocalsDelayMs >= 0 ? `+${importedVocalsDelayMs}` : importedVocalsDelayMs}ms
-                    </Text>
-                    
-                    <HoldableButton 
-                      style={{ paddingVertical: 8, paddingHorizontal: 16, minWidth: 54, backgroundColor: themeColors.border, borderRadius: 6, alignItems: 'center' }}
-                      onPressAction={() => setImportedVocalsDelayMs(prev => prev + 50)}
+                      <Ionicons name="volume-high" size={12} color={isSpeaker ? "#fff" : themeColors.textMuted} />
+                    </TouchableOpacity>
+
+                    {/* Male Vocal */}
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        isMale && { backgroundColor: '#0984e3' }
+                      ]}
+                      onPress={() => handleToggleTrackRole(lane.index, 'male_vocal')}
                     >
-                      <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>+50</Text>
-                    </HoldableButton>
+                      <Ionicons name="man" size={12} color={isMale ? "#fff" : themeColors.textMuted} />
+                    </TouchableOpacity>
+
+                    {/* Female Vocal */}
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        isFemale && { backgroundColor: '#e84393' }
+                      ]}
+                      onPress={() => handleToggleTrackRole(lane.index, 'female_vocal')}
+                    >
+                      <Ionicons name="woman" size={12} color={isFemale ? "#fff" : themeColors.textMuted} />
+                    </TouchableOpacity>
+
+                    {/* Mute */}
+                    <TouchableOpacity 
+                      style={[
+                        styles.allocToggleBtn, 
+                        isMuted && { backgroundColor: themeColors.border }
+                      ]}
+                      onPress={() => handleToggleTrackRole(lane.index, 'mute')}
+                    >
+                      <Ionicons name="volume-mute" size={12} color={isMuted ? themeColors.text : themeColors.textMuted} />
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
-            }
+            })}
+            </View>
 
-            return (
-              <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
-                <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
-                  {lane.name}
-                </Text>
-                
-                {/* 5-Way Live Toggle Row */}
-                <View style={styles.allocationRow}>
-                  {/* Piano */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.allocToggleBtn, 
-                      isPiano && { backgroundColor: themeColors.accent }
-                    ]}
-                    onPress={() => handleToggleTrackRole(lane.index, 'piano')}
-                  >
-                    <Ionicons name="musical-notes" size={12} color={isPiano ? "#fff" : themeColors.textMuted} />
-                  </TouchableOpacity>
+            {/* Scrollable Lanes Grid */}
+            <ScrollView 
+              horizontal 
+              ref={scrollRef}
+              onScroll={handleTimelineScroll}
+              scrollEventThrottle={100}
+              showsHorizontalScrollIndicator={true}
+              style={[styles.lanesScrollView, { backgroundColor: themeColors.background, height: totalHeight }]}
+              removeClippedSubviews={true}
+            >
+              <View style={{ width: timelineWidth, height: totalHeight }}>
+              <NoteGrid
+                lanesData={getLanesData}
+                pianoTracks={pianoTracks}
+                speakerTracks={speakerTracks}
+                vocalMaleTracks={vocalMaleTracks}
+                vocalFemaleTracks={vocalFemaleTracks}
+                themeColors={themeColors}
+                durationSec={durationSec}
+                timelineWidth={timelineWidth}
+                totalHeight={totalHeight}
+                importedVocalsEnabled={importedVocalsEnabled}
+                importedVocalsDelayMs={importedVocalsDelayMs}
+                vocalsWaveformEnvelope={vocalsWaveformEnvelope}
+                importedVocalsBreaklines={importedVocalsBreaklines}
+                loopStartMs={loopStartMs}
+                loopEndMs={loopEndMs}
+                loopEnabled={loopEnabled}
+                laneOffsets={laneOffsets}
+                laneHeights={laneHeights}
+                finetuneTimeMs={finetuneTimeMs}
+                finetuneMode={finetuneMode}
+                visibleStartPx={visibleStartPx}
+                visibleEndPx={visibleEndPx}
+                onUpdateBreakline={handleUpdateBreaklineOffset}
+                onDeleteBreakline={handleDeleteBreakline}
+                onDeleteLoopStart={handleDeleteLoopStart}
+                onDeleteLoopEnd={handleDeleteLoopEnd}
+                onLongPressVocals={handleVocalsLongPress}
+              />
 
-                  {/* Speakers (Instruments) */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.allocToggleBtn, 
-                      isSpeaker && { backgroundColor: '#a29bfe' }
-                    ]}
-                    onPress={() => handleToggleTrackRole(lane.index, 'speakers')}
-                  >
-                    <Ionicons name="volume-high" size={12} color={isSpeaker ? "#fff" : themeColors.textMuted} />
-                  </TouchableOpacity>
-
-                  {/* Male Vocal */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.allocToggleBtn, 
-                      isMale && { backgroundColor: '#0984e3' }
-                    ]}
-                    onPress={() => handleToggleTrackRole(lane.index, 'male_vocal')}
-                  >
-                    <Ionicons name="man" size={12} color={isMale ? "#fff" : themeColors.textMuted} />
-                  </TouchableOpacity>
-
-                  {/* Female Vocal */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.allocToggleBtn, 
-                      isFemale && { backgroundColor: '#e84393' }
-                    ]}
-                    onPress={() => handleToggleTrackRole(lane.index, 'female_vocal')}
-                  >
-                    <Ionicons name="woman" size={12} color={isFemale ? "#fff" : themeColors.textMuted} />
-                  </TouchableOpacity>
-
-                  {/* Mute */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.allocToggleBtn, 
-                      isMuted && { backgroundColor: themeColors.border }
-                    ]}
-                    onPress={() => handleToggleTrackRole(lane.index, 'mute')}
-                  >
-                    <Ionicons name="volume-mute" size={12} color={isMuted ? themeColors.text : themeColors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
-          </View>
-
-          {/* Scrollable Lanes Grid */}
-          <ScrollView 
-            horizontal 
-            ref={scrollRef}
-            onScroll={handleTimelineScroll}
-            scrollEventThrottle={100}
-            showsHorizontalScrollIndicator={true}
-            style={[styles.lanesScrollView, { backgroundColor: themeColors.background, height: totalHeight }]}
-            removeClippedSubviews={true}
-          >
-            <View style={{ width: timelineWidth, height: totalHeight }}>
-            <NoteGrid
-              lanesData={getLanesData}
-              pianoTracks={pianoTracks}
-              speakerTracks={speakerTracks}
-              vocalMaleTracks={vocalMaleTracks}
-              vocalFemaleTracks={vocalFemaleTracks}
-              themeColors={themeColors}
-              durationSec={durationSec}
-              timelineWidth={timelineWidth}
-              totalHeight={totalHeight}
-              importedVocalsEnabled={importedVocalsEnabled}
-              importedVocalsDelayMs={importedVocalsDelayMs}
-              vocalsWaveformEnvelope={vocalsWaveformEnvelope}
-              importedVocalsBreaklines={importedVocalsBreaklines}
-              loopStartMs={loopStartMs}
-              loopEndMs={loopEndMs}
-              loopEnabled={loopEnabled}
-              laneOffsets={laneOffsets}
-              laneHeights={laneHeights}
-              finetuneTimeMs={finetuneTimeMs}
-              finetuneMode={finetuneMode}
-              visibleStartPx={visibleStartPx}
-              visibleEndPx={visibleEndPx}
-              onUpdateBreakline={handleUpdateBreaklineOffset}
-              onDeleteBreakline={handleDeleteBreakline}
-              onDeleteLoopStart={handleDeleteLoopStart}
-              onDeleteLoopEnd={handleDeleteLoopEnd}
-              onLongPressVocals={handleVocalsLongPress}
-            />
-
-            {/* Glowing Vertical Playhead */}
-            <View 
-              style={[
-                styles.playheadLine, 
-                { 
-                  left: (playbackPos / 1000) * PIXELS_PER_SECOND, 
-                  height: totalHeight,
-                  backgroundColor: themeColors.accent
-                }
-              ]} 
-            />
-          </View>
-        </ScrollView>
-      </View>
+              {/* Glowing Vertical Playhead */}
+              <View 
+                style={[
+                  styles.playheadLine, 
+                  { 
+                    left: (playbackPos / 1000) * PIXELS_PER_SECOND, 
+                    height: totalHeight,
+                    backgroundColor: themeColors.accent
+                  }
+                ]} 
+              />
+            </View>
+          </ScrollView>
+        </View>
       </ScrollView>
+
+      {/* Sticky Horizontal Navigation & Scrubber Bar for TV Remote & Web Mouse */}
+      <View style={{
+        ...(Platform.OS === 'web' ? { position: 'sticky', bottom: 0, zIndex: 100 } as any : { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100 }),
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: themeColors.surface,
+        borderTopWidth: 1,
+        borderTopColor: themeColors.border,
+        boxShadow: '0px -2px 10px rgba(0,0,0,0.15)',
+        elevation: 8,
+      }}>
+        <HoldableButton
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 6,
+            backgroundColor: themeColors.surfaceSecondary,
+            marginRight: 8,
+          }}
+          onPressAction={() => panTimelineBy(-10)}
+        >
+          <Ionicons name="chevron-back" size={16} color={themeColors.accent} />
+          <Text style={{ color: themeColors.text, fontSize: 11, fontWeight: 'bold', marginLeft: 2 }}>◄ 10s</Text>
+        </HoldableButton>
+
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 8 }}>
+          <Text style={{ color: themeColors.textMuted, fontSize: 10, fontWeight: 'bold', minWidth: 42 }}>
+            {formatTime((visibleScrollX / PIXELS_PER_SECOND) * 1000)}
+          </Text>
+          
+          <Pressable
+            style={{ flex: 1, height: 24, justifyContent: 'center', marginHorizontal: 8 }}
+            onPress={(e) => {
+              const width = e.nativeEvent.target ? (e.nativeEvent.target as any).clientWidth || 300 : 300;
+              const x = e.nativeEvent.locationX;
+              const ratio = Math.max(0, Math.min(1, x / width));
+              const maxScrollX = Math.max(1, timelineWidth - SCREEN_WIDTH + 170);
+              const targetX = ratio * maxScrollX;
+              scrollRef.current?.scrollTo({ x: targetX, animated: false });
+              setVisibleScrollX(targetX);
+            }}
+          >
+            <View style={{ height: 8, backgroundColor: themeColors.border, borderRadius: 4, width: '100%', overflow: 'hidden' }}>
+              <View 
+                style={{ 
+                  height: '100%', 
+                  width: `${Math.min(100, Math.max(0, (visibleScrollX / Math.max(1, timelineWidth - SCREEN_WIDTH + 170)) * 100))}%`, 
+                  backgroundColor: themeColors.accent 
+                }} 
+              />
+            </View>
+          </Pressable>
+
+          <Text style={{ color: themeColors.textMuted, fontSize: 10, fontWeight: 'bold', minWidth: 42, textAlign: 'right' }}>
+            {formatTime(durationSec * 1000)}
+          </Text>
+        </View>
+
+        <HoldableButton
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 6,
+            backgroundColor: themeColors.surfaceSecondary,
+            marginLeft: 8,
+          }}
+          onPressAction={() => panTimelineBy(10)}
+        >
+          <Text style={{ color: themeColors.text, fontSize: 11, fontWeight: 'bold', marginRight: 2 }}>10s ►</Text>
+          <Ionicons name="chevron-forward" size={16} color={themeColors.accent} />
+        </HoldableButton>
+      </View>
+    </View>
     );
   };
 
