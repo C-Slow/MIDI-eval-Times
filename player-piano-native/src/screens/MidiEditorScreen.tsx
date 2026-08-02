@@ -691,10 +691,10 @@ export const MidiEditorScreen = () => {
         setBackendAudioEnabled(data.backend_audio_enabled);
         setSelectedDevice(data.selected_device);
         setBackendAudioVolume(data.backend_audio_volume ?? 1.0);
-        if (data.active_soundfont) setActiveSoundfont(data.active_soundfont);
-        if (data.reverb_enabled !== undefined) setReverbEnabled(data.reverb_enabled);
-        if (data.reverb_room_size !== undefined) setReverbRoomSize(data.reverb_room_size);
-        if (data.peak_ceiling_db !== undefined) setPeakCeilingDb(data.peak_ceiling_db);
+        if (data.active_soundfont && !selectedJobId) setActiveSoundfont(data.active_soundfont);
+        if (data.reverb_enabled !== undefined && !selectedJobId) setReverbEnabled(data.reverb_enabled);
+        if (data.reverb_room_size !== undefined && !selectedJobId) setReverbRoomSize(data.reverb_room_size);
+        if (data.peak_ceiling_db !== undefined && !selectedJobId) setPeakCeilingDb(data.peak_ceiling_db);
       } catch (err) {
         console.error('Failed to fetch backend audio settings', err);
       }
@@ -713,7 +713,7 @@ export const MidiEditorScreen = () => {
           ]);
           setAudioDevices(devicesRes.devices || []);
           if (sfRes.soundfonts) setSoundfonts(sfRes.soundfonts);
-          if (sfRes.active_soundfont) setActiveSoundfont(sfRes.active_soundfont);
+          if (sfRes.active_soundfont && !selectedJobId) setActiveSoundfont(sfRes.active_soundfont);
         } catch (err) {
           console.error('Failed to fetch audio devices or soundfonts', err);
         }
@@ -727,13 +727,15 @@ export const MidiEditorScreen = () => {
     try {
       if (selectedJobId) {
         await midiOrchestratorApi.updateMetadata(selectedJobId, { soundfont: sf });
+        setJobs(prevJobs => prevJobs.map(j => j.job_id === selectedJobId ? { ...j, soundfont: sf } : j));
+      } else {
+        await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
+          active_soundfont: sf,
+          reverb_enabled: reverbEnabled,
+          reverb_room_size: reverbRoomSize,
+          peak_ceiling_db: peakCeilingDb
+        });
       }
-      await midiOrchestratorApi.saveAudioSettings(backendAudioEnabled, selectedDevice, backendAudioVolume, {
-        active_soundfont: sf,
-        reverb_enabled: reverbEnabled,
-        reverb_room_size: reverbRoomSize,
-        peak_ceiling_db: peakCeilingDb
-      });
     } catch (err) {
       console.error('Failed to save soundfont setting', err);
     }
