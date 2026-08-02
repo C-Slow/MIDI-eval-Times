@@ -467,6 +467,32 @@ def get_midi_info(path: str):
     """Return dict with basic MIDI info: length (seconds), size bytes, and created timestamp. Uses cache."""
     global _midi_info_cache
     
+_midi_parsed_cache = {}
+_midi_cache_max_entries = 50
+
+def get_parsed_midi(path: str) -> mido.MidiFile:
+    """Returns a cached parsed mido.MidiFile object to prevent parsing lag during playback."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"MIDI file not found: {path}")
+    
+    file_size = os.path.getsize(path)
+    file_mtime = os.path.getmtime(path)
+    cache_key = f"{os.path.abspath(path)}_{file_size}_{file_mtime}"
+    
+    if cache_key in _midi_parsed_cache:
+        return _midi_parsed_cache[cache_key]
+    
+    mid = mido.MidiFile(path)
+    if len(_midi_parsed_cache) >= _midi_cache_max_entries:
+        _midi_parsed_cache.pop(next(iter(_midi_parsed_cache)))
+    _midi_parsed_cache[cache_key] = mid
+    return mid
+
+
+def get_midi_info(path: str):
+    if not os.path.exists(path):
+        return {'length': None, 'size': 0, 'created': 0}
+
     file_size = os.path.getsize(path)
     file_mtime = os.path.getmtime(path)
     cache_key = f"{path}_{file_size}_{file_mtime}"
@@ -476,7 +502,7 @@ def get_midi_info(path: str):
 
     info = {'length': None, 'size': file_size, 'created': file_mtime}
     try:
-        mid = mido.MidiFile(path)
+        mid = get_parsed_midi(path)
         length = getattr(mid, 'length', None)
         if not length:
             length = 0
@@ -1093,14 +1119,14 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
         print(f"Error in audio playback thread: {e}")
 
 
-def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
+def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0, request_timestamp: float = None):
     _current_play['event'] = stop_event
     _log(f"Playback started for {path} at offset {start_offset} with audio_path={audio_path} and offset={global_offset_ms}ms")
     
     audio_stop_event = Event()
     
     try:
-        mid = mido.MidiFile(path)
+        mid = get_parsed_midi(path)
         settings = load_settings()
         
         # Start backing audio thread if enabled and audio file exists
@@ -1132,8 +1158,11 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
 
         accumulated_seconds = 0.0
         current_tempo = 500000
-        start_anchor = None
         
+        # Precisely anchor start time to when the play request was received
+        base_time = request_timestamp if request_timestamp is not None else time.time()
+        start_anchor = base_time + midi_delay
+
         for msg in mido.merge_tracks(mid.tracks):
             if stop_event is not None and stop_event.is_set():
                 print("DEBUG: Playback loop stop event set.")
@@ -1147,12 +1176,6 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
 
             if accumulated_seconds < start_offset:
                 continue
-            
-            if start_anchor is None:
-                start_anchor = time.time()
-                # Apply MIDI delay offset
-                if midi_delay > 0:
-                    start_anchor += midi_delay
 
             target_time = start_anchor + (accumulated_seconds - start_offset)
             
@@ -1200,6 +1223,7 @@ def play_midi_blocking(path: str, port_name: str = None, stop_event=None, start_
 _current_play = {'thread': None, 'event': None, 'path': None, 'file': None, 'start': None, 'port': None, 'length': None, 'seek_offset': 0, 'audio_thread': None}
 
 def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0):
+    req_time = time.time()
     # stop any existing playback
     stop_current_play()
     
@@ -1215,7 +1239,7 @@ def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, a
     _current_play['port'] = port_name
     _current_play['length'] = info.get('length')
     
-    virtual_start = time.time()
+    virtual_start = req_time
     if audio_path and os.path.exists(audio_path):
         settings = load_settings()
         if settings.get("backend_audio_enabled") and global_offset_ms < 0:
@@ -1227,7 +1251,7 @@ def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, a
     
     t = threading.Thread(
         target=_play_internal, 
-        args=(path, port_name, ev, seek_offset, audio_path, global_offset_ms), 
+        args=(path, port_name, ev, seek_offset, audio_path, global_offset_ms, req_time), 
         daemon=True
     )
     _current_play['thread'] = t
