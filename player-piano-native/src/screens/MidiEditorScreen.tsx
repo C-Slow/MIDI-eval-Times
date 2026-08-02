@@ -117,6 +117,8 @@ interface NoteGridProps {
   laneHeights: number[];
   finetuneTimeMs: number | null;
   finetuneMode: 'breakline' | 'loopStart' | 'loopEnd' | null;
+  visibleStartPx?: number;
+  visibleEndPx?: number;
   onUpdateBreakline: (index: number, delta: number) => void;
   onDeleteBreakline: (index: number) => void;
   onDeleteLoopStart: () => void;
@@ -133,6 +135,8 @@ const InstrumentLanesContent = React.memo(({
   speakerTracks,
   vocalMaleTracks,
   vocalFemaleTracks,
+  visibleStartPx = 0,
+  visibleEndPx = 3000,
 }: any) => {
   const getTrackColor = (trackIndex: number, isPiano: boolean, isSpeaker: boolean, isMale: boolean, isFemale: boolean) => {
     if (isPiano) return themeColors.accent;
@@ -172,6 +176,13 @@ const InstrumentLanesContent = React.memo(({
             {lane.notes.map((note: any, noteIdx: number) => {
               const noteWidth = Math.max(2, (note.end - note.start) * PIXELS_PER_SECOND);
               const noteLeft = note.start * PIXELS_PER_SECOND;
+              const noteRight = noteLeft + noteWidth;
+
+              // Viewport Virtualization: Clip off-screen notes to prevent main thread freezing
+              if (noteRight < visibleStartPx || noteLeft > visibleEndPx) {
+                return null;
+              }
+
               const normalizedPitch = (note.pitch - lane.minPitch) / lane.pitchRange;
               const noteTop = verticalPadding + (usableLaneHeight * (1 - normalizedPitch));
 
@@ -197,6 +208,8 @@ const InstrumentLanesContent = React.memo(({
     </>
   );
 }, (prev, next) => {
+  if (prev.visibleStartPx !== next.visibleStartPx) return false;
+  if (prev.visibleEndPx !== next.visibleEndPx) return false;
   if (prev.lanesData !== next.lanesData) return false;
   if (prev.themeColors !== next.themeColors) return false;
   if (prev.pianoTracks !== next.pianoTracks) return false;
@@ -232,6 +245,8 @@ const NoteGrid = React.memo(({
   laneHeights,
   finetuneTimeMs,
   finetuneMode,
+  visibleStartPx,
+  visibleEndPx,
   onUpdateBreakline,
   onDeleteBreakline,
   onDeleteLoopStart,
@@ -482,10 +497,14 @@ const NoteGrid = React.memo(({
         speakerTracks={speakerTracks}
         vocalMaleTracks={vocalMaleTracks}
         vocalFemaleTracks={vocalFemaleTracks}
+        visibleStartPx={visibleStartPx}
+        visibleEndPx={visibleEndPx}
       />
     </View>
   );
 }, (prevProps, nextProps) => {
+  if (prevProps.visibleStartPx !== nextProps.visibleStartPx) return false;
+  if (prevProps.visibleEndPx !== nextProps.visibleEndPx) return false;
   if (prevProps.timelineWidth !== nextProps.timelineWidth) return false;
   if (prevProps.totalHeight !== nextProps.totalHeight) return false;
   if (prevProps.durationSec !== nextProps.durationSec) return false;
@@ -574,6 +593,20 @@ export const MidiEditorScreen = () => {
   // Drag reordering state for MP3 Vocals track
   const [mp3VocalsPosition, setMp3VocalsPosition] = useState<number | null>(null);
   const [isDraggingMp3Vocals, setIsDraggingMp3Vocals] = useState<boolean>(false);
+
+  // Viewport Virtualization state for large MIDI songs
+  const [visibleScrollX, setVisibleScrollX] = useState<number>(0);
+  const visibleStartPx = Math.max(0, visibleScrollX - (SCREEN_WIDTH * 2));
+  const visibleEndPx = visibleScrollX + (SCREEN_WIDTH * 3);
+
+  const handleTimelineScroll = React.useCallback((event: any) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const chunk = Math.floor(x / 250);
+    setVisibleScrollX(prev => {
+      const prevChunk = Math.floor(prev / 250);
+      return chunk !== prevChunk ? x : prev;
+    });
+  }, []);
 
   const dragStartYRef = useRef<number>(0);
   const mp3StartPosRef = useRef<number>(0);
@@ -2200,6 +2233,8 @@ export const MidiEditorScreen = () => {
           <ScrollView 
             horizontal 
             ref={scrollRef}
+            onScroll={handleTimelineScroll}
+            scrollEventThrottle={100}
             showsHorizontalScrollIndicator={true}
             style={[styles.lanesScrollView, { backgroundColor: themeColors.background, height: totalHeight }]}
             removeClippedSubviews={true}
@@ -2226,6 +2261,8 @@ export const MidiEditorScreen = () => {
               laneHeights={laneHeights}
               finetuneTimeMs={finetuneTimeMs}
               finetuneMode={finetuneMode}
+              visibleStartPx={visibleStartPx}
+              visibleEndPx={visibleEndPx}
               onUpdateBreakline={handleUpdateBreaklineOffset}
               onDeleteBreakline={handleDeleteBreakline}
               onDeleteLoopStart={handleDeleteLoopStart}

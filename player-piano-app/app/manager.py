@@ -216,8 +216,8 @@ class PlaylistManager:
 
     def check_upcoming_speaker_preconnect(self):
         """
-        Check the upcoming song in the playlist; if it is a validated hybrid track (validated === true),
-        pre-connect to the backend speaker system to eliminate sleep/standby latency before playback starts.
+        Check the upcoming song in the playlist; pre-cache its parsed MIDI and
+        pre-connect to backend speakers if it's a validated hybrid track.
         """
         if not self.active_tracks:
             return
@@ -226,17 +226,26 @@ class PlaylistManager:
             next_idx = 0
         if 0 <= next_idx < len(self.active_tracks):
             upcoming_fn = self.active_tracks[next_idx]
+            next_path = None
             if upcoming_fn.startswith("hybrid:"):
                 job_id = upcoming_fn.split(":", 1)[1]
                 from app.main import midi_orchestrator
                 job = midi_orchestrator.status.get(job_id)
-                if job and job.get("status") == "completed" and job.get("validated", False):
-                    from app.utils import load_settings, connect_paired_device, _active_bt_device_name
-                    settings = load_settings()
-                    selected_device = settings.get("selected_device", "")
-                    if selected_device and not _active_bt_device_name:
-                        print(f"Smart Speaker Pre-Connection: Upcoming track '{upcoming_fn}' is validated hybrid. Pre-connecting speaker '{selected_device}'...")
-                        connect_paired_device(selected_device)
+                if job and job.get("status") == "completed":
+                    next_path = job.get("midi")
+                    if job.get("validated", False):
+                        from app.utils import load_settings, connect_paired_device, _active_bt_device_name
+                        settings = load_settings()
+                        selected_device = settings.get("selected_device", "")
+                        if selected_device and not _active_bt_device_name:
+                            print(f"Smart Speaker Pre-Connection: Upcoming track '{upcoming_fn}' is validated hybrid. Pre-connecting speaker '{selected_device}'...")
+                            connect_paired_device(selected_device)
+            else:
+                next_path = self._resolve_path(upcoming_fn)
+
+            if next_path and os.path.exists(next_path):
+                # Pre-cache upcoming MIDI in background to eliminate transition latency
+                threading.Thread(target=utils.get_parsed_midi, args=(next_path,), daemon=True).start()
 
     def seek(self, offset: float):
         if not self.play_thread or not self.play_thread.is_alive() or self.current_playlist_name is None:
