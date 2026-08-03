@@ -1661,7 +1661,8 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             soundfont=req.soundfont,
             reverb_enabled=req.reverb_enabled,
             reverb_room_size=req.reverb_room_size,
-            peak_ceiling_db=req.peak_ceiling_db
+            peak_ceiling_db=req.peak_ceiling_db,
+            tracks_config=req.tracks_config
         )
         return {"status": "started"}
     except ValueError as e:
@@ -1683,6 +1684,7 @@ class MidiOrchestratorMetadataUpdate(BaseModel):
     reverb_enabled: Optional[bool] = None
     reverb_room_size: Optional[float] = None
     peak_ceiling_db: Optional[float] = None
+    tracks_config: Optional[Dict[str, Any]] = None
 
 @app.get("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
 async def get_midi_orchestrator_metadata(job_id: str):
@@ -1703,7 +1705,8 @@ async def get_midi_orchestrator_metadata(job_id: str):
         "soundfont": job.get("soundfont"),
         "reverb_enabled": job.get("reverb_enabled"),
         "reverb_room_size": job.get("reverb_room_size"),
-        "peak_ceiling_db": job.get("peak_ceiling_db")
+        "peak_ceiling_db": job.get("peak_ceiling_db"),
+        "tracks_config": job.get("tracks_config", {})
     }
 
 @app.post("/midi-orchestrator/metadata/{job_id}", dependencies=[Depends(verify_auth)])
@@ -1725,6 +1728,7 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     if req.reverb_enabled is not None: updates["reverb_enabled"] = req.reverb_enabled
     if req.reverb_room_size is not None: updates["reverb_room_size"] = req.reverb_room_size
     if req.peak_ceiling_db is not None: updates["peak_ceiling_db"] = req.peak_ceiling_db
+    if req.tracks_config is not None: updates["tracks_config"] = req.tracks_config
     
     midi_orchestrator.status[job_id].update(updates)
     midi_orchestrator._save_db()

@@ -662,6 +662,10 @@ export const MidiEditorScreen = () => {
 
   const [peakCeilingDb, setPeakCeilingDb] = useState<number>(-6.0);
 
+  // Track Settings & Customization states
+  const [tracksConfig, setTracksConfig] = useState<Record<string, any>>({});
+  const [editingTrackIndex, setEditingTrackIndex] = useState<number | null>(null);
+
   const pianoPlayback = useStore(state => state.pianoPlayback);
   const pianoStartedRef = useRef(false);
 
@@ -1014,6 +1018,7 @@ export const MidiEditorScreen = () => {
     setLoopStartMs(null);
     setLoopEndMs(null);
     setLoopEnabled(false);
+    setTracksConfig(job.tracks_config || {});
 
     // Load per-job soundfont & audio parameters, falling back to global settings
     try {
@@ -2176,9 +2181,21 @@ export const MidiEditorScreen = () => {
 
               return (
                 <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
-                  <Text style={[styles.sidebarLaneTitle, { color: themeColors.text }]} numberOfLines={1}>
-                    {lane.name}
-                  </Text>
+                  <TouchableOpacity
+                    onLongPress={() => setEditingTrackIndex(lane.index)}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
+                  >
+                    <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, flex: 1 }]} numberOfLines={1}>
+                      {tracksConfig[String(lane.index)]?.name || lane.name}
+                    </Text>
+                    <TouchableOpacity onPress={() => setEditingTrackIndex(lane.index)} style={{ padding: 2 }}>
+                      <Ionicons 
+                        name={tracksConfig[String(lane.index)] ? "options" : "options-outline"} 
+                        size={13} 
+                        color={tracksConfig[String(lane.index)] ? themeColors.accent : themeColors.textMuted} 
+                      />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
                   
                   {/* 5-Way Live Toggle Row */}
                   <View style={styles.allocationRow}>
@@ -3828,6 +3845,191 @@ export const MidiEditorScreen = () => {
                   onPress={() => setShowMp3ImportModal(false)}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Track Settings & Customization Modal */}
+          <Modal
+            visible={editingTrackIndex !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setEditingTrackIndex(null)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface, maxWidth: 480, width: '90%', padding: 20, borderRadius: 16 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                  <Text style={[styles.modalTitle, { color: themeColors.text, fontSize: 16 }]}>
+                    Track {editingTrackIndex !== null ? editingTrackIndex : ''} Settings
+                  </Text>
+                  <TouchableOpacity onPress={() => setEditingTrackIndex(null)}>
+                    <Ionicons name="close" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                  {/* Custom Track Name */}
+                  <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>Custom Track Name</Text>
+                    <TextInput
+                      style={[styles.searchBar, { backgroundColor: themeColors.surfaceSecondary, color: themeColors.text, marginBottom: 0, height: 40, borderRadius: 8, paddingHorizontal: 12 }]}
+                      placeholder="e.g. Solo Cello, Violin 1 Lead..."
+                      placeholderTextColor={themeColors.textMuted}
+                      value={editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.name || '') : ''}
+                      onChangeText={(txt) => {
+                        if (editingTrackIndex === null) return;
+                        setTracksConfig(prev => ({
+                          ...prev,
+                          [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], name: txt }
+                        }));
+                      }}
+                    />
+                  </View>
+
+                  {/* SoundFont Engine Selector */}
+                  <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>Track Synthesizer Engine</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4 }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.presetBadge,
+                          editingTrackIndex !== null && !tracksConfig[String(editingTrackIndex)]?.soundfont ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                        ]}
+                        onPress={() => {
+                          if (editingTrackIndex === null) return;
+                          setTracksConfig(prev => {
+                            const updated = { ...prev[String(editingTrackIndex)] };
+                            delete updated.soundfont;
+                            return { ...prev, [String(editingTrackIndex)]: updated };
+                          });
+                        }}
+                      >
+                        <Text style={[styles.presetBadgeText, { color: editingTrackIndex !== null && !tracksConfig[String(editingTrackIndex)]?.soundfont ? '#fff' : themeColors.text }]}>
+                          Default (Job SoundFont)
+                        </Text>
+                      </TouchableOpacity>
+                      {soundfonts.map((sf) => {
+                        const isSel = editingTrackIndex !== null && tracksConfig[String(editingTrackIndex)]?.soundfont === sf;
+                        return (
+                          <TouchableOpacity
+                            key={sf}
+                            style={[
+                              styles.presetBadge,
+                              isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                            ]}
+                            onPress={() => {
+                              if (editingTrackIndex === null) return;
+                              setTracksConfig(prev => ({
+                                ...prev,
+                                [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], soundfont: sf }
+                              }));
+                            }}
+                          >
+                            <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
+                              {sf}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Track Gain / Volume Stepper */}
+                  <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
+                      Track Volume: {Math.round((editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.gain ?? 1.0) : 1.0) * 100)}%
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.surfaceSecondary, borderRadius: 8, padding: 4 }}>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => {
+                          if (editingTrackIndex === null) return;
+                          const cur = tracksConfig[String(editingTrackIndex)]?.gain ?? 1.0;
+                          const nextGain = Math.max(0.1, Number((cur - 0.1).toFixed(2)));
+                          setTracksConfig(prev => ({
+                            ...prev,
+                            [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], gain: nextGain }
+                          }));
+                        }}
+                      >
+                        <Ionicons name="remove-circle-outline" size={26} color={themeColors.accent} />
+                      </TouchableOpacity>
+                      <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 15 }}>
+                        {Math.round((editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.gain ?? 1.0) : 1.0) * 100)}%
+                      </Text>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => {
+                          if (editingTrackIndex === null) return;
+                          const cur = tracksConfig[String(editingTrackIndex)]?.gain ?? 1.0;
+                          const nextGain = Math.min(2.0, Number((cur + 0.1).toFixed(2)));
+                          setTracksConfig(prev => ({
+                            ...prev,
+                            [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], gain: nextGain }
+                          }));
+                        }}
+                      >
+                        <Ionicons name="add-circle-outline" size={26} color={themeColors.accent} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Track Pitch / Transpose Stepper */}
+                  <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
+                      Octave / Pitch Transpose: {editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.transpose ?? 0) : 0} semitones
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: themeColors.surfaceSecondary, borderRadius: 8, padding: 4 }}>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => {
+                          if (editingTrackIndex === null) return;
+                          const cur = tracksConfig[String(editingTrackIndex)]?.transpose ?? 0;
+                          setTracksConfig(prev => ({
+                            ...prev,
+                            [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], transpose: Math.max(-24, cur - 1) }
+                          }));
+                        }}
+                      >
+                        <Ionicons name="remove-circle-outline" size={26} color={themeColors.accent} />
+                      </TouchableOpacity>
+                      <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 15 }}>
+                        {(editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.transpose ?? 0) : 0) >= 0 ? `+${editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.transpose ?? 0) : 0}` : tracksConfig[String(editingTrackIndex)]?.transpose} st
+                      </Text>
+                      <TouchableOpacity
+                        style={{ padding: 6 }}
+                        onPress={() => {
+                          if (editingTrackIndex === null) return;
+                          const cur = tracksConfig[String(editingTrackIndex)]?.transpose ?? 0;
+                          setTracksConfig(prev => ({
+                            ...prev,
+                            [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], transpose: Math.min(24, cur + 1) }
+                          }));
+                        }}
+                      >
+                        <Ionicons name="add-circle-outline" size={26} color={themeColors.accent} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                {/* Save Track Settings Button */}
+                <TouchableOpacity
+                  style={[styles.uploadBtn, { backgroundColor: themeColors.accent, marginTop: 15, height: 42, justifyContent: 'center', borderRadius: 8 }]}
+                  onPress={async () => {
+                    if (selectedJobId) {
+                      try {
+                        await midiOrchestratorApi.updateMetadata(selectedJobId, { tracks_config: tracksConfig });
+                        setJobs(prev => prev.map(j => j.job_id === selectedJobId ? { ...j, tracks_config: tracksConfig } : j));
+                      } catch (e) {
+                        console.error('Failed to save tracks_config:', e);
+                      }
+                    }
+                    setEditingTrackIndex(null);
+                  }}
+                >
+                  <Text style={[styles.uploadBtnText, { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' }]}>Save Track Settings</Text>
                 </TouchableOpacity>
               </View>
             </View>

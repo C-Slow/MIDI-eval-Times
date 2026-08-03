@@ -308,7 +308,8 @@ class MidiOrchestrator:
         soundfont: str = None,
         reverb_enabled: bool = None,
         reverb_room_size: float = None,
-        peak_ceiling_db: float = None
+        peak_ceiling_db: float = None,
+        tracks_config: Dict = None
     ):
         if job_id not in self.status:
             raise ValueError("Job not found.")
@@ -328,6 +329,9 @@ class MidiOrchestrator:
         if peak_ceiling_db is None:
             peak_ceiling_db = float(settings.get("peak_ceiling_db", -6.0))
             
+        existing_tracks_config = self.status[job_id].get("tracks_config", {})
+        merged_tracks_config = {**existing_tracks_config, **(tracks_config or {})}
+            
         self.status[job_id].update({
             "status": "processing",
             "progress": 10,
@@ -342,7 +346,8 @@ class MidiOrchestrator:
             "soundfont": soundfont,
             "reverb_enabled": reverb_enabled,
             "reverb_room_size": reverb_room_size,
-            "peak_ceiling_db": peak_ceiling_db
+            "peak_ceiling_db": peak_ceiling_db,
+            "tracks_config": merged_tracks_config
         })
         self._save_db()
         

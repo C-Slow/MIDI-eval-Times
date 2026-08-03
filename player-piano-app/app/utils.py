@@ -27,27 +27,44 @@ RENDER_CACHE = os.path.join(PROJECT_ROOT, 'storage', 'render_cache')
 STORAGE_RAW = os.path.join(PROJECT_ROOT, 'storage', 'raw')
 STORAGE_PROCESSED = os.path.join(PROJECT_ROOT, 'storage', 'processed')
 
+def get_bbc_so_vst_path() -> Optional[str]:
+    """Return path to Spitfire BBC SO VST3 if installed on system."""
+    candidates = [
+        r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3",
+        r"C:\Program Files\Common Files\VST3\Spitfire Audio.vst3",
+        r"C:\Program Files\VSTPlugins\BBC Symphony Orchestra (64 Bit).vst3",
+        r"C:\Program Files\Steinberg\VSTPlugins\BBC Symphony Orchestra (64 Bit).vst3"
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
 def get_available_soundfonts() -> List[str]:
-    """Scan storage directory for valid .sf2 / .sf3 soundfonts."""
+    """Scan storage directory for valid .sf2 / .sf3 soundfonts, plus installed VST3 engines."""
     storage_dir = os.path.join(PROJECT_ROOT, 'storage')
-    if not os.path.exists(storage_dir):
-        return []
     valid = []
-    try:
-        soundfont_candidates = [f for f in os.listdir(storage_dir) if f.lower().endswith(('.sf2', '.sf3'))]
-        for sf in soundfont_candidates:
-            sf_path = os.path.join(storage_dir, sf)
-            try:
-                with open(sf_path, 'rb') as f:
-                    header = f.read(100)
-                if b'<!DOCTYPE html>' in header or b'<html' in header:
-                    continue
-                if sf_path and os.path.getsize(sf_path) > 1000:
-                    valid.append(sf)
-            except Exception:
-                pass
-    except Exception as e:
-        _log(f"Error scanning soundfonts: {e}")
+    if os.path.exists(storage_dir):
+        try:
+            soundfont_candidates = [f for f in os.listdir(storage_dir) if f.lower().endswith(('.sf2', '.sf3'))]
+            for sf in soundfont_candidates:
+                sf_path = os.path.join(storage_dir, sf)
+                try:
+                    with open(sf_path, 'rb') as f:
+                        header = f.read(100)
+                    if b'<!DOCTYPE html>' in header or b'<html' in header:
+                        continue
+                    if sf_path and os.path.getsize(sf_path) > 1000:
+                        valid.append(sf)
+                except Exception:
+                    pass
+        except Exception as e:
+            _log(f"Error scanning soundfonts: {e}")
+            
+    if get_bbc_so_vst_path():
+        valid.append("Spitfire BBC Symphony Orchestra (VST3)")
+        
     return sorted(valid)
 
 
@@ -55,6 +72,11 @@ def get_active_soundfont_path() -> str:
     """Get path to the active soundfont from settings or priority fallback list."""
     settings = load_settings()
     configured_sf = settings.get("active_soundfont")
+    if configured_sf == "Spitfire BBC Symphony Orchestra (VST3)":
+        bbc_vst = get_bbc_so_vst_path()
+        if bbc_vst:
+            return bbc_vst
+            
     storage_dir = os.path.join(PROJECT_ROOT, 'storage')
     if configured_sf:
         sf_path = os.path.join(storage_dir, configured_sf)
@@ -90,9 +112,13 @@ def get_active_soundfont_path() -> str:
 
 
 def resolve_soundfont_path(sf_filename: str = None) -> str:
-    """Resolve absolute path for a given SoundFont filename, falling back to active soundfont."""
+    """Resolve absolute path for a given SoundFont filename or VST3, falling back to active soundfont."""
     if not sf_filename:
         return get_active_soundfont_path()
+    if sf_filename == "Spitfire BBC Symphony Orchestra (VST3)":
+        bbc_vst = get_bbc_so_vst_path()
+        if bbc_vst:
+            return bbc_vst
     if os.path.isabs(sf_filename) and os.path.exists(sf_filename):
         return sf_filename
     storage_dir = os.path.join(PROJECT_ROOT, 'storage')
