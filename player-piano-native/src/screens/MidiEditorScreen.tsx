@@ -3936,6 +3936,58 @@ export const MidiEditorScreen = () => {
                     </ScrollView>
                   </View>
 
+                  {/* Orchestrator Instrument Patch / Performer Selector */}
+                  <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
+                      Instrument Patch / Performer
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4 }}>
+                      {[
+                        { id: 'auto', label: 'Auto (Detect from Track)' },
+                        { id: 'violins_1', label: 'Violins 1 Section' },
+                        { id: 'violins_2', label: 'Violins 2 Section' },
+                        { id: 'violas', label: 'Violas Section' },
+                        { id: 'celli', label: 'Celli (Section / Solo)' },
+                        { id: 'double_basses', label: 'Double Basses' },
+                        { id: 'flutes', label: 'Flutes' },
+                        { id: 'oboes', label: 'Oboes' },
+                        { id: 'clarinets', label: 'Clarinets' },
+                        { id: 'bassoons', label: 'Bassoons' },
+                        { id: 'horns', label: 'French Horns' },
+                        { id: 'trumpets', label: 'Trumpets' },
+                        { id: 'trombones', label: 'Trombones' },
+                        { id: 'tuba', label: 'Tuba' },
+                        { id: 'timpani', label: 'Timpani & Percussion' },
+                        { id: 'harp', label: 'Orchestral Harp' },
+                        { id: 'grand_piano', label: 'Grand Piano' },
+                        { id: 'tutti', label: 'Full Orchestra (Tutti)' }
+                      ].map((patch) => {
+                        const curPatch = editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto') : 'auto';
+                        const isSel = curPatch === patch.id;
+                        return (
+                          <TouchableOpacity
+                            key={patch.id}
+                            style={[
+                              styles.presetBadge,
+                              isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                            ]}
+                            onPress={() => {
+                              if (editingTrackIndex === null) return;
+                              setTracksConfig(prev => ({
+                                ...prev,
+                                [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], instrument_patch: patch.id }
+                              }));
+                            }}
+                          >
+                            <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
+                              {patch.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
                   {/* Track Gain / Volume Stepper */}
                   <View style={{ marginBottom: 15 }}>
                     <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
@@ -4015,23 +4067,46 @@ export const MidiEditorScreen = () => {
                   </View>
                 </ScrollView>
 
-                {/* Save Track Settings Button */}
-                <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: themeColors.accent, marginTop: 15, height: 42, justifyContent: 'center', borderRadius: 8 }]}
-                  onPress={async () => {
-                    if (selectedJobId) {
-                      try {
-                        await midiOrchestratorApi.updateMetadata(selectedJobId, { tracks_config: tracksConfig });
-                        setJobs(prev => prev.map(j => j.job_id === selectedJobId ? { ...j, tracks_config: tracksConfig } : j));
-                      } catch (e) {
-                        console.error('Failed to save tracks_config:', e);
+                {/* Footer Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
+                  {/* Reset to Default Button */}
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, { backgroundColor: themeColors.surfaceSecondary, flex: 1, height: 42, justifyContent: 'center', borderRadius: 8 }]}
+                    onPress={async () => {
+                      if (editingTrackIndex === null) return;
+                      setTracksConfig(prev => {
+                        const copy = { ...prev };
+                        delete copy[String(editingTrackIndex)];
+                        if (selectedJobId) {
+                          midiOrchestratorApi.updateMetadata(selectedJobId, { tracks_config: copy }).catch(console.error);
+                          setJobs(jList => jList.map(j => j.job_id === selectedJobId ? { ...j, tracks_config: copy } : j));
+                        }
+                        return copy;
+                      });
+                      setEditingTrackIndex(null);
+                    }}
+                  >
+                    <Text style={[styles.uploadBtnText, { color: themeColors.text, fontSize: 13, fontWeight: 'bold', textAlign: 'center' }]}>Reset to Default</Text>
+                  </TouchableOpacity>
+
+                  {/* Save Track Settings Button */}
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, { backgroundColor: themeColors.accent, flex: 1, height: 42, justifyContent: 'center', borderRadius: 8 }]}
+                    onPress={async () => {
+                      if (selectedJobId) {
+                        try {
+                          await midiOrchestratorApi.updateMetadata(selectedJobId, { tracks_config: tracksConfig });
+                          setJobs(prev => prev.map(j => j.job_id === selectedJobId ? { ...j, tracks_config: tracksConfig } : j));
+                        } catch (e) {
+                          console.error('Failed to save tracks_config:', e);
+                        }
                       }
-                    }
-                    setEditingTrackIndex(null);
-                  }}
-                >
-                  <Text style={[styles.uploadBtnText, { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' }]}>Save Track Settings</Text>
-                </TouchableOpacity>
+                      setEditingTrackIndex(null);
+                    }}
+                  >
+                    <Text style={[styles.uploadBtnText, { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' }]}>Save Settings</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Modal>
