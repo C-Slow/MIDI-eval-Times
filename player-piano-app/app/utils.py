@@ -222,10 +222,14 @@ def render_midi_to_wav_with_soundfont(
     if soundfont_path and ("Spitfire BBC" in soundfont_path or soundfont_path.lower().endswith('.vst3')):
         resolved_vst = resolve_soundfont_path(soundfont_path)
         if os.path.exists(resolved_vst) and resolved_vst.lower().endswith('.vst3'):
-            return render_midi_to_wav_with_vst3(midi_path, resolved_vst, out_wav_path, gain=gain)
+            try:
+                return render_midi_to_wav_with_vst3(midi_path, resolved_vst, out_wav_path, gain=gain)
+            except Exception as e:
+                _log(f"VST3 render notice ({e}), falling back to FluidSynth SoundFont...")
+                soundfont_path = get_active_soundfont_path()
 
     resolved_sf = resolve_soundfont_path(soundfont_path)
-    if not os.path.exists(resolved_sf):
+    if not os.path.exists(resolved_sf) or resolved_sf.lower().endswith('.vst3'):
         resolved_sf = get_active_soundfont_path()
         
     soundfont_path = resolved_sf

@@ -317,7 +317,7 @@ export const midiOrchestratorApi = {
     vocalMaleTracks: number[] = [],
     vocalFemaleTracks: number[] = [],
     importedVocals?: { mp3_job_id: string; original_name?: string; delay_ms: number; enabled: boolean; volume_factor?: number; breaklines?: Array<{ time_ms: number; offset_ms: number }>; position?: number },
-    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number }
+    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number; tracks_config?: Record<string, any> }
   ) => {
     const res = await api.post(`/midi-orchestrator/process/${jobId}`, {
       piano_tracks: pianoTracks,
@@ -331,7 +331,8 @@ export const midiOrchestratorApi = {
       soundfont: audioSettings?.soundfont,
       reverb_enabled: audioSettings?.reverb_enabled,
       reverb_room_size: audioSettings?.reverb_room_size,
-      peak_ceiling_db: audioSettings?.peak_ceiling_db
+      peak_ceiling_db: audioSettings?.peak_ceiling_db,
+      tracks_config: audioSettings?.tracks_config
     });
     return res.data;
   },

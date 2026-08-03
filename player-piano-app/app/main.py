@@ -1648,6 +1648,15 @@ async def get_midi_orchestrator_notes(job_id: str):
 @app.post("/midi-orchestrator/process/{job_id}", dependencies=[Depends(verify_auth)])
 async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
     try:
+        imp_voc_data = None
+        if req.imported_vocals:
+            if hasattr(req.imported_vocals, "dict"):
+                imp_voc_data = req.imported_vocals.dict()
+            elif hasattr(req.imported_vocals, "model_dump"):
+                imp_voc_data = req.imported_vocals.model_dump()
+            elif isinstance(req.imported_vocals, dict):
+                imp_voc_data = req.imported_vocals
+
         midi_orchestrator.start_processing(
             job_id,
             req.piano_tracks,
@@ -1657,7 +1666,7 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             req.melody_factor,
             req.vocal_male_tracks,
             req.vocal_female_tracks,
-            imported_vocals=req.imported_vocals.dict() if req.imported_vocals else None,
+            imported_vocals=imp_voc_data,
             soundfont=req.soundfont,
             reverb_enabled=req.reverb_enabled,
             reverb_room_size=req.reverb_room_size,
@@ -1668,6 +1677,9 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error in process_midi_orchestrator: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class MidiOrchestratorMetadataUpdate(BaseModel):

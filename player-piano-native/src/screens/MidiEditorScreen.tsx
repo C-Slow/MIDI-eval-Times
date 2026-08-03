@@ -1718,7 +1718,8 @@ export const MidiEditorScreen = () => {
           soundfont: activeSoundfont,
           reverb_enabled: reverbEnabled,
           reverb_room_size: reverbRoomSize,
-          peak_ceiling_db: peakCeilingDb
+          peak_ceiling_db: peakCeilingDb,
+          tracks_config: tracksConfig
         }
       );
       await fetchJobs();
