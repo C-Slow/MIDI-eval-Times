@@ -1466,6 +1466,7 @@ class ProcessMidiRequest(BaseModel):
     reverb_enabled: Optional[bool] = None
     reverb_room_size: Optional[float] = None
     peak_ceiling_db: Optional[float] = None
+    tracks_config: Optional[Dict[str, Any]] = None
 
 class Base64MidiUploadRequest(BaseModel):
     filename: str
@@ -1671,7 +1672,7 @@ async def process_midi_orchestrator(job_id: str, req: ProcessMidiRequest):
             reverb_enabled=req.reverb_enabled,
             reverb_room_size=req.reverb_room_size,
             peak_ceiling_db=req.peak_ceiling_db,
-            tracks_config=req.tracks_config
+            tracks_config=getattr(req, "tracks_config", None)
         )
         return {"status": "started"}
     except ValueError as e:
