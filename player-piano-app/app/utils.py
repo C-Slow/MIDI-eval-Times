@@ -253,7 +253,7 @@ def render_midi_to_wav_with_soundfont(
     if reverb_level is None:
         reverb_level = float(settings.get("reverb_level", 0.25))
     if polyphony is None:
-        polyphony = int(settings.get("polyphony", 512))
+        polyphony = int(settings.get("polyphony", 1024))
     if interpolation is None:
         interpolation = int(settings.get("interpolation", 7))
     if peak_ceiling_db is None:
@@ -279,8 +279,10 @@ def render_midi_to_wav_with_soundfont(
     cmd.extend([
         '-g', str(gain),
         '-r', '48000',
-        '-o', f'synth.polyphony={polyphony}',
+        '-o', f'synth.polyphony={max(1024, polyphony)}',
         '-o', 'synth.cpu-cores=4',
+        '-o', 'synth.overflow.sustained=0',
+        '-o', 'synth.overflow.released=0',
     ])
 
     if reverb_enabled:
