@@ -170,6 +170,43 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
         _log(f"Peak normalization skipped: {e}")
 
 
+def render_midi_to_wav_with_vst3(
+    midi_path: str,
+    vst3_path: str,
+    out_wav_path: str,
+    gain: float = None
+) -> str:
+    """Render MIDI to WAV using DawDreamer VST3 engine (e.g. Spitfire BBC SO)."""
+    import numpy as np
+    from scipy.io import wavfile
+    import dawdreamer as daw
+    import mido
+    
+    _log(f"Rendering MIDI via VST3 engine ({vst3_path}) -> {out_wav_path}")
+    sample_rate = 44100
+    block_size = 512
+    engine = daw.RenderEngine(sample_rate, block_size)
+    
+    synth = engine.make_plugin_processor("vst3_synth", vst3_path)
+    synth.load_midi(midi_path)
+    
+    mid = mido.MidiFile(midi_path)
+    duration_sec = getattr(mid, 'length', 180.0) + 2.5
+    
+    engine.load_graph([(synth, [])])
+    engine.render(duration_sec)
+    
+    audio = engine.get_audio().T
+    if gain is not None:
+        audio = audio * gain
+    max_val = np.max(np.abs(audio))
+    if max_val > 0:
+        audio = (audio / max_val) * 0.9 * 32767.0
+    audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
+    wavfile.write(out_wav_path, sample_rate, audio_int16)
+    return out_wav_path
+
+
 def render_midi_to_wav_with_soundfont(
     midi_path: str, 
     soundfont_path: str, 
@@ -181,7 +218,17 @@ def render_midi_to_wav_with_soundfont(
     polyphony: int = None,
     interpolation: int = None
 ) -> str:
-    """Render MIDI to WAV using FluidSynth with optimized audio parameters."""
+    """Render MIDI to WAV using FluidSynth or VST3 engine with optimized audio parameters."""
+    if soundfont_path and ("Spitfire BBC" in soundfont_path or soundfont_path.lower().endswith('.vst3')):
+        resolved_vst = resolve_soundfont_path(soundfont_path)
+        if os.path.exists(resolved_vst) and resolved_vst.lower().endswith('.vst3'):
+            return render_midi_to_wav_with_vst3(midi_path, resolved_vst, out_wav_path, gain=gain)
+
+    resolved_sf = resolve_soundfont_path(soundfont_path)
+    if not os.path.exists(resolved_sf):
+        resolved_sf = get_active_soundfont_path()
+        
+    soundfont_path = resolved_sf
     import subprocess
     
     if not os.path.exists(FLUIDSYNTH_BIN):
