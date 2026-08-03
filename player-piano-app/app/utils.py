@@ -182,35 +182,51 @@ def render_midi_to_wav_with_vst3(
     out_wav_path: str,
     gain: float = None
 ) -> str:
-    """Render MIDI to WAV using DawDreamer VST3 engine (e.g. Spitfire BBC SO)."""
+    """Render MIDI to WAV using Pedalboard VST3 host (Spitfire BBC Symphony Orchestra)."""
     import numpy as np
     from scipy.io import wavfile
-    import dawdreamer as daw
+    import pretty_midi
     import mido
+    from pedalboard import load_plugin
+
+    _log(f"Rendering MIDI via Spitfire VST3 engine ({vst3_path}) -> {out_wav_path}")
     
-    _log(f"Rendering MIDI via VST3 engine ({vst3_path}) -> {out_wav_path}")
-    sample_rate = 44100
-    block_size = 8192
-    engine = daw.RenderEngine(sample_rate, block_size)
+    dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
+    if not os.path.exists(dll_path):
+        dll_path = vst3_path
+        
+    plugin = load_plugin(dll_path)
+    pm = pretty_midi.PrettyMIDI(midi_path)
+    duration_sec = max(3.0, pm.get_end_time() + 2.0)
     
-    synth = engine.make_plugin_processor("vst3_synth", vst3_path)
-    synth.load_midi(midi_path)
+    messages = []
+    for inst in pm.instruments:
+        for n in inst.notes:
+            messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
+            messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n.end))
+            
+    if not messages:
+        messages.append(mido.Message('note_on', note=60, velocity=100, time=0.0))
+        messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
+        
+    messages.sort(key=lambda m: m.time)
     
-    mid = mido.MidiFile(midi_path)
-    duration_sec = getattr(mid, 'length', 180.0) + 2.5
-    
-    engine.load_graph([(synth, [])])
-    engine.render(duration_sec)
-    
-    audio = engine.get_audio().T
+    sample_rate = 44100.0
+    audio = plugin(messages, duration=duration_sec, sample_rate=sample_rate)
+    if audio.ndim == 2:
+        audio = audio.T
+        
     if gain is not None:
         audio = audio * gain
+        
     max_val = np.max(np.abs(audio))
     if max_val <= 0:
-        raise ValueError("VST3 engine returned silent audio (unloaded patch state)")
+        raise ValueError("VST3 engine returned silent audio")
+        
     audio = (audio / max_val) * 0.9 * 32767.0
     audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
-    wavfile.write(out_wav_path, sample_rate, audio_int16)
+    wavfile.write(out_wav_path, int(sample_rate), audio_int16)
+    _log(f"Spitfire VST3 Render Complete: {out_wav_path} (Peak: {max_val:.4f})")
     return out_wav_path
 
 
