@@ -651,6 +651,10 @@ class MidiOrchestrator:
             backing_insts_wav_path = job_dir / "backing_insts.wav"
             
             if backing_pm.instruments:
+                self.status[job_id]["progress"] = 30
+                self.status[job_id]["status"] = "synthesizing backing tracks"
+                self._save_db()
+                
                 backing_pm.write(str(backing_out_path))
                 
                 # Render instruments using job's assigned SoundFont and DSP parameters
@@ -673,7 +677,7 @@ class MidiOrchestrator:
                     backing_out_path.unlink()
             
             self.status[job_id]["progress"] = 70
-            self.status[job_id]["status"] = "synthesizing"
+            self.status[job_id]["status"] = "mixing audio"
             self._save_db()
             
             # --- 3. Render Vocal Tracks via RVC ---
