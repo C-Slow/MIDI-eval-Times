@@ -70,14 +70,15 @@ def get_available_soundfonts() -> List[str]:
 
 
 def get_active_soundfont_path() -> str:
-    """Get path to the active soundfont from settings or priority fallback list."""
+    """Get path to the active soundfont from settings or priority fallback list, defaulting to Spitfire BBC SO VST3."""
     settings = load_settings()
     configured_sf = settings.get("active_soundfont")
-    if configured_sf == "Spitfire BBC Symphony Orchestra (VST3)":
-        bbc_vst = get_bbc_so_vst_path()
+    
+    bbc_vst = get_bbc_so_vst_path()
+    if configured_sf == "Spitfire BBC Symphony Orchestra (VST3)" or (not configured_sf and bbc_vst):
         if bbc_vst:
             return bbc_vst
-            
+
     storage_dir = os.path.join(PROJECT_ROOT, 'storage')
     if configured_sf:
         sf_path = os.path.join(storage_dir, configured_sf)
@@ -91,6 +92,9 @@ def get_active_soundfont_path() -> str:
                 pass
             
     # Priority fallback list
+    if bbc_vst:
+        return bbc_vst
+
     priority_list = [
         "SGM-V2.01.sf2",
         "FluidR3_GM.sf2",
@@ -109,6 +113,7 @@ def get_active_soundfont_path() -> str:
                     return sf_path
             except Exception:
                 pass
+                
     return SOUNDFONT
 
 
@@ -508,16 +513,39 @@ def render_orchestrator_tracks(
             stem_wav = os.path.join(temp_dir, f"track_{idx}.wav")
             single_pm.write(stem_midi)
             
-            # Render track stem
-            render_midi_to_wav_with_soundfont(
-                stem_midi,
-                sf_path,
-                stem_wav,
-                gain=track_gain,
-                reverb_enabled=reverb_enabled,
-                reverb_room_size=reverb_room_size,
-                peak_ceiling_db=peak_ceiling_db
-            )
+            # Render track stem via VST3 or SoundFont engine
+            if sf_path and sf_path.lower().endswith('.vst3'):
+                try:
+                    render_midi_to_wav_with_vst3(
+                        stem_midi,
+                        sf_path,
+                        stem_wav,
+                        gain=track_gain
+                    )
+                except Exception as vst_err:
+                    _log(f"VST3 stem render notice ({vst_err}), falling back to SoundFont for track {idx}...")
+                    fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'FluidR3_GM.sf2')
+                    if not os.path.exists(fb_sf):
+                        fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'SGM-V2.01.sf2')
+                    render_midi_to_wav_with_soundfont(
+                        stem_midi,
+                        fb_sf,
+                        stem_wav,
+                        gain=track_gain,
+                        reverb_enabled=reverb_enabled,
+                        reverb_room_size=reverb_room_size,
+                        peak_ceiling_db=peak_ceiling_db
+                    )
+            else:
+                render_midi_to_wav_with_soundfont(
+                    stem_midi,
+                    sf_path,
+                    stem_wav,
+                    gain=track_gain,
+                    reverb_enabled=reverb_enabled,
+                    reverb_room_size=reverb_room_size,
+                    peak_ceiling_db=peak_ceiling_db
+                )
             
             # Read stem WAV into numpy array and apply authentic symphonic seating spatial panning
             if os.path.exists(stem_wav):
