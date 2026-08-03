@@ -360,13 +360,38 @@ def render_orchestrator_tracks(
             track_sf = track_cfg.get("soundfont") or job_sf_name
             sf_path = resolve_soundfont_path(track_sf)
             
-            # Per-track gain & transpose
+            # Per-track gain & transpose & instrument patch remapping
             track_gain = float(track_cfg.get("gain", 1.0))
             track_transpose = int(track_cfg.get("transpose", 0))
+            track_patch = track_cfg.get("instrument_patch", "auto")
+            
+            patch_map = {
+                "violins_1": 40,
+                "violins_2": 40,
+                "violas": 41,
+                "celli": 42,
+                "double_basses": 43,
+                "flutes": 73,
+                "oboes": 68,
+                "clarinets": 71,
+                "bassoons": 70,
+                "horns": 60,
+                "trumpets": 56,
+                "trombones": 57,
+                "tuba": 58,
+                "timpani": 47,
+                "harp": 46,
+                "grand_piano": 0,
+                "tutti": 48
+            }
             
             # Create single-track PrettyMIDI
             single_pm = pretty_midi.PrettyMIDI()
             new_inst = copy.deepcopy(orig_inst)
+            
+            if track_patch in patch_map:
+                new_inst.program = patch_map[track_patch]
+                _log(f"Track {idx} remapped to instrument patch '{track_patch}' (GM Program {new_inst.program})")
             
             # Apply time shift & pitch shift transpose
             if time_shift > 0 or track_transpose != 0:
