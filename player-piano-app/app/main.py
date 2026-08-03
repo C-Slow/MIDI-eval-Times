@@ -1895,19 +1895,34 @@ async def get_midi_orchestrator_preview(
                 _log(f"Serving pre-rendered final audio instantly for preview: {pre_rendered_final}")
                 return FileResponse(str(pre_rendered_final), media_type="audio/wav")
         
-        # Resolve soundfont path for preview
+        # Resolve soundfont and DSP parameters for preview
         sf_name = soundfont or saved_sf
-        sf_path = utils.resolve_soundfont_path(sf_name)
+        job_tracks_cfg = job_info.get("tracks_config", {})
         preview_reverb_enabled = reverb_enabled if reverb_enabled is not None else job_info.get("reverb_enabled")
         preview_reverb_room_size = reverb_room_size if reverb_room_size is not None else job_info.get("reverb_room_size")
+        preview_peak_ceiling_db = peak_ceiling_db if peak_ceiling_db is not None else job_info.get("peak_ceiling_db", -6.0)
         
-        utils.render_midi_to_wav_with_soundfont(
-            str(temp_midi),
-            sf_path,
-            str(temp_wav),
-            reverb_enabled=preview_reverb_enabled,
-            reverb_room_size=preview_reverb_room_size
-        )
+        if s_tracks:
+            utils.render_orchestrator_tracks(
+                pm,
+                s_tracks,
+                sf_name,
+                job_tracks_cfg,
+                str(temp_wav),
+                reverb_enabled=preview_reverb_enabled,
+                reverb_room_size=preview_reverb_room_size,
+                peak_ceiling_db=preview_peak_ceiling_db
+            )
+        else:
+            sf_path = utils.resolve_soundfont_path(sf_name)
+            utils.render_midi_to_wav_with_soundfont(
+                str(temp_midi),
+                sf_path,
+                str(temp_wav),
+                reverb_enabled=preview_reverb_enabled,
+                reverb_room_size=preview_reverb_room_size,
+                peak_ceiling_db=preview_peak_ceiling_db
+            )
         
         def cleanup():
             try:

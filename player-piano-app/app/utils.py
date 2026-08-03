@@ -7,6 +7,7 @@ import re
 import tempfile
 from typing import List, Optional, Dict, Any
 import mido
+import pretty_midi
 import time
 from threading import Event
 from app.ble_midi import BleMidiOutput
@@ -217,22 +218,23 @@ def render_midi_to_wav_with_soundfont(
     reverb_room_size: float = None,
     reverb_level: float = None,
     polyphony: int = None,
-    interpolation: int = None
+    interpolation: int = None,
+    peak_ceiling_db: float = None
 ) -> str:
-    """Render MIDI to WAV using FluidSynth or VST3 engine with optimized audio parameters."""
-    if soundfont_path and ("Spitfire BBC" in soundfont_path or soundfont_path.lower().endswith('.vst3')):
-        resolved_vst = resolve_soundfont_path(soundfont_path)
-        if os.path.exists(resolved_vst) and resolved_vst.lower().endswith('.vst3'):
-            try:
-                return render_midi_to_wav_with_vst3(midi_path, resolved_vst, out_wav_path, gain=gain)
-            except Exception as e:
-                _log(f"VST3 render notice ({e}), falling back to FluidSynth SoundFont...")
-                soundfont_path = get_active_soundfont_path()
-
+    """Render MIDI to WAV using FluidSynth with optimized audio parameters."""
     resolved_sf = resolve_soundfont_path(soundfont_path)
     if not os.path.exists(resolved_sf) or resolved_sf.lower().endswith('.vst3'):
-        resolved_sf = get_active_soundfont_path()
-        
+        # Fall back to high-definition active SoundFont
+        storage_dir = os.path.join(PROJECT_ROOT, 'storage')
+        resolved_sf = None
+        for candidate in ["SGM-V2.01.sf2", "FluidR3_GM.sf2", "ChoriumRevA.sf2", "Salamander.sf2", "GeneralUser_GS.sf2"]:
+            c_path = os.path.join(storage_dir, candidate)
+            if os.path.exists(c_path):
+                resolved_sf = c_path
+                break
+        if not resolved_sf:
+            resolved_sf = SOUNDFONT
+            
     soundfont_path = resolved_sf
     import subprocess
     
@@ -254,6 +256,8 @@ def render_midi_to_wav_with_soundfont(
         polyphony = int(settings.get("polyphony", 512))
     if interpolation is None:
         interpolation = int(settings.get("interpolation", 7))
+    if peak_ceiling_db is None:
+        peak_ceiling_db = float(settings.get("peak_ceiling_db", -6.0))
 
     temp_cfg_path = None
     if interpolation is not None:
@@ -305,8 +309,8 @@ def render_midi_to_wav_with_soundfont(
             _log(f"FluidSynth error: {result.stderr}")
             raise RuntimeError(f"FluidSynth failed: {result.stderr}")
             
-        normalize_wav_file(out_wav_path, target_peak_db=-0.5)
-        _log(f"Render complete: {out_wav_path}")
+        normalize_wav_file(out_wav_path, target_peak_db=peak_ceiling_db)
+        _log(f"Render complete: {out_wav_path} (peak_ceiling_db={peak_ceiling_db})")
         return out_wav_path
     except Exception as e:
         _log(f"Rendering failed: {str(e)}")
@@ -317,6 +321,121 @@ def render_midi_to_wav_with_soundfont(
                 os.remove(temp_cfg_path)
             except Exception:
                 pass
+
+
+def render_orchestrator_tracks(
+    pm: pretty_midi.PrettyMIDI,
+    speaker_track_indices: List[int],
+    job_sf_name: str,
+    tracks_config: Dict[str, Any],
+    out_wav_path: str,
+    reverb_enabled: bool = True,
+    reverb_room_size: float = 0.55,
+    peak_ceiling_db: float = -6.0,
+    time_shift: float = 0.0
+) -> str:
+    """Render backing speaker tracks according to per-track tracks_config settings."""
+    import numpy as np
+    from scipy.io import wavfile
+    import copy
+    
+    if not speaker_track_indices:
+        return None
+
+    tracks_config = tracks_config or {}
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
+        sample_rate = 44100
+        combined_audio = None
+
+        for idx in speaker_track_indices:
+            if idx >= len(pm.instruments):
+                continue
+                
+            orig_inst = pm.instruments[idx]
+            track_cfg = tracks_config.get(str(idx), {}) or tracks_config.get(idx, {})
+            
+            # Per-track SoundFont
+            track_sf = track_cfg.get("soundfont") or job_sf_name
+            sf_path = resolve_soundfont_path(track_sf)
+            
+            # Per-track gain & transpose
+            track_gain = float(track_cfg.get("gain", 1.0))
+            track_transpose = int(track_cfg.get("transpose", 0))
+            
+            # Create single-track PrettyMIDI
+            single_pm = pretty_midi.PrettyMIDI()
+            new_inst = copy.deepcopy(orig_inst)
+            
+            # Apply time shift & pitch shift transpose
+            if time_shift > 0 or track_transpose != 0:
+                for n in new_inst.notes:
+                    if time_shift > 0:
+                        n.start = max(0.0, n.start - time_shift)
+                        n.end = max(0.0, n.end - time_shift)
+                    if track_transpose != 0:
+                        n.pitch = max(0, min(127, n.pitch + track_transpose))
+                for cc in new_inst.control_changes:
+                    if time_shift > 0:
+                        cc.time = max(0.0, cc.time - time_shift)
+                    
+            single_pm.instruments.append(new_inst)
+            
+            stem_midi = os.path.join(temp_dir, f"track_{idx}.mid")
+            stem_wav = os.path.join(temp_dir, f"track_{idx}.wav")
+            single_pm.write(stem_midi)
+            
+            # Render track stem
+            render_midi_to_wav_with_soundfont(
+                stem_midi,
+                sf_path,
+                stem_wav,
+                gain=track_gain,
+                reverb_enabled=reverb_enabled,
+                reverb_room_size=reverb_room_size,
+                peak_ceiling_db=peak_ceiling_db
+            )
+            
+            # Read stem WAV into numpy array and sum
+            if os.path.exists(stem_wav):
+                sr, data = wavfile.read(stem_wav)
+                sample_rate = sr
+                if data.ndim == 1:
+                    data = np.column_stack((data, data))
+                elif data.ndim > 2:
+                    data = data[:, :2]
+                    
+                data = data.astype(np.float32) * track_gain
+                
+                if combined_audio is None:
+                    combined_audio = data
+                else:
+                    if len(data) > len(combined_audio):
+                        pad = np.zeros((len(data) - len(combined_audio), 2), dtype=np.float32)
+                        combined_audio = np.vstack((combined_audio, pad)) + data
+                    else:
+                        pad = np.zeros((len(combined_audio) - len(data), 2), dtype=np.float32)
+                        data_padded = np.vstack((data, pad))
+                        combined_audio = combined_audio + data_padded
+
+        if combined_audio is not None:
+            max_val = np.max(np.abs(combined_audio))
+            if max_val > 0:
+                combined_audio = (combined_audio / max_val) * 32767.0
+            int16_audio = np.clip(combined_audio, -32768, 32767).astype(np.int16)
+            wavfile.write(out_wav_path, sample_rate, int16_audio)
+            
+            # Normalize peak ceiling dB
+            normalize_wav_file(out_wav_path, target_peak_db=peak_ceiling_db)
+            return out_wav_path
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+        except Exception:
+            pass
+            
+    return None
 
 
 def render_midi_to_wav(midi_path: str) -> str:

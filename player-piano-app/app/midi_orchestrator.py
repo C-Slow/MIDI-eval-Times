@@ -650,31 +650,29 @@ class MidiOrchestrator:
             
             backing_insts_wav_path = job_dir / "backing_insts.wav"
             
-            if backing_pm.instruments:
+            if non_vocal_speakers:
                 self.status[job_id]["progress"] = 30
                 self.status[job_id]["status"] = "synthesizing backing tracks"
                 self._save_db()
                 
-                backing_pm.write(str(backing_out_path))
-                
-                # Render instruments using job's assigned SoundFont and DSP parameters
                 job_info = self.status.get(job_id, {})
                 job_sf_name = job_info.get("soundfont")
-                target_sf_path = utils.resolve_soundfont_path(job_sf_name)
+                job_tracks_cfg = job_info.get("tracks_config", {})
                 job_reverb_enabled = job_info.get("reverb_enabled")
                 job_reverb_room_size = job_info.get("reverb_room_size")
+                job_peak_ceiling_db = job_info.get("peak_ceiling_db")
                 
-                utils.render_midi_to_wav_with_soundfont(
-                    str(backing_out_path), 
-                    target_sf_path, 
+                utils.render_orchestrator_tracks(
+                    pm,
+                    non_vocal_speakers,
+                    job_sf_name,
+                    job_tracks_cfg,
                     str(backing_insts_wav_path),
                     reverb_enabled=job_reverb_enabled,
-                    reverb_room_size=job_reverb_room_size
+                    reverb_room_size=job_reverb_room_size,
+                    peak_ceiling_db=job_peak_ceiling_db,
+                    time_shift=time_shift
                 )
-                
-                # Clean up intermediate midi
-                if backing_out_path.exists():
-                    backing_out_path.unlink()
             
             self.status[job_id]["progress"] = 70
             self.status[job_id]["status"] = "mixing audio"
