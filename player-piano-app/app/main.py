@@ -1875,6 +1875,14 @@ async def get_midi_orchestrator_preview(
                 new_inst = pretty_midi.Instrument(program=53, name=f"Female_Vocal_Preview_{idx}", is_drum=False)
                 new_inst.notes = orig_inst.notes
                 preview_pm.instruments.append(new_inst)
+
+        # Crop preview notes to a maximum duration of 90 seconds for sub-second instant preview response!
+        max_preview_sec = 90.0
+        for inst in preview_pm.instruments:
+            inst.notes = [n for n in inst.notes if n.start < max_preview_sec]
+            for n in inst.notes:
+                if n.end > max_preview_sec:
+                    n.end = max_preview_sec
                 
         preview_pm.write(str(temp_midi))
         
