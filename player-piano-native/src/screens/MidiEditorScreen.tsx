@@ -1656,7 +1656,7 @@ export const MidiEditorScreen = () => {
         Array.from(speakerTracks),
         Array.from(vocalMaleTracks),
         Array.from(vocalFemaleTracks),
-        { soundfont: activeSoundfont, reverb_enabled: reverbEnabled, reverb_room_size: reverbRoomSize }
+        { soundfont: activeSoundfont, reverb_enabled: reverbEnabled, reverb_room_size: reverbRoomSize, peak_ceiling_db: peakCeilingDb }
       );
 
       const initialStatus = {

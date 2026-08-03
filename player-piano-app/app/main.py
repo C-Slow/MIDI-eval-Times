@@ -1810,6 +1810,7 @@ async def get_midi_orchestrator_preview(
     soundfont: Optional[str] = Query(None),
     reverb_enabled: Optional[bool] = Query(None),
     reverb_room_size: Optional[float] = Query(None),
+    peak_ceiling_db: Optional[float] = Query(None),
     token: Optional[str] = None, 
     authorization: Optional[str] = Header(None),
     background_tasks: BackgroundTasks = None
