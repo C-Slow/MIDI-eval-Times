@@ -1878,9 +1878,25 @@ async def get_midi_orchestrator_preview(
                 
         preview_pm.write(str(temp_midi))
         
-        # Resolve soundfont path for preview
+        # Check if pre-rendered audio exists for completed jobs to serve instantly
+        job_dir = midi_orchestrator.jobs_dir / job_id
+        pre_rendered_backing = job_dir / "backing_insts.wav"
+        pre_rendered_final = job_dir / "final_mix.wav"
+        
         job_info = midi_orchestrator.status.get(job_id, {})
-        sf_name = soundfont or job_info.get("soundfont")
+        saved_sf = job_info.get("soundfont")
+        
+        # Fast path: If pre-rendered audio exists and soundfont matches, serve immediately without re-rendering!
+        if (soundfont is None or soundfont == saved_sf):
+            if pre_rendered_backing.exists() and pre_rendered_backing.stat().st_size > 1000:
+                _log(f"Serving pre-rendered backing audio instantly for preview: {pre_rendered_backing}")
+                return FileResponse(str(pre_rendered_backing), media_type="audio/wav")
+            elif pre_rendered_final.exists() and pre_rendered_final.stat().st_size > 1000:
+                _log(f"Serving pre-rendered final audio instantly for preview: {pre_rendered_final}")
+                return FileResponse(str(pre_rendered_final), media_type="audio/wav")
+        
+        # Resolve soundfont path for preview
+        sf_name = soundfont or saved_sf
         sf_path = utils.resolve_soundfont_path(sf_name)
         preview_reverb_enabled = reverb_enabled if reverb_enabled is not None else job_info.get("reverb_enabled")
         preview_reverb_room_size = reverb_room_size if reverb_room_size is not None else job_info.get("reverb_room_size")
