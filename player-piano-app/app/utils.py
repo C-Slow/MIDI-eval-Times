@@ -323,48 +323,48 @@ def render_midi_to_wav_with_soundfont(
                 pass
 
 
-def inject_auto_expression_controllers(inst: pretty_midi.Instrument):
-    """Inject smooth CC #1 (Modwheel Dynamics) and CC #11 (Expression) dynamic curves into sustained instruments."""
+def inject_auto_expression_controllers(inst: pretty_midi.Instrument, enable: bool = True):
+    """Inject ultra-smooth 50ms interpolated CC #11 Expression curves for sustained orchestral notes."""
+    if not enable:
+        return
+
     sustain_programs = {40, 41, 42, 43, 44, 45, 46, 48, 49, 50, 51, 56, 57, 58, 60, 68, 70, 71, 73}
     if inst.program not in sustain_programs:
         return
 
-    existing_cc1_times = {round(cc.time, 2) for cc in inst.control_changes if cc.number == 1}
-    
-    for note in inst.notes:
-        duration = note.end - note.start
-        if duration < 0.6:
-            continue
+    # Sort notes by start time
+    notes = sorted(inst.notes, key=lambda n: n.start)
+    if not notes:
+        return
+
+    # Find long notes (> 1.2 seconds) that benefit from gentle swell
+    long_notes = [n for n in notes if (n.end - n.start) >= 1.2]
+    if not long_notes:
+        return
+
+    import numpy as np
+
+    # Clear existing CC1/CC11 to prevent conflicting step jumps
+    inst.control_changes = [cc for cc in inst.control_changes if cc.number not in (1, 11)]
+
+    # High-density 50ms step interpolation (20 updates/sec) for silky smooth glides
+    step_sec = 0.05
+    for note in long_notes:
+        start_t = note.start
+        end_t = note.end
+        duration = end_t - start_t
+        base_val = max(50, min(115, note.velocity))
+
+        t = start_t
+        while t <= end_t:
+            rel_t = (t - start_t) / duration # 0.0 to 1.0
             
-        # Create 5-point dynamic curve over the duration of the held note
-        base_vel = max(40, min(120, note.velocity))
-        steps = 5
-        for s in range(steps):
-            t = note.start + (s / float(steps - 1)) * duration
-            t_key = round(t, 2)
-            if t_key in existing_cc1_times:
-                continue
-                
-            # Swell curve: cresc in first 35%, sustain in middle, decresc in final 20%
-            if s == 0:
-                cc1_val = int(base_vel * 0.65)
-                cc11_val = int(base_vel * 0.70)
-            elif s == 1:
-                cc1_val = int(base_vel * 0.95)
-                cc11_val = int(base_vel * 0.95)
-            elif s == 2:
-                cc1_val = min(127, int(base_vel * 1.10))
-                cc11_val = min(127, int(base_vel * 1.05))
-            elif s == 3:
-                cc1_val = int(base_vel * 0.90)
-                cc11_val = int(base_vel * 0.90)
-            else:
-                cc1_val = int(base_vel * 0.50)
-                cc11_val = int(base_vel * 0.55)
-                
-            inst.control_changes.append(pretty_midi.ControlChange(number=1, value=cc1_val, time=t))
+            # Smooth sine arch (gentle +/- 12% swell without abrupt volume jumps)
+            swell_factor = 0.88 + (0.22 * np.sin(rel_t * np.pi))
+            cc11_val = int(np.clip(base_val * swell_factor, 40, 125))
+
             inst.control_changes.append(pretty_midi.ControlChange(number=11, value=cc11_val, time=t))
-            existing_cc1_times.add(t_key)
+            t += step_sec
 
 
 def get_orchestral_seating_pan(program: int, track_patch: str) -> float:
