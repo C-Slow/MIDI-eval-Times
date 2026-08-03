@@ -184,7 +184,7 @@ def render_midi_to_wav_with_vst3(
     
     _log(f"Rendering MIDI via VST3 engine ({vst3_path}) -> {out_wav_path}")
     sample_rate = 44100
-    block_size = 2048
+    block_size = 8192
     engine = daw.RenderEngine(sample_rate, block_size)
     
     synth = engine.make_plugin_processor("vst3_synth", vst3_path)
