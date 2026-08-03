@@ -449,10 +449,11 @@ def render_orchestrator_tracks(
     peak_ceiling_db: float = -6.0,
     time_shift: float = 0.0
 ) -> str:
-    """Render backing speaker tracks according to per-track tracks_config settings with Symphonic Seating & Auto-Expression."""
+    """Render backing speaker tracks in parallel concurrently using per-track tracks_config settings and symphonic seating."""
     import numpy as np
     from scipy.io import wavfile
     import copy
+    from concurrent.futures import ThreadPoolExecutor
     
     if not speaker_track_indices:
         return None
@@ -462,11 +463,30 @@ def render_orchestrator_tracks(
     
     try:
         sample_rate = 44100
-        combined_audio = None
+        
+        patch_map = {
+            "violins_1": 40,
+            "violins_2": 40,
+            "violas": 41,
+            "celli": 42,
+            "double_basses": 43,
+            "flutes": 73,
+            "oboes": 68,
+            "clarinets": 71,
+            "bassoons": 70,
+            "horns": 60,
+            "trumpets": 56,
+            "trombones": 57,
+            "tuba": 58,
+            "timpani": 47,
+            "harp": 46,
+            "grand_piano": 0,
+            "tutti": 48
+        }
 
-        for idx in speaker_track_indices:
+        def _render_single_track(idx: int):
             if idx >= len(pm.instruments):
-                continue
+                return None
                 
             orig_inst = pm.instruments[idx]
             track_cfg = tracks_config.get(str(idx), {}) or tracks_config.get(idx, {})
@@ -475,42 +495,18 @@ def render_orchestrator_tracks(
             track_sf = track_cfg.get("soundfont") or job_sf_name
             sf_path = resolve_soundfont_path(track_sf)
             
-            # Per-track gain & transpose & instrument patch remapping
+            # Per-track gain, transpose & instrument patch remapping
             track_gain = float(track_cfg.get("gain", 1.0))
             track_transpose = int(track_cfg.get("transpose", 0))
             track_patch = track_cfg.get("instrument_patch", "auto")
             
-            patch_map = {
-                "violins_1": 40,
-                "violins_2": 40,
-                "violas": 41,
-                "celli": 42,
-                "double_basses": 43,
-                "flutes": 73,
-                "oboes": 68,
-                "clarinets": 71,
-                "bassoons": 70,
-                "horns": 60,
-                "trumpets": 56,
-                "trombones": 57,
-                "tuba": 58,
-                "timpani": 47,
-                "harp": 46,
-                "grand_piano": 0,
-                "tutti": 48
-            }
-            
-            # Create single-track PrettyMIDI
             single_pm = pretty_midi.PrettyMIDI()
             new_inst = copy.deepcopy(orig_inst)
             
             if track_patch in patch_map:
                 new_inst.program = patch_map[track_patch]
-                _log(f"Track {idx} remapped to instrument patch '{track_patch}' (GM Program {new_inst.program})")
+                _log(f"Track {idx} mapped to instrument patch '{track_patch}' (GM Program {new_inst.program})")
             
-            # Inject continuous CC #1 Dynamics & CC #11 Expression curves for sustained orchestral notes
-            inject_auto_expression_controllers(new_inst)
-
             # Apply time shift & pitch shift transpose
             if time_shift > 0 or track_transpose != 0:
                 for n in new_inst.notes:
@@ -562,11 +558,9 @@ def render_orchestrator_tracks(
                     reverb_room_size=reverb_room_size,
                     peak_ceiling_db=peak_ceiling_db
                 )
-            
-            # Read stem WAV into numpy array and apply authentic symphonic seating spatial panning
+                
             if os.path.exists(stem_wav):
                 sr, data = wavfile.read(stem_wav)
-                sample_rate = sr
                 if data.ndim == 1:
                     data = np.column_stack((data, data))
                 elif data.ndim > 2:
@@ -581,16 +575,30 @@ def render_orchestrator_tracks(
                 data[:, 0] *= left_gain
                 data[:, 1] *= right_gain
                 
-                if combined_audio is None:
-                    combined_audio = data
+                return sr, data
+            return None
+
+        # Execute multi-stem track rendering in parallel concurrently!
+        max_workers = min(4, len(speaker_track_indices))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            stem_results = list(executor.map(_render_single_track, speaker_track_indices))
+
+        combined_audio = None
+        for res in stem_results:
+            if res is None:
+                continue
+            sr, data = res
+            sample_rate = sr
+            if combined_audio is None:
+                combined_audio = data
+            else:
+                if len(data) > len(combined_audio):
+                    pad = np.zeros((len(data) - len(combined_audio), 2), dtype=np.float32)
+                    combined_audio = np.vstack((combined_audio, pad)) + data
                 else:
-                    if len(data) > len(combined_audio):
-                        pad = np.zeros((len(data) - len(combined_audio), 2), dtype=np.float32)
-                        combined_audio = np.vstack((combined_audio, pad)) + data
-                    else:
-                        pad = np.zeros((len(combined_audio) - len(data), 2), dtype=np.float32)
-                        data_padded = np.vstack((data, pad))
-                        combined_audio = combined_audio + data_padded
+                    pad = np.zeros((len(combined_audio) - len(data), 2), dtype=np.float32)
+                    data_padded = np.vstack((data, pad))
+                    combined_audio = combined_audio + data_padded
 
         if combined_audio is not None:
             max_val = np.max(np.abs(combined_audio))
