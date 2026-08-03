@@ -5,7 +5,7 @@ import threading
 import shutil
 import re
 import tempfile
-from typing import List
+from typing import List, Optional, Dict, Any
 import mido
 import time
 from threading import Event

@@ -16,7 +16,7 @@ torchaudio.save = patched_torchaudio_save
 
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import os
 import shutil
 import json
