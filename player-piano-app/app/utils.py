@@ -323,6 +323,98 @@ def render_midi_to_wav_with_soundfont(
                 pass
 
 
+def inject_auto_expression_controllers(inst: pretty_midi.Instrument):
+    """Inject smooth CC #1 (Modwheel Dynamics) and CC #11 (Expression) dynamic curves into sustained instruments."""
+    sustain_programs = {40, 41, 42, 43, 44, 45, 46, 48, 49, 50, 51, 56, 57, 58, 60, 68, 70, 71, 73}
+    if inst.program not in sustain_programs:
+        return
+
+    existing_cc1_times = {round(cc.time, 2) for cc in inst.control_changes if cc.number == 1}
+    
+    for note in inst.notes:
+        duration = note.end - note.start
+        if duration < 0.6:
+            continue
+            
+        # Create 5-point dynamic curve over the duration of the held note
+        base_vel = max(40, min(120, note.velocity))
+        steps = 5
+        for s in range(steps):
+            t = note.start + (s / float(steps - 1)) * duration
+            t_key = round(t, 2)
+            if t_key in existing_cc1_times:
+                continue
+                
+            # Swell curve: cresc in first 35%, sustain in middle, decresc in final 20%
+            if s == 0:
+                cc1_val = int(base_vel * 0.65)
+                cc11_val = int(base_vel * 0.70)
+            elif s == 1:
+                cc1_val = int(base_vel * 0.95)
+                cc11_val = int(base_vel * 0.95)
+            elif s == 2:
+                cc1_val = min(127, int(base_vel * 1.10))
+                cc11_val = min(127, int(base_vel * 1.05))
+            elif s == 3:
+                cc1_val = int(base_vel * 0.90)
+                cc11_val = int(base_vel * 0.90)
+            else:
+                cc1_val = int(base_vel * 0.50)
+                cc11_val = int(base_vel * 0.55)
+                
+            inst.control_changes.append(pretty_midi.ControlChange(number=1, value=cc1_val, time=t))
+            inst.control_changes.append(pretty_midi.ControlChange(number=11, value=cc11_val, time=t))
+            existing_cc1_times.add(t_key)
+
+
+def get_orchestral_seating_pan(program: int, track_patch: str) -> float:
+    """Return stereo pan position (-1.0 Hard Left to +1.0 Hard Right) based on authentic symphonic seating."""
+    patch_pans = {
+        "violins_1": -0.65,
+        "violins_2": -0.35,
+        "violas": 0.20,
+        "celli": 0.65,
+        "double_basses": 0.80,
+        "flutes": -0.10,
+        "oboes": -0.05,
+        "clarinets": 0.05,
+        "bassoons": 0.10,
+        "horns": -0.30,
+        "trumpets": 0.25,
+        "trombones": 0.35,
+        "tuba": 0.45,
+        "timpani": 0.35,
+        "harp": -0.45,
+        "grand_piano": 0.0,
+        "tutti": 0.0
+    }
+    if track_patch in patch_pans:
+        return patch_pans[track_patch]
+
+    # Default GM program seating map
+    if program in [40, 48]: # Violin 1 / Strings 1
+        return -0.65
+    elif program in [41, 49]: # Viola / Strings 2
+        return 0.20
+    elif program == 42: # Cello
+        return 0.65
+    elif program == 43: # Contrabass
+        return 0.80
+    elif program in [73, 68]: # Flute / Oboe
+        return -0.10
+    elif program in [71, 70]: # Clarinet / Bassoon
+        return 0.10
+    elif program == 60: # French Horn
+        return -0.30
+    elif program in [56, 57, 58]: # Trumpet / Trombone / Tuba
+        return 0.30
+    elif program == 46: # Harp
+        return -0.45
+    elif program == 47: # Timpani
+        return 0.35
+    return 0.0
+
+
 def render_orchestrator_tracks(
     pm: pretty_midi.PrettyMIDI,
     speaker_track_indices: List[int],
@@ -334,7 +426,7 @@ def render_orchestrator_tracks(
     peak_ceiling_db: float = -6.0,
     time_shift: float = 0.0
 ) -> str:
-    """Render backing speaker tracks according to per-track tracks_config settings."""
+    """Render backing speaker tracks according to per-track tracks_config settings with Symphonic Seating & Auto-Expression."""
     import numpy as np
     from scipy.io import wavfile
     import copy
@@ -393,6 +485,9 @@ def render_orchestrator_tracks(
                 new_inst.program = patch_map[track_patch]
                 _log(f"Track {idx} remapped to instrument patch '{track_patch}' (GM Program {new_inst.program})")
             
+            # Inject continuous CC #1 Dynamics & CC #11 Expression curves for sustained orchestral notes
+            inject_auto_expression_controllers(new_inst)
+
             # Apply time shift & pitch shift transpose
             if time_shift > 0 or track_transpose != 0:
                 for n in new_inst.notes:
@@ -422,7 +517,7 @@ def render_orchestrator_tracks(
                 peak_ceiling_db=peak_ceiling_db
             )
             
-            # Read stem WAV into numpy array and sum
+            # Read stem WAV into numpy array and apply authentic symphonic seating spatial panning
             if os.path.exists(stem_wav):
                 sr, data = wavfile.read(stem_wav)
                 sample_rate = sr
@@ -432,6 +527,13 @@ def render_orchestrator_tracks(
                     data = data[:, :2]
                     
                 data = data.astype(np.float32) * track_gain
+                
+                # Apply symphonic seating stereo panning
+                pan = get_orchestral_seating_pan(new_inst.program, track_patch)
+                left_gain = np.cos((pan + 1.0) * np.pi / 4.0)
+                right_gain = np.sin((pan + 1.0) * np.pi / 4.0)
+                data[:, 0] *= left_gain
+                data[:, 1] *= right_gain
                 
                 if combined_audio is None:
                     combined_audio = data
