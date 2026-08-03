@@ -200,8 +200,9 @@ def render_midi_to_wav_with_vst3(
     if gain is not None:
         audio = audio * gain
     max_val = np.max(np.abs(audio))
-    if max_val > 0:
-        audio = (audio / max_val) * 0.9 * 32767.0
+    if max_val <= 0:
+        raise ValueError("VST3 engine returned silent audio (unloaded patch state)")
+    audio = (audio / max_val) * 0.9 * 32767.0
     audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
     wavfile.write(out_wav_path, sample_rate, audio_int16)
     return out_wav_path
