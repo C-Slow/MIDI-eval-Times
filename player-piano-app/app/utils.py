@@ -281,7 +281,7 @@ def render_midi_to_wav_with_vst3(
     messages.sort(key=lambda m: m.time)
     
     sample_rate = 44100.0
-    audio = plugin(messages, duration=duration_sec, sample_rate=sample_rate)
+    audio = plugin(messages, duration=duration_sec, sample_rate=sample_rate, reset=False)
     if audio.ndim == 2:
         audio = audio.T
         
