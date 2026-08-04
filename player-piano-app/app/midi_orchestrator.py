@@ -594,11 +594,14 @@ class MidiOrchestrator:
             original_midi = job_dir / "original.mid"
             src_midi = self.uploads_dir / f"{job_id}.mid"
             
-            if src_midi.exists():
+            if original_midi.exists():
+                # Re-synthesis run: original.mid is safely preserved in job folder
+                pass
+            elif src_midi.exists():
                 # First run: copy uploaded file to original.mid
                 shutil.copy(src_midi, original_midi)
-            elif not original_midi.exists():
-                raise FileNotFoundError("Original MIDI file not found.")
+            else:
+                raise FileNotFoundError(f"Original MIDI file not found for job {job_id}.")
                 
             pm = pretty_midi.PrettyMIDI(str(original_midi))
             
