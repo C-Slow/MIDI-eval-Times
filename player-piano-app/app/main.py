@@ -1903,6 +1903,19 @@ async def get_midi_orchestrator_preview(
         preview_reverb_room_size = reverb_room_size if reverb_room_size is not None else job_info.get("reverb_room_size")
         preview_peak_ceiling_db = peak_ceiling_db if peak_ceiling_db is not None else job_info.get("peak_ceiling_db", -6.0)
         
+        # Smart MD5 Preview Caching: Check if preview audio with exact same settings exists
+        import hashlib
+        cache_dir = Path(STORAGE_DIR) / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_peak_ceiling_db}_{job_tracks_cfg}"
+        cache_key = hashlib.md5(cache_raw.encode('utf-8')).hexdigest()
+        cached_preview_wav = cache_dir / f"preview_{cache_key}.wav"
+        
+        if cached_preview_wav.exists() and cached_preview_wav.stat().st_size > 1000:
+            _log(f"Serving cached preview audio instantly (0ms delay): {cached_preview_wav}")
+            return FileResponse(str(cached_preview_wav), media_type="audio/wav")
+        
         if s_tracks:
             utils.render_orchestrator_tracks(
                 pm,
@@ -1925,6 +1938,12 @@ async def get_midi_orchestrator_preview(
                 peak_ceiling_db=preview_peak_ceiling_db
             )
         
+        if temp_wav.exists() and temp_wav.stat().st_size > 1000:
+            try:
+                shutil.copyfile(str(temp_wav), str(cached_preview_wav))
+            except Exception:
+                pass
+
         def cleanup():
             try:
                 shutil.rmtree(str(temp_dir))

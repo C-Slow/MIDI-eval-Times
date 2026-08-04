@@ -1639,15 +1639,35 @@ export const MidiEditorScreen = () => {
     }
 
     if (isPreviewPlaying) {
-      await stopPreview();
+      if (previewSoundRef.current) {
+        try {
+          await previewSoundRef.current.pauseAsync();
+        } catch (e) {}
+        setIsPreviewPlaying(false);
+      } else {
+        await stopPreview();
+      }
       return;
+    }
+
+    // Fast Resume: If audio is already loaded and paused, simply resume playing!
+    if (previewSoundRef.current) {
+      try {
+        await setAudioMode('playback');
+        await previewSoundRef.current.playAsync();
+        setIsPreviewPlaying(true);
+        return;
+      } catch (resumeErr) {
+        console.log("Resume existing audio failed, reloading...", resumeErr);
+      }
     }
 
     setIsPreviewLoading(true);
     try {
       await setAudioMode('playback');
       if (previewSoundRef.current) {
-        await previewSoundRef.current.unloadAsync();
+        try { await previewSoundRef.current.unloadAsync(); } catch (e) {}
+        previewSoundRef.current = null;
       }
 
       const url = midiOrchestratorApi.getPreviewUrl(
