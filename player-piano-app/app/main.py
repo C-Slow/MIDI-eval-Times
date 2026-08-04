@@ -1888,9 +1888,19 @@ async def get_midi_orchestrator_preview(
         
         job_info = midi_orchestrator.status.get(job_id, {})
         saved_sf = job_info.get("soundfont")
+        saved_s_tracks = job_info.get("speaker_tracks") or []
+        saved_tracks_cfg = job_info.get("tracks_config") or {}
+
+        # Fast path: Serve pre-rendered audio ONLY IF speaker tracks and speaker track configs match saved completed job
+        speaker_tracks_match = sorted(s_tracks) == sorted(saved_s_tracks)
+        soundfont_matches = (soundfont is None or soundfont == saved_sf)
         
-        # Fast path: If pre-rendered audio exists and soundfont matches, serve immediately without re-rendering!
-        if (soundfont is None or soundfont == saved_sf):
+        # Compare track configs for active speaker tracks only (ignoring piano tracks)
+        curr_speaker_cfg = {str(k): v for k, v in saved_tracks_cfg.items() if int(k) in s_tracks}
+        saved_speaker_cfg = {str(k): v for k, v in saved_tracks_cfg.items() if int(k) in saved_s_tracks}
+        speaker_cfg_match = curr_speaker_cfg == saved_speaker_cfg
+
+        if soundfont_matches and speaker_tracks_match and speaker_cfg_match:
             for candidate in [pre_rendered_backing, pre_rendered_insts, pre_rendered_final]:
                 if candidate.exists() and candidate.stat().st_size > 1000:
                     print(f"Serving pre-rendered backing audio instantly for preview: {candidate}")
