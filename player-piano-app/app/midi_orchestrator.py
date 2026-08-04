@@ -230,6 +230,11 @@ class MidiOrchestrator:
         dest = self.uploads_dir / f"{job_id}.mid"
         dest.write_bytes(midi_bytes)
         
+        # Immediately preserve original master MIDI in job directory
+        job_dir = self.jobs_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(dest, job_dir / "original.mid")
+        
         # Initialize job entry
         self.status[job_id] = {
             "job_id": job_id,
@@ -878,6 +883,17 @@ class MidiOrchestrator:
         jobs = list(self.status.values())
         updated = False
         for job in jobs:
+            job_id = job.get("job_id")
+            if job_id:
+                job_dir = self.jobs_dir / job_id
+                job_dir.mkdir(parents=True, exist_ok=True)
+                orig = job_dir / "original.mid"
+                up = self.uploads_dir / f"{job_id}.mid"
+                if not orig.exists() and up.exists():
+                    try:
+                        shutil.copy(up, orig)
+                    except Exception:
+                        pass
             if "tracks" in job and isinstance(job["tracks"], list):
                 for t in job["tracks"]:
                     if "display_name" not in t or is_garbled_or_generic_name(t.get("name", "")):
