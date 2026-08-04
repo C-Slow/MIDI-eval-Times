@@ -1780,6 +1780,26 @@ async def delete_midi_orchestrator_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "deleted"}
 
+@app.post("/midi-orchestrator/cancel/{job_id}", dependencies=[Depends(verify_auth)])
+async def cancel_midi_orchestrator_job(job_id: str):
+    success = midi_orchestrator.cancel_job(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found or not active")
+    return {"status": "cancelled"}
+
+@app.get("/midi-orchestrator/worker-log/{job_id}")
+async def get_midi_orchestrator_worker_log(job_id: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    await verify_auth(authorization=authorization, token=token)
+    job_dir = midi_orchestrator.jobs_dir / job_id
+    log_file = job_dir / "worker.log"
+    if not log_file.exists():
+        return {"log": "No worker log recorded for this job yet."}
+    try:
+        content = log_file.read_text(encoding="utf-8", errors="replace")
+        return {"log": content}
+    except Exception as e:
+        return {"log": f"Error reading log file: {e}"}
+
 @app.get("/midi-orchestrator/backing-audio/{job_id}")
 async def get_midi_orchestrator_backing_audio(job_id: str, token: Optional[str] = None, authorization: Optional[str] = Header(None)):
     await verify_auth(authorization=authorization, token=token)

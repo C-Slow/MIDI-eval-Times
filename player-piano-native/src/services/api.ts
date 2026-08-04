@@ -352,6 +352,14 @@ export const midiOrchestratorApi = {
     const res = await api.delete(`/midi-orchestrator/jobs/${jobId}`);
     return res.data;
   },
+  cancelJob: async (jobId: string) => {
+    const res = await api.post(`/midi-orchestrator/cancel/${jobId}`);
+    return res.data;
+  },
+  getWorkerLog: async (jobId: string) => {
+    const res = await api.get(`/midi-orchestrator/worker-log/${jobId}`);
+    return res.data;
+  },
   getVstPresets: async () => {
     const res = await api.get('/midi-orchestrator/vst-presets');
     return res.data;

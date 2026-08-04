@@ -882,6 +882,34 @@ export const MidiEditorScreen = () => {
   const [sortBy, setSortBy] = useState<'name' | 'artist' | 'rating' | 'created' | 'length'>('created');
   const previewSoundRef = useRef<Audio.Sound | null>(null);
 
+  const [showWorkerLogModal, setShowWorkerLogModal] = useState(false);
+  const [workerLogText, setWorkerLogText] = useState('');
+  const [isFetchingWorkerLog, setIsFetchingWorkerLog] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [activeRunningJob, setActiveRunningJob] = useState<any>(null);
+
+  useEffect(() => {
+    if (!showWorkerLogModal || !selectedJobId) return;
+    let isMounted = true;
+    const fetchLog = async () => {
+      try {
+        setIsFetchingWorkerLog(true);
+        const res = await midiOrchestratorApi.getWorkerLog(selectedJobId);
+        if (isMounted) setWorkerLogText(res.log || 'No log text recorded yet.');
+      } catch (e) {
+        if (isMounted) setWorkerLogText('Error loading worker log.');
+      } finally {
+        if (isMounted) setIsFetchingWorkerLog(false);
+      }
+    };
+    fetchLog();
+    const interval = setInterval(fetchLog, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [showWorkerLogModal, selectedJobId]);
+
   const toggleSelect = (jobId: string) => {
     setSelectedJobs(prev => {
       const next = new Set(prev);
@@ -1740,13 +1768,8 @@ export const MidiEditorScreen = () => {
   };
 
   // Run Backend Split & Synthesize Process
-  const handleProcess = async () => {
+  const executeProcessTask = async () => {
     if (!selectedJobId) return;
-    if (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) {
-      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano, Speakers, or Vocals.');
-      return;
-    }
-
     try {
       setLoading(true);
       await midiOrchestratorApi.process(
@@ -1777,13 +1800,30 @@ export const MidiEditorScreen = () => {
       );
       await fetchJobs();
       setStage('list');
-      Alert.alert('Processing Started', 'Extracting piano keys and generating backing strings. Monitor progress in the jobs list.');
+      Alert.alert('Processing Started', 'Isolated worker process launched. Monitor progress or view worker logs in the jobs list.');
     } catch (e: any) {
       console.error(e);
       Alert.alert('Processing Failed', e.message || 'Could not start processing.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProcess = async () => {
+    if (!selectedJobId) return;
+    if (pianoTracks.size === 0 && speakerTracks.size === 0 && vocalMaleTracks.size === 0 && vocalFemaleTracks.size === 0) {
+      Alert.alert('No Tracks Selected', 'Choose at least one track for Piano, Speakers, or Vocals.');
+      return;
+    }
+
+    const runningJob = jobs.find(j => (j.status === 'processing' || j.status === 'synthesizing' || j.status?.includes('synthesizing')) && j.job_id !== selectedJobId);
+    if (runningJob) {
+      setActiveRunningJob(runningJob);
+      setShowConflictModal(true);
+      return;
+    }
+
+    await executeProcessTask();
   };
 
   // Sound Playback Updates
@@ -2700,13 +2740,26 @@ export const MidiEditorScreen = () => {
 
                       {/* Progress details */}
                       {(item.status === 'processing' || item.status === 'synthesizing' || item.status?.includes('synthesizing') || item.status?.includes('mixing')) && (
-                        <View style={styles.progressContainer}>
-                          <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
-                            <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: themeColors.accent }]} />
+                        <View style={[styles.progressContainer, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
+                              <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: themeColors.accent }]} />
+                            </View>
+                            <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
+                              {`Processing (${item.progress || 0}%)`}
+                            </Text>
                           </View>
-                          <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
-                            {`Processing (${item.progress || 0}%)`}
-                          </Text>
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: themeColors.surfaceSecondary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setSelectedJobId(item.job_id);
+                              setShowWorkerLogModal(true);
+                            }}
+                          >
+                            <Ionicons name="terminal-outline" size={14} color={themeColors.accent} style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>Logs</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
 
@@ -2719,7 +2772,17 @@ export const MidiEditorScreen = () => {
                       )}
                     </View>
 
-                    <View style={styles.cardActions}>
+                    <View style={[styles.cardActions, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <TouchableOpacity
+                        style={{ padding: 6, borderRadius: 6, backgroundColor: themeColors.surfaceSecondary }}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSelectedJobId(item.job_id);
+                          setShowWorkerLogModal(true);
+                        }}
+                      >
+                        <Ionicons name="terminal-outline" size={18} color={themeColors.accent} />
+                      </TouchableOpacity>
                       <Ionicons name="chevron-forward" size={20} color={themeColors.accent} />
                     </View>
                   </TouchableOpacity>
@@ -3105,6 +3168,25 @@ export const MidiEditorScreen = () => {
             </View>
 
 
+
+            {/* Worker Log Button */}
+            <TouchableOpacity 
+              onPress={() => setShowWorkerLogModal(true)} 
+              style={{ 
+                marginRight: 12, 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                backgroundColor: themeColors.surfaceSecondary, 
+                paddingHorizontal: 8, 
+                paddingVertical: 5, 
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: themeColors.border
+              }}
+            >
+              <Ionicons name="terminal-outline" size={16} color={themeColors.accent} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>Worker Log</Text>
+            </TouchableOpacity>
 
             {/* Settings Toggle Button */}
             <TouchableOpacity onPress={() => setShowSettings(!showSettings)} style={{ marginRight: 15 }}>
@@ -4252,6 +4334,126 @@ export const MidiEditorScreen = () => {
                     }}
                   >
                     <Text style={[styles.uploadBtnText, { color: '#fff', fontSize: 13, fontWeight: 'bold', textAlign: 'center' }]}>Save Settings</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Worker Log Modal */}
+          <Modal
+            visible={showWorkerLogModal}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowWorkerLogModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface, width: '92%', maxHeight: '85%', padding: 18, borderRadius: 16 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="terminal-outline" size={22} color={themeColors.accent} style={{ marginRight: 8 }} />
+                    <Text style={[styles.modalTitle, { color: themeColors.text, marginBottom: 0, fontSize: 16 }]}>Worker Process Log</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowWorkerLogModal(false)}>
+                    <Ionicons name="close" size={24} color={themeColors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Status Indicator */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8, paddingHorizontal: 4 }}>
+                  <Text style={{ fontSize: 11, color: themeColors.textMuted, fontWeight: 'bold' }}>
+                    Job ID: {selectedJobId?.slice(0, 12)}...
+                  </Text>
+                  {isFetchingWorkerLog && <ActivityIndicator size="small" color={themeColors.accent} />}
+                </View>
+
+                {/* Console Log Window */}
+                <ScrollView 
+                  style={{ 
+                    width: '100%', 
+                    maxHeight: 380, 
+                    backgroundColor: '#1e1e1e', 
+                    borderRadius: 8, 
+                    padding: 12, 
+                    marginVertical: 8 
+                  }}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 11, color: '#00ff66', lineHeight: 16 }}>
+                    {workerLogText || 'Waiting for process logs...'}
+                  </Text>
+                </ScrollView>
+
+                {/* Bottom Actions */}
+                <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 10 }}>
+                  <TouchableOpacity 
+                    style={[styles.modalBtn, { backgroundColor: '#ff7675', flex: 1, paddingVertical: 10 }]}
+                    onPress={() => {
+                      if (selectedJobId) {
+                        midiOrchestratorApi.cancelJob(selectedJobId).catch(() => {});
+                        setShowWorkerLogModal(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Cancel Active Process</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.modalBtn, { backgroundColor: themeColors.border, flex: 1, paddingVertical: 10 }]}
+                    onPress={() => setShowWorkerLogModal(false)}
+                  >
+                    <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 12 }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Synthesis Conflict Modal */}
+          <Modal
+            visible={showConflictModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowConflictModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.surface, width: '88%', padding: 20, borderRadius: 16 }]}>
+                <Ionicons name="warning-outline" size={42} color="#fdcb6e" style={{ marginBottom: 10 }} />
+                <Text style={[styles.modalTitle, { color: themeColors.text, textAlign: 'center', fontSize: 16 }]}>
+                  Synthesis Job In Progress
+                </Text>
+                <Text style={{ fontSize: 13, color: themeColors.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 18 }}>
+                  Another job ({activeRunningJob?.filename}) is currently rendering. How would you like to handle this request?
+                </Text>
+
+                <View style={{ gap: 10, width: '100%' }}>
+                  <TouchableOpacity
+                    style={{ padding: 12, borderRadius: 8, backgroundColor: '#ff7675', alignItems: 'center' }}
+                    onPress={async () => {
+                      if (activeRunningJob?.job_id) {
+                        await midiOrchestratorApi.cancelJob(activeRunningJob.job_id).catch(() => {});
+                      }
+                      setShowConflictModal(false);
+                      await executeProcessTask();
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Cancel Running Job & Start New</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ padding: 12, borderRadius: 8, backgroundColor: themeColors.accent, alignItems: 'center' }}
+                    onPress={async () => {
+                      setShowConflictModal(false);
+                      await executeProcessTask();
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Queue New Job</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ padding: 12, borderRadius: 8, backgroundColor: themeColors.border, alignItems: 'center' }}
+                    onPress={() => setShowConflictModal(false)}
+                  >
+                    <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 13 }}>Dismiss</Text>
                   </TouchableOpacity>
                 </View>
               </View>

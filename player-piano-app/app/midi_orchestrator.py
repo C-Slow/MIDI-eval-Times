@@ -1,9 +1,11 @@
+import sys
 import os
 import json
 import uuid
 import time
 import shutil
 import threading
+import subprocess
 from pathlib import Path
 import pretty_midi
 import collections
@@ -383,9 +385,40 @@ class MidiOrchestrator:
         })
         self._save_db()
         
-        thread = threading.Thread(target=self._process_task, args=(job_id, piano_tracks, speaker_tracks, pedal_preset, rhythm_factor, melody_factor, vocal_male_tracks, vocal_female_tracks))
-        thread.daemon = True
-        thread.start()
+        # Launch worker in a separate OS subprocess for 100% memory isolation
+        cmd = [
+            sys.executable,
+            "-m", "app.render_worker",
+            "--job-id", job_id,
+            "--storage-dir", str(self.base_dir.parent)
+        ]
+        print(f"Spawning isolated render_worker subprocess for job {job_id}: {' '.join(cmd)}")
+        proc = subprocess.Popen(cmd, cwd=str(Path(__file__).resolve().parent.parent))
+        if not hasattr(self, "active_processes"):
+            self.active_processes = {}
+        self.active_processes[job_id] = proc
+
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel an active synthesis job by killing its worker process."""
+        if hasattr(self, "active_processes") and job_id in self.active_processes:
+            proc = self.active_processes.get(job_id)
+            if proc:
+                try:
+                    proc.kill()
+                    print(f"Terminated active worker process PID {proc.pid} for job {job_id}")
+                except Exception as e:
+                    print(f"Error terminating worker process for job {job_id}: {e}")
+                del self.active_processes[job_id]
+            
+        if job_id in self.status:
+            self.status[job_id].update({
+                "status": "cancelled",
+                "error": "Synthesis job cancelled by user.",
+                "progress": 100
+            })
+            self._save_db()
+            return True
+        return False
 
     def _apply_vocal_expression(self, inst: pretty_midi.Instrument):
         import math
@@ -880,6 +913,7 @@ class MidiOrchestrator:
             self._save_db()
 
     def list_jobs(self) -> List[Dict]:
+        self.status = self._load_db()
         jobs = list(self.status.values())
         updated = False
         for job in jobs:

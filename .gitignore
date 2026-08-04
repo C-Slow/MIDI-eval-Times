@@ -32,6 +32,8 @@ storage/mp3_jobs.json
 storage/*.sf2
 storage/midi_orchestrator/
 storage/midi_orchestrator_settings.json
+storage/vst_presets/
+storage/cache/
 
 # Legacy output folder from older scripts
 Midi-Projects/Output-Midi/
