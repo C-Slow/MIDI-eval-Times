@@ -176,8 +176,8 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
         _log(f"Peak normalization skipped: {e}")
 
 
-def resolve_vst_preset(track_patch: str = "auto", program: int = 0) -> Optional[str]:
-    """Find a matching .vstpreset file in C:\\app\\storage\\vst_presets for a given instrument patch or GM program."""
+def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "") -> Optional[str]:
+    """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, or track name."""
     preset_dir = os.path.join(PROJECT_ROOT, 'storage', 'vst_presets')
     if not os.path.exists(preset_dir):
         return None
@@ -186,50 +186,144 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0) -> Optional[
     if not files:
         return None
 
-    patch_clean = (track_patch or "").lower().replace("_", "").replace(" ", "")
+    combined_text = f"{track_patch or ''} {track_name or ''}".lower()
 
-    keywords = []
-    if "cello" in patch_clean or "celli" in patch_clean or program == 42:
-        keywords = ["celli", "cello"]
-    elif "violin1" in patch_clean or "violins1" in patch_clean or program in (40, 48):
-        keywords = ["violin 1", "violins 1", "violin1", "violins1"]
-    elif "violin2" in patch_clean or "violins2" in patch_clean:
-        keywords = ["violin 2", "violins 2", "violin2", "violins2"]
-    elif "viola" in patch_clean or program in (41, 49):
-        keywords = ["viola", "violas"]
-    elif "bass" in patch_clean or "contrabass" in patch_clean or program == 43:
-        keywords = ["bass", "basses", "double bass", "doublebasses"]
-    elif "flute" in patch_clean or program == 73:
-        keywords = ["flute", "flutes"]
-    elif "oboe" in patch_clean or program == 68:
-        keywords = ["oboe", "oboes"]
-    elif "clarinet" in patch_clean or program == 71:
-        keywords = ["clarinet", "clarinets"]
-    elif "bassoon" in patch_clean or program == 70:
-        keywords = ["bassoon", "bassoons"]
-    elif "horn" in patch_clean or program == 60:
-        keywords = ["horn", "horns"]
-    elif "trumpet" in patch_clean or program == 56:
-        keywords = ["trumpet", "trumpets"]
-    elif "trombone" in patch_clean or program in (57, 58):
-        keywords = ["trombone", "trombones"]
-    elif "tuba" in patch_clean:
-        keywords = ["tuba"]
-    elif "timpani" in patch_clean or program == 47:
-        keywords = ["timpani"]
-    elif "harp" in patch_clean or program == 46:
-        keywords = ["harp"]
-    elif "piano" in patch_clean or program == 0:
-        keywords = ["piano"]
+    # Map file basenames stripped of category prefixes (e.g. "Strings celli.vstpreset" -> "celli.vstpreset")
+    preset_map = {}
+    for f in files:
+        clean_f = f.lower()
+        for prefix in ["strings ", "woodwind ", "woodwinds ", "brass ", "percussion "]:
+            if clean_f.startswith(prefix):
+                clean_f = clean_f[len(prefix):]
+        preset_map[f] = clean_f
 
-    for kw in keywords:
-        for f in files:
-            if kw in f.lower():
+    # Priority 1: Contrabass / Double Bass / Basses
+    if any(k in combined_text for k in ["contrabass", "double bass", "doublebass", "upright bass", "basses"]) or program in (43, 110):
+        for f, clean in preset_map.items():
+            if "basses" in clean or "double bass" in clean or "contrabass" in clean:
+                return os.path.join(preset_dir, f)
+        for f, clean in preset_map.items():
+            if "bass" in clean and "trombone" not in clean:
                 return os.path.join(preset_dir, f)
 
-    if patch_clean and patch_clean != "auto":
-        for f in files:
-            if patch_clean in f.lower().replace(" ", "").replace("_", ""):
+    # Priority 2: Violoncello / Celli / Cello
+    if any(k in combined_text for k in ["violoncello", "cello", "celli"]) or program == 42:
+        for f, clean in preset_map.items():
+            if "celli" in clean or "cello" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 3: Viola / Violas
+    if "viola" in combined_text or program in (41, 49):
+        for f, clean in preset_map.items():
+            if "viola" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 4: Violin 2 / 2nd Violin / Violin II
+    if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2"]):
+        for f, clean in preset_map.items():
+            if "violin 2" in clean or "violins 2" in clean or "violin2" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 5: Violin 1 / 1st Violin / Violin I / General Violin
+    if any(k in combined_text for k in ["violin", "violins"]) or program in (40, 48):
+        for f, clean in preset_map.items():
+            if "violin 1" in clean or "violin1" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 6: Flute / Piccolo
+    if "piccolo" in combined_text:
+        for f, clean in preset_map.items():
+            if "piccolo" in clean:
+                return os.path.join(preset_dir, f)
+    if "flute" in combined_text or program == 73:
+        for f, clean in preset_map.items():
+            if "flute" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 7: Oboe / English Horn
+    if "oboe" in combined_text or program == 68:
+        for f, clean in preset_map.items():
+            if "oboe" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 8: Clarinet
+    if "clarinet" in combined_text or program == 71:
+        for f, clean in preset_map.items():
+            if "clarinet" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 9: Bassoon
+    if "bassoon" in combined_text or program == 70:
+        for f, clean in preset_map.items():
+            if "bassoon" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 10: French Horn / Horns
+    if any(k in combined_text for k in ["french horn", "horn"]) or program == 60:
+        for f, clean in preset_map.items():
+            if "horn" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 11: Trumpet
+    if "trumpet" in combined_text or program == 56:
+        for f, clean in preset_map.items():
+            if "trumpet" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 12: Trombone
+    if "trombone" in combined_text or program == 57:
+        for f, clean in preset_map.items():
+            if "trombone" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 13: Tuba
+    if "tuba" in combined_text or program == 58:
+        for f, clean in preset_map.items():
+            if "tuba" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 14: Timpani
+    if "timpani" in combined_text or program == 47:
+        for f, clean in preset_map.items():
+            if "timpani" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 15: Harp
+    if "harp" in combined_text or program == 46:
+        for f, clean in preset_map.items():
+            if "harp" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 16: Celeste
+    if "celeste" in combined_text or "celesta" in combined_text or program == 8:
+        for f, clean in preset_map.items():
+            if "celeste" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 17: Marimba / Xylophone / Vibraphone / Glockenspiel / Tubular Bells / Crotales
+    if "marimba" in combined_text or program == 12:
+        for f, clean in preset_map.items():
+            if "marimba" in clean:
+                return os.path.join(preset_dir, f)
+    if "xylophone" in combined_text or program == 13:
+        for f, clean in preset_map.items():
+            if "xylophone" in clean:
+                return os.path.join(preset_dir, f)
+    if "vibraphone" in combined_text or program == 11:
+        for f, clean in preset_map.items():
+            if "vibraphone" in clean:
+                return os.path.join(preset_dir, f)
+    if "glockenspiel" in combined_text or program == 9:
+        for f, clean in preset_map.items():
+            if "glockenspiel" in clean:
+                return os.path.join(preset_dir, f)
+    if "tubular" in combined_text or "bells" in combined_text or program == 14:
+        for f, clean in preset_map.items():
+            if "tubular" in clean or "bells" in clean:
+                return os.path.join(preset_dir, f)
+    if "crotales" in combined_text:
+        for f, clean in preset_map.items():
+            if "crotales" in clean:
                 return os.path.join(preset_dir, f)
 
     return None
@@ -612,7 +706,7 @@ def render_orchestrator_tracks(
                     dll_path = sf_path
                 try:
                     plugin_obj = load_plugin(dll_path)
-                    vst_preset = resolve_vst_preset(track_patch, new_inst.program)
+                    vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name)
                     if vst_preset and os.path.exists(vst_preset):
                         try:
                             plugin_obj.load_preset(vst_preset)
