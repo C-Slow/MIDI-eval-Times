@@ -861,7 +861,26 @@ class MidiOrchestrator:
             self._save_db()
 
     def list_jobs(self) -> List[Dict]:
-        return sorted(list(self.status.values()), key=lambda x: x.get("timestamp", 0), reverse=True)
+        jobs = list(self.status.values())
+        updated = False
+        for job in jobs:
+            if "tracks" in job and isinstance(job["tracks"], list):
+                for t in job["tracks"]:
+                    if "display_name" not in t or is_garbled_or_generic_name(t.get("name", "")):
+                        inst_name = t.get("instrument_name") or get_instrument_name(t.get("program", 0))
+                        idx = t.get("index", 0)
+                        raw_name = (t.get("name") or "").strip()
+                        if is_garbled_or_generic_name(raw_name):
+                            t["display_name"] = f"{inst_name} (Track {idx+1})"
+                        else:
+                            t["display_name"] = f"{raw_name} [{inst_name}]" if inst_name.lower() not in raw_name.lower() else raw_name
+                        updated = True
+        if updated:
+            try:
+                self._save_db()
+            except Exception:
+                pass
+        return sorted(jobs, key=lambda x: x.get("timestamp", 0), reverse=True)
 
     def delete_job(self, job_id: str) -> bool:
         if job_id not in self.status:
