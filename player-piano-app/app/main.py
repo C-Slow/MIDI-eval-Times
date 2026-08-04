@@ -1905,7 +1905,7 @@ async def get_midi_orchestrator_preview(
         
         # Smart MD5 Preview Caching: Check if preview audio with exact same settings exists
         import hashlib
-        cache_dir = Path(STORAGE_DIR) / "cache"
+        cache_dir = Path(utils.PROJECT_ROOT) / "storage" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         
         cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_peak_ceiling_db}_{job_tracks_cfg}"
