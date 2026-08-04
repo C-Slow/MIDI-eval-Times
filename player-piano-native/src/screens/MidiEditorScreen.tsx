@@ -1309,9 +1309,9 @@ export const MidiEditorScreen = () => {
     };
   }, []);
 
-  // Poll job status if any is processing
+  // Poll job status if any is processing or synthesizing
   useEffect(() => {
-    const hasProcessing = jobs.some(j => j.status === 'processing' || j.status === 'synthesizing');
+    const hasProcessing = jobs.some(j => j.status === 'processing' || j.status === 'synthesizing' || j.status?.includes('synthesizing') || j.status?.includes('mixing'));
     let timer: any;
     if (hasProcessing) {
       timer = setInterval(fetchJobs, 2000);
@@ -2643,13 +2643,13 @@ export const MidiEditorScreen = () => {
                       </View>
 
                       {/* Progress details */}
-                      {(item.status === 'processing' || item.status === 'synthesizing') && (
+                      {(item.status === 'processing' || item.status === 'synthesizing' || item.status?.includes('synthesizing') || item.status?.includes('mixing')) && (
                         <View style={styles.progressContainer}>
                           <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
-                            <View style={[styles.progressBarFill, { width: `${item.progress}%`, backgroundColor: themeColors.accent }]} />
+                            <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: themeColors.accent }]} />
                           </View>
                           <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
-                            {item.status === 'synthesizing' ? 'Rendering Strings...' : `Processing ${item.progress}%`}
+                            {`Processing (${item.progress || 0}%)`}
                           </Text>
                         </View>
                       )}

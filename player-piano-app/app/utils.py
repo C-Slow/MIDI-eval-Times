@@ -614,7 +614,8 @@ def render_orchestrator_tracks(
     reverb_room_size: float = 0.55,
     peak_ceiling_db: float = -6.0,
     time_shift: float = 0.0,
-    is_preview: bool = False
+    is_preview: bool = False,
+    progress_callback: Optional[Any] = None
 ) -> str:
     """Render backing speaker tracks in parallel concurrently using per-track tracks_config settings and symphonic seating."""
     import numpy as np
@@ -799,8 +800,27 @@ def render_orchestrator_tracks(
 
         # Execute Stage 2 parallel worker rendering across all CPU cores
         max_workers = min(os.cpu_count() or 8, len(render_tasks))
+        stem_results = []
+        completed_count = 0
+        total_tasks = len(render_tasks)
+        
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            stem_results = list(executor.map(_execute_render_task, render_tasks))
+            from concurrent.futures import as_completed
+            futures = [executor.submit(_execute_render_task, task) for task in render_tasks]
+            for f in as_completed(futures):
+                completed_count += 1
+                if progress_callback and total_tasks > 0:
+                    pct = 30 + int(40 * (completed_count / total_tasks))
+                    try:
+                        progress_callback(pct)
+                    except Exception:
+                        pass
+                try:
+                    res = f.result()
+                    if res is not None:
+                        stem_results.append(res)
+                except Exception as e:
+                    _log(f"Stem worker execution error: {e}")
 
         combined_audio = None
         for res in stem_results:

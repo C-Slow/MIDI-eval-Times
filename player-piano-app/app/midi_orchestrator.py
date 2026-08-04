@@ -687,6 +687,12 @@ class MidiOrchestrator:
                 job_reverb_room_size = job_info.get("reverb_room_size")
                 job_peak_ceiling_db = job_info.get("peak_ceiling_db")
                 
+                def _update_progress(pct):
+                    if job_id in self.status:
+                        self.status[job_id]["progress"] = pct
+                        self.status[job_id]["status"] = "synthesizing backing tracks"
+                        self._save_db()
+
                 utils.render_orchestrator_tracks(
                     pm,
                     non_vocal_speakers,
@@ -696,7 +702,8 @@ class MidiOrchestrator:
                     reverb_enabled=job_reverb_enabled,
                     reverb_room_size=job_reverb_room_size,
                     peak_ceiling_db=job_peak_ceiling_db,
-                    time_shift=time_shift
+                    time_shift=time_shift,
+                    progress_callback=_update_progress
                 )
             
             self.status[job_id]["progress"] = 70
