@@ -726,6 +726,8 @@ def render_orchestrator_tracks(
                     
             render_tasks.append(task)
 
+        used_fallbacks = []
+
         # Stage 2: Render audio buffers in parallel concurrently across worker threads
         def _execute_render_task(task):
             idx = task["idx"]
@@ -768,6 +770,7 @@ def render_orchestrator_tracks(
                         wavfile.write(stem_wav, 44100, audio_int16)
                 except Exception as vst_exec_err:
                     _log(f"Track {idx}: Parallel VST3 audio processing notice ({vst_exec_err}), falling back to SoundFont...")
+                    used_fallbacks.append(True)
                     fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'FluidR3_GM.sf2')
                     if not os.path.exists(fb_sf):
                         fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'SGM-V2.01.sf2')
@@ -848,8 +851,12 @@ def render_orchestrator_tracks(
             wavfile.write(out_wav_path, sample_rate, int16_audio)
             
             # Normalize peak ceiling dB
-            normalize_wav_file(out_wav_path, target_peak_db=peak_ceiling_db)
-            return out_wav_path
+            apply_audio_dsp(out_wav_path, reverb_enabled=reverb_enabled, room_size=reverb_room_size, peak_ceiling_db=peak_ceiling_db)
+            
+            actual_sf = "FluidR3_GM.sf2 (Fallback)" if used_fallbacks else (job_sf_name or "SGM-V2.01.sf2")
+            return out_wav_path, actual_sf
+            
+        return None, job_sf_name
     finally:
         try:
             shutil.rmtree(temp_dir)

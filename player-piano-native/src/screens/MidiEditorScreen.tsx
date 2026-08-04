@@ -923,6 +923,36 @@ export const MidiEditorScreen = () => {
     );
   };
 
+  const getSoundfontLabel = (sf?: string, lastBuilt?: string): { text: string; color: string; bg: string } => {
+    const target = lastBuilt || sf || '';
+    if (!target) return { text: 'SF2', color: '#95a5a6', bg: 'rgba(149, 165, 166, 0.15)' };
+    
+    if (target.toLowerCase().includes('fallback')) {
+      return { text: 'FB: SF2', color: '#e67e22', bg: 'rgba(230, 126, 34, 0.18)' };
+    }
+    if (target.toLowerCase().includes('bbc') || target.toLowerCase().includes('vst')) {
+      return { text: 'BBC VST', color: '#a29bfe', bg: 'rgba(162, 155, 254, 0.18)' };
+    }
+    if (target.toLowerCase().includes('fluid')) {
+      return { text: 'FluidR3', color: '#3498db', bg: 'rgba(52, 152, 219, 0.18)' };
+    }
+    const cleanName = target.replace(/\.sf2$/i, '').replace(/\.vst3$/i, '');
+    return { text: cleanName.length > 10 ? cleanName.substring(0, 10) : cleanName, color: '#2ecc71', bg: 'rgba(46, 204, 113, 0.18)' };
+  };
+
+  const hasCustomTrackSettings = (tracksConfig?: Record<string, any>): boolean => {
+    if (!tracksConfig) return false;
+    return Object.values(tracksConfig).some(cfg => {
+      if (!cfg) return false;
+      if (cfg.preset && typeof cfg.preset === 'string' && cfg.preset.trim() !== '') return true;
+      if (cfg.gain !== undefined && Math.abs(cfg.gain - 1.0) > 0.01) return true;
+      if (cfg.pan !== undefined && Math.abs(cfg.pan) > 0.01) return true;
+      if (cfg.pitch !== undefined && cfg.pitch !== 0) return true;
+      if (cfg.patch !== undefined && cfg.patch !== null && cfg.patch !== '') return true;
+      return false;
+    });
+  };
+
   // Selected job details
   const currentJob = useMemo(() => {
     return jobs.find(j => j.job_id === selectedJobId) || null;
@@ -2641,6 +2671,23 @@ export const MidiEditorScreen = () => {
                         {item.dnu && (
                           <View style={[styles.statBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
                             <Text style={[styles.statBadgeText, { color: '#e74c3c' }]}>DNU</Text>
+                          </View>
+                        )}
+
+                        {/* Soundfont / VST Badge */}
+                        {(() => {
+                          const sfBadge = getSoundfontLabel(item.soundfont, item.last_built_soundfont);
+                          return (
+                            <View style={[styles.statBadge, { backgroundColor: sfBadge.bg }]}>
+                              <Text style={[styles.statBadgeText, { color: sfBadge.color, fontWeight: 'bold' }]}>{sfBadge.text}</Text>
+                            </View>
+                          );
+                        })()}
+
+                        {/* Custom Track Settings Tag [T] */}
+                        {hasCustomTrackSettings(item.tracks_config) && (
+                          <View style={[styles.statBadge, { backgroundColor: 'rgba(155, 89, 182, 0.2)' }]}>
+                            <Text style={[styles.statBadgeText, { color: '#9b59b6', fontWeight: 'bold' }]}>[T]</Text>
                           </View>
                         )}
                       </View>

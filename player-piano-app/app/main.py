@@ -1918,7 +1918,7 @@ async def get_midi_orchestrator_preview(
             return FileResponse(str(cached_preview_wav), media_type="audio/wav")
         
         if s_tracks:
-            utils.render_orchestrator_tracks(
+            _, actual_sf = utils.render_orchestrator_tracks(
                 pm,
                 s_tracks,
                 sf_name,
@@ -1929,6 +1929,9 @@ async def get_midi_orchestrator_preview(
                 peak_ceiling_db=preview_peak_ceiling_db,
                 is_preview=not full_preview
             )
+            if actual_sf:
+                midi_orchestrator.status[job_id]["last_built_soundfont"] = actual_sf
+                midi_orchestrator._save_db()
         else:
             sf_path = utils.resolve_soundfont_path(sf_name)
             utils.render_midi_to_wav_with_soundfont(

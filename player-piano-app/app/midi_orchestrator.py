@@ -693,7 +693,7 @@ class MidiOrchestrator:
                         self.status[job_id]["status"] = "synthesizing backing tracks"
                         self._save_db()
 
-                utils.render_orchestrator_tracks(
+                _, actual_sf = utils.render_orchestrator_tracks(
                     pm,
                     non_vocal_speakers,
                     job_sf_name,
@@ -705,6 +705,8 @@ class MidiOrchestrator:
                     time_shift=time_shift,
                     progress_callback=_update_progress
                 )
+                if actual_sf:
+                    self.status[job_id]["last_built_soundfont"] = actual_sf
             
             self.status[job_id]["progress"] = 70
             self.status[job_id]["status"] = "mixing audio"
