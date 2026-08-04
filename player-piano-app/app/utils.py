@@ -24,6 +24,10 @@ FLUIDSYNTH_BIN = os.environ.get(
     'FLUIDSYNTH_BIN',
     shutil.which('fluidsynth') or os.path.join(PROJECT_ROOT, 'fluidsynth', 'bin', 'fluidsynth.exe')
 )
+import threading
+vst_lock = threading.Lock()
+fs_lock = threading.Lock()
+
 RENDER_CACHE = os.path.join(PROJECT_ROOT, 'storage', 'render_cache')
 STORAGE_RAW = os.path.join(PROJECT_ROOT, 'storage', 'raw')
 STORAGE_PROCESSED = os.path.join(PROJECT_ROOT, 'storage', 'processed')
@@ -490,7 +494,8 @@ def render_midi_to_wav_with_soundfont(
     ])
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        with fs_lock:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             _log(f"FluidSynth error: {result.stderr}")
             raise RuntimeError(f"FluidSynth failed: {result.stderr}")
@@ -704,7 +709,7 @@ def render_orchestrator_tracks(
             }
             
             # If VST3, pre-instantiate an INDEPENDENT plugin instance per track ON MAIN THREAD
-            if sf_path and sf_path.lower().endswith('.vst3'):
+            if sf_path and ('vst' in sf_path.lower() or sf_path.lower().endswith('.vst3')):
                 from pedalboard import load_plugin
                 dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
                 if not os.path.exists(dll_path):
@@ -758,7 +763,8 @@ def render_orchestrator_tracks(
                         messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
                     messages.sort(key=lambda m: m.time)
                     
-                    audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
+                    with vst_lock:
+                        audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
                     if audio.ndim == 2:
                         audio = audio.T
                     if track_gain is not None:
