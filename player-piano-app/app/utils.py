@@ -614,11 +614,15 @@ def render_orchestrator_tracks(
                     plugin_obj = load_plugin(dll_path)
                     vst_preset = resolve_vst_preset(track_patch, new_inst.program)
                     if vst_preset and os.path.exists(vst_preset):
-                        plugin_obj.load_preset(vst_preset)
-                        _log(f"Track {idx}: Main-thread pre-loaded VST3 preset {vst_preset}")
+                        try:
+                            plugin_obj.load_preset(vst_preset)
+                            _log(f"Track {idx}: Pre-loaded VST3 preset {vst_preset}")
+                        except Exception as p_err:
+                            plugin_obj.raw_state = open(vst_preset, 'rb').read()
+                            _log(f"Track {idx}: Raw-state pre-loaded VST3 preset {vst_preset} (Notice: {p_err})")
                     task["plugin_obj"] = plugin_obj
                 except Exception as init_err:
-                    _log(f"Track {idx}: VST3 main-thread pre-init notice: {init_err}")
+                    _log(f"Track {idx}: VST3 pre-init notice: {init_err}")
                     
             render_tasks.append(task)
 
