@@ -243,16 +243,41 @@ class MidiOrchestrator:
         self._save_db()
         return job_id
 
+def is_garbled_or_generic_name(name: str) -> bool:
+    if not name or not name.strip():
+        return True
+    s = name.strip()
+    s_lower = s.lower()
+    if s_lower.startswith("track") or s_lower.startswith("channel") or s_lower in ["untitled", "midi", "no name", "unknown", "track"]:
+        return True
+    if "\ufffd" in s or "\\x" in s or "\\u" in s:
+        return True
+    ascii_count = sum(1 for c in s if 32 <= ord(c) <= 126)
+    if len(s) > 0 and (ascii_count / len(s)) < 0.6:
+        return True
+    return False
+
     def _extract_track_meta(self, midi_path: Path) -> List[Dict]:
         try:
             pm = pretty_midi.PrettyMIDI(str(midi_path))
             tracks = []
             for i, inst in enumerate(pm.instruments):
+                raw_name = inst.name.strip()
+                inst_name = get_instrument_name(int(inst.program))
+                if inst.is_drum:
+                    inst_name = "Drums / Percussion"
+                    
+                if is_garbled_or_generic_name(raw_name):
+                    display_name = f"{inst_name} (Track {i+1})"
+                else:
+                    display_name = f"{raw_name} [{inst_name}]" if inst_name.lower() not in raw_name.lower() else raw_name
+                    
                 tracks.append({
                     "index": int(i),
-                    "name": inst.name.strip() or f"Track {i+1}",
+                    "name": raw_name or f"Track {i+1}",
+                    "display_name": display_name,
                     "program": int(inst.program),
-                    "instrument_name": get_instrument_name(int(inst.program)),
+                    "instrument_name": inst_name,
                     "is_drum": inst.is_drum,
                     "note_count": len(inst.notes),
                     "duration": float(inst.get_end_time()) if inst.notes else 0.0

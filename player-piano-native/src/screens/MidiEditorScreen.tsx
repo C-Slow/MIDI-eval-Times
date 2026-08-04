@@ -1923,8 +1923,11 @@ export const MidiEditorScreen = () => {
       const maxPitch = pitches.length > 0 ? Math.max(...pitches) : 80;
       const pitchRange = Math.max(12, maxPitch - minPitch); // avoid division by zero, min 1 octave height scale
       
+      const cleanName = track.display_name || track.name;
       return {
         ...track,
+        name: cleanName,
+        display_name: cleanName,
         notes: trackNotes,
         minPitch,
         maxPitch,
@@ -2217,7 +2220,7 @@ export const MidiEditorScreen = () => {
                     style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
                   >
                     <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, flex: 1 }]} numberOfLines={1}>
-                      {tracksConfig[String(lane.index)]?.name || lane.name}
+                      {tracksConfig[String(lane.index)]?.name || lane.display_name || lane.name}
                     </Text>
                     <TouchableOpacity onPress={() => setEditingTrackIndex(lane.index)} style={{ padding: 2 }}>
                       <Ionicons 
