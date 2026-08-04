@@ -85,6 +85,20 @@ def get_instrument_name(program: int) -> str:
         return GM_INSTRUMENTS[program]
     return f"Unknown Instrument ({program})"
 
+def is_garbled_or_generic_name(name: str) -> bool:
+    if not name or not name.strip():
+        return True
+    s = name.strip()
+    s_lower = s.lower()
+    if s_lower.startswith("track") or s_lower.startswith("channel") or s_lower in ["untitled", "midi", "no name", "unknown", "track"]:
+        return True
+    if "\ufffd" in s or "\\x" in s or "\\u" in s:
+        return True
+    ascii_count = sum(1 for c in s if 32 <= ord(c) <= 126)
+    if len(s) > 0 and (ascii_count / len(s)) < 0.6:
+        return True
+    return False
+
 def identify_rhythm_notes(notes):
     if not notes: return set()
     notes_by_pitch = collections.defaultdict(list)
@@ -242,20 +256,6 @@ class MidiOrchestrator:
         }
         self._save_db()
         return job_id
-
-def is_garbled_or_generic_name(name: str) -> bool:
-    if not name or not name.strip():
-        return True
-    s = name.strip()
-    s_lower = s.lower()
-    if s_lower.startswith("track") or s_lower.startswith("channel") or s_lower in ["untitled", "midi", "no name", "unknown", "track"]:
-        return True
-    if "\ufffd" in s or "\\x" in s or "\\u" in s:
-        return True
-    ascii_count = sum(1 for c in s if 32 <= ord(c) <= 126)
-    if len(s) > 0 and (ascii_count / len(s)) < 0.6:
-        return True
-    return False
 
     def _extract_track_meta(self, midi_path: Path) -> List[Dict]:
         try:
