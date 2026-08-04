@@ -1097,21 +1097,7 @@ export const MidiEditorScreen = () => {
         previewSoundRef.current = null;
       }
 
-      // 3. If job is completed, pre-load backing audio for performance play
-      if (job.status === 'completed') {
-        try {
-          const url = midiOrchestratorApi.getBackingAudioUrl(jobId);
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: url },
-            { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-            onPlaybackStatusUpdate
-          );
-          soundRef.current = sound;
-        } catch (backingErr) {
-          console.warn('Could not pre-load performance backing audio:', backingErr);
-        }
-      }
-
+      // 3. Clear audio refs - audio loading will occur on-demand when user presses Play or Preview
       setStage('visualizer');
     } catch (e: any) {
       console.error(e);
@@ -1836,7 +1822,23 @@ export const MidiEditorScreen = () => {
 
   // Sync Playback Controllers
   const startPlayback = async () => {
-    if (!soundRef.current || !selectedJobId) {
+    if (!selectedJobId) return;
+
+    if (!soundRef.current) {
+      try {
+        const url = midiOrchestratorApi.getBackingAudioUrl(selectedJobId);
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: url },
+          { shouldPlay: false, progressUpdateIntervalMillis: 100 },
+          onPlaybackStatusUpdate
+        );
+        soundRef.current = sound;
+      } catch (backingErr) {
+        console.warn('Could not load performance backing audio:', backingErr);
+      }
+    }
+
+    if (!soundRef.current) {
       Alert.alert('Playback Error', 'Backing audio is not loaded or ready.');
       return;
     }

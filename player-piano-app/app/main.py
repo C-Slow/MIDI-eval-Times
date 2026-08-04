@@ -1882,7 +1882,8 @@ async def get_midi_orchestrator_preview(
         
         # Check if pre-rendered audio exists for completed jobs to serve instantly
         job_dir = midi_orchestrator.jobs_dir / job_id
-        pre_rendered_backing = job_dir / "backing_insts.wav"
+        pre_rendered_backing = job_dir / "backing.wav"
+        pre_rendered_insts = job_dir / "backing_insts.wav"
         pre_rendered_final = job_dir / "final_mix.wav"
         
         job_info = midi_orchestrator.status.get(job_id, {})
@@ -1890,12 +1891,10 @@ async def get_midi_orchestrator_preview(
         
         # Fast path: If pre-rendered audio exists and soundfont matches, serve immediately without re-rendering!
         if (soundfont is None or soundfont == saved_sf):
-            if pre_rendered_backing.exists() and pre_rendered_backing.stat().st_size > 1000:
-                _log(f"Serving pre-rendered backing audio instantly for preview: {pre_rendered_backing}")
-                return FileResponse(str(pre_rendered_backing), media_type="audio/wav")
-            elif pre_rendered_final.exists() and pre_rendered_final.stat().st_size > 1000:
-                _log(f"Serving pre-rendered final audio instantly for preview: {pre_rendered_final}")
-                return FileResponse(str(pre_rendered_final), media_type="audio/wav")
+            for candidate in [pre_rendered_backing, pre_rendered_insts, pre_rendered_final]:
+                if candidate.exists() and candidate.stat().st_size > 1000:
+                    _log(f"Serving pre-rendered backing audio instantly for preview: {candidate}")
+                    return FileResponse(str(candidate), media_type="audio/wav")
         
         # Resolve soundfont and DSP parameters for preview
         sf_name = soundfont or saved_sf
