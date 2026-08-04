@@ -553,18 +553,18 @@ def render_orchestrator_tracks(
             "tutti": 48
         }
 
-        def _render_single_track(idx: int):
+        # Stage 1: Pre-initialize plugin instances & presets on main thread
+        render_tasks = []
+        for idx in speaker_track_indices:
             if idx >= len(pm.instruments):
-                return None
+                continue
                 
             orig_inst = pm.instruments[idx]
             track_cfg = tracks_config.get(str(idx), {}) or tracks_config.get(idx, {})
             
-            # Per-track SoundFont
             track_sf = track_cfg.get("soundfont") or job_sf_name
             sf_path = resolve_soundfont_path(track_sf)
             
-            # Per-track gain, transpose & instrument patch remapping
             track_gain = float(track_cfg.get("gain", 1.0))
             track_transpose = int(track_cfg.get("transpose", 0))
             track_patch = track_cfg.get("instrument_patch", "auto")
@@ -576,7 +576,6 @@ def render_orchestrator_tracks(
                 new_inst.program = patch_map[track_patch]
                 _log(f"Track {idx} mapped to instrument patch '{track_patch}' (GM Program {new_inst.program})")
             
-            # Apply time shift & pitch shift transpose
             if time_shift > 0 or track_transpose != 0:
                 for n in new_inst.notes:
                     if time_shift > 0:
@@ -594,39 +593,83 @@ def render_orchestrator_tracks(
             stem_wav = os.path.join(temp_dir, f"track_{idx}.wav")
             single_pm.write(stem_midi)
             
-            # Render track stem via VST3 or SoundFont engine
+            task = {
+                "idx": idx,
+                "program": new_inst.program,
+                "track_patch": track_patch,
+                "sf_path": sf_path,
+                "stem_midi": stem_midi,
+                "stem_wav": stem_wav,
+                "track_gain": track_gain,
+                "plugin_obj": None
+            }
+            
+            # If VST3, pre-instantiate plugin instance and load preset ON MAIN THREAD
             if sf_path and sf_path.lower().endswith('.vst3'):
+                from pedalboard import load_plugin
+                dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
+                if not os.path.exists(dll_path):
+                    dll_path = sf_path
                 try:
+                    plugin_obj = load_plugin(dll_path)
                     vst_preset = resolve_vst_preset(track_patch, new_inst.program)
-                    render_midi_to_wav_with_vst3(
-                        stem_midi,
-                        sf_path,
-                        stem_wav,
-                        gain=track_gain,
-                        preset_path=vst_preset
-                    )
-                except Exception as vst_err:
-                    _log(f"VST3 stem render notice ({vst_err}), falling back to SoundFont for track {idx}...")
+                    if vst_preset and os.path.exists(vst_preset):
+                        plugin_obj.load_preset(vst_preset)
+                        _log(f"Track {idx}: Main-thread pre-loaded VST3 preset {vst_preset}")
+                    task["plugin_obj"] = plugin_obj
+                except Exception as init_err:
+                    _log(f"Track {idx}: VST3 main-thread pre-init notice: {init_err}")
+                    
+            render_tasks.append(task)
+
+        # Stage 2: Render audio buffers in parallel concurrently across worker threads
+        def _execute_render_task(task):
+            idx = task["idx"]
+            stem_midi = task["stem_midi"]
+            stem_wav = task["stem_wav"]
+            sf_path = task["sf_path"]
+            track_gain = task["track_gain"]
+            plugin_obj = task["plugin_obj"]
+            
+            if plugin_obj is not None:
+                try:
+                    import mido
+                    pm_task = pretty_midi.PrettyMIDI(stem_midi)
+                    duration_sec = max(3.0, pm_task.get_end_time() + 2.0)
+                    messages = []
+                    for inst in pm_task.instruments:
+                        for n in inst.notes:
+                            messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
+                            messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n.end))
+                    if not messages:
+                        messages.append(mido.Message('note_on', note=60, velocity=100, time=0.0))
+                        messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
+                    messages.sort(key=lambda m: m.time)
+                    
+                    audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
+                    if audio.ndim == 2:
+                        audio = audio.T
+                    if track_gain is not None:
+                        audio = audio * track_gain
+                    max_val = np.max(np.abs(audio))
+                    if max_val > 0:
+                        audio = (audio / max_val) * 0.9 * 32767.0
+                        audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
+                        wavfile.write(stem_wav, 44100, audio_int16)
+                except Exception as vst_exec_err:
+                    _log(f"Track {idx}: Parallel VST3 audio processing notice ({vst_exec_err}), falling back to SoundFont...")
                     fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'FluidR3_GM.sf2')
                     if not os.path.exists(fb_sf):
                         fb_sf = os.path.join(PROJECT_ROOT, 'storage', 'SGM-V2.01.sf2')
                     render_midi_to_wav_with_soundfont(
-                        stem_midi,
-                        fb_sf,
-                        stem_wav,
-                        gain=track_gain,
-                        reverb_enabled=reverb_enabled,
-                        reverb_room_size=reverb_room_size,
+                        stem_midi, fb_sf, stem_wav, gain=track_gain,
+                        reverb_enabled=reverb_enabled, reverb_room_size=reverb_room_size,
                         peak_ceiling_db=peak_ceiling_db
                     )
             else:
                 render_midi_to_wav_with_soundfont(
-                    stem_midi,
-                    sf_path,
-                    stem_wav,
-                    gain=track_gain,
-                    reverb_enabled=reverb_enabled,
-                    reverb_room_size=reverb_room_size,
+                    stem_midi, sf_path, stem_wav, gain=track_gain,
+                    reverb_enabled=reverb_enabled, reverb_room_size=reverb_room_size,
                     peak_ceiling_db=peak_ceiling_db
                 )
                 
@@ -636,32 +679,20 @@ def render_orchestrator_tracks(
                     data = np.column_stack((data, data))
                 elif data.ndim > 2:
                     data = data[:, :2]
-                    
                 data = data.astype(np.float32) * track_gain
                 
-                # Apply symphonic seating stereo panning
-                pan = get_orchestral_seating_pan(new_inst.program, track_patch)
+                pan = get_orchestral_seating_pan(task["program"], task["track_patch"])
                 left_gain = np.cos((pan + 1.0) * np.pi / 4.0)
                 right_gain = np.sin((pan + 1.0) * np.pi / 4.0)
                 data[:, 0] *= left_gain
                 data[:, 1] *= right_gain
-                
                 return sr, data
             return None
 
-        # Execute multi-stem track rendering
-        # JUCE/Pedalboard VST3 plugins require main thread instantiation
-        has_vst3 = any(
-            (resolve_soundfont_path((tracks_config.get(str(i), {}) or tracks_config.get(i, {})).get("soundfont") or job_sf_name) or "").lower().endswith('.vst3')
-            for i in speaker_track_indices
-        )
-        
-        if has_vst3:
-            stem_results = [_render_single_track(idx) for idx in speaker_track_indices]
-        else:
-            max_workers = min(4, len(speaker_track_indices))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                stem_results = list(executor.map(_render_single_track, speaker_track_indices))
+        # Execute Stage 2 parallel worker rendering across CPU cores
+        max_workers = min(4, len(render_tasks))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            stem_results = list(executor.map(_execute_render_task, render_tasks))
 
         combined_audio = None
         for res in stem_results:
