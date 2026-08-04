@@ -649,10 +649,19 @@ def render_orchestrator_tracks(
                 return sr, data
             return None
 
-        # Execute multi-stem track rendering in parallel concurrently!
-        max_workers = min(4, len(speaker_track_indices))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            stem_results = list(executor.map(_render_single_track, speaker_track_indices))
+        # Execute multi-stem track rendering
+        # JUCE/Pedalboard VST3 plugins require main thread instantiation
+        has_vst3 = any(
+            (resolve_soundfont_path((tracks_config.get(str(i), {}) or tracks_config.get(i, {})).get("soundfont") or job_sf_name) or "").lower().endswith('.vst3')
+            for i in speaker_track_indices
+        )
+        
+        if has_vst3:
+            stem_results = [_render_single_track(idx) for idx in speaker_track_indices]
+        else:
+            max_workers = min(4, len(speaker_track_indices))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                stem_results = list(executor.map(_render_single_track, speaker_track_indices))
 
         combined_audio = None
         for res in stem_results:
