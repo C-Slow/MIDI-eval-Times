@@ -703,24 +703,23 @@ def render_orchestrator_tracks(
                 "plugin_obj": None
             }
             
-            # If VST3, pre-instantiate plugin instance and load preset ON MAIN THREAD
+            # If VST3, pre-instantiate an INDEPENDENT plugin instance per track ON MAIN THREAD
             if sf_path and sf_path.lower().endswith('.vst3'):
                 from pedalboard import load_plugin
                 dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
                 if not os.path.exists(dll_path):
                     dll_path = sf_path
                 try:
-                    if dll_path not in _VST_PLUGIN_CACHE:
-                        _VST_PLUGIN_CACHE[dll_path] = load_plugin(dll_path)
-                    plugin_obj = _VST_PLUGIN_CACHE[dll_path]
+                    # Create a fresh, dedicated plugin instance for this specific track
+                    plugin_obj = load_plugin(dll_path)
                     vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name)
                     if vst_preset and os.path.exists(vst_preset):
                         try:
                             plugin_obj.load_preset(vst_preset)
-                            _log(f"Track {idx}: Pre-loaded VST3 preset {vst_preset}")
+                            _log(f"Track {idx}: Dedicated VST3 instance loaded preset {vst_preset}")
                         except Exception as p_err:
                             plugin_obj.raw_state = open(vst_preset, 'rb').read()
-                            _log(f"Track {idx}: Raw-state pre-loaded VST3 preset {vst_preset} (Notice: {p_err})")
+                            _log(f"Track {idx}: Dedicated VST3 instance raw-state preset {vst_preset}")
                     task["plugin_obj"] = plugin_obj
                 except Exception as init_err:
                     _log(f"Track {idx}: VST3 pre-init notice: {init_err}")
@@ -740,16 +739,18 @@ def render_orchestrator_tracks(
                 try:
                     import mido
                     pm_task = pretty_midi.PrettyMIDI(stem_midi)
-                    duration_sec = max(3.0, pm_task.get_end_time() + 2.0)
-                    if is_preview and duration_sec > 60.0:
-                        duration_sec = 60.0
+                    full_duration = max(3.0, pm_task.get_end_time() + 2.0)
+                    duration_sec = min(60.0, full_duration) if (is_preview and full_duration > 60.0) else full_duration
+                    
                     messages = []
                     for inst in pm_task.instruments:
                         for n in inst.notes:
-                            if is_preview and n.start > 60.0:
+                            if is_preview and n.start >= duration_sec:
                                 continue
-                            messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
-                            messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=min(n.end, duration_sec)))
+                            n_end = min(n.end, duration_sec) if is_preview else n.end
+                            if n_end > n.start:
+                                messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
+                                messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n_end))
                     if not messages:
                         messages.append(mido.Message('note_on', note=60, velocity=100, time=0.0))
                         messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))

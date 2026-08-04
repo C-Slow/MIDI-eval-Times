@@ -1030,10 +1030,11 @@ export const MidiEditorScreen = () => {
     setLoopEnabled(false);
     setTracksConfig(job.tracks_config || {});
 
-    // Load per-job soundfont & audio parameters, falling back to global settings
+    // Load per-job soundfont & audio parameters, falling back to legacy defaults for older files
     try {
       const globalAudio = await midiOrchestratorApi.getAudioSettings().catch(() => ({}));
-      setActiveSoundfont(job.soundfont || globalAudio.active_soundfont || 'SGM-V2.01.sf2');
+      const jobSf = job.soundfont || (job.status === 'completed' ? 'SGM-V2.01.sf2' : (globalAudio.active_soundfont || 'SGM-V2.01.sf2'));
+      setActiveSoundfont(jobSf);
       setReverbEnabled(job.reverb_enabled ?? globalAudio.reverb_enabled ?? true);
       setReverbRoomSize(job.reverb_room_size ?? globalAudio.reverb_room_size ?? 0.55);
       setPeakCeilingDb(job.peak_ceiling_db ?? globalAudio.peak_ceiling_db ?? -6.0);
