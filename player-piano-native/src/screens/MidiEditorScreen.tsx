@@ -708,6 +708,14 @@ export const MidiEditorScreen = () => {
 
   // Fetch devices and soundfonts when settings panel is opened
   useEffect(() => {
+    if (editingTrackIndex !== null || showSettings) {
+      midiOrchestratorApi.getVstPresets()
+        .then(res => setVstCategories(res.categories || {}))
+        .catch(e => console.log('Failed to fetch VST presets', e));
+    }
+  }, [editingTrackIndex, showSettings]);
+
+  useEffect(() => {
     if (showSettings) {
       const fetchDevicesAndSoundfonts = async () => {
         try {
@@ -847,6 +855,8 @@ export const MidiEditorScreen = () => {
 
   // Preview State
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [vstCategories, setVstCategories] = useState<Record<string, Array<{ id: string; filename: string; title: string; category: string }>>>({});
+  const [selectedVstCategory, setSelectedVstCategory] = useState<string>('Auto');
 
   // Context Actions Bottom Sheet & Modals State
   const [contextJob, setContextJob] = useState<any | null>(null);
@@ -3956,55 +3966,93 @@ export const MidiEditorScreen = () => {
                     </ScrollView>
                   </View>
 
-                  {/* Orchestrator Instrument Patch / Performer Selector */}
+                  {/* Categorized Orchestrator Instrument Patch / Performer Selector */}
                   <View style={{ marginBottom: 15 }}>
                     <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
-                      Instrument Patch / Performer
+                      Instrument Category & Preset
                     </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4 }}>
-                      {[
-                        { id: 'auto', label: 'Auto (Detect from Track)' },
-                        { id: 'violins_1', label: 'Violins 1 Section' },
-                        { id: 'violins_2', label: 'Violins 2 Section' },
-                        { id: 'violas', label: 'Violas Section' },
-                        { id: 'celli', label: 'Celli (Section / Solo)' },
-                        { id: 'double_basses', label: 'Double Basses' },
-                        { id: 'flutes', label: 'Flutes' },
-                        { id: 'oboes', label: 'Oboes' },
-                        { id: 'clarinets', label: 'Clarinets' },
-                        { id: 'bassoons', label: 'Bassoons' },
-                        { id: 'horns', label: 'French Horns' },
-                        { id: 'trumpets', label: 'Trumpets' },
-                        { id: 'trombones', label: 'Trombones' },
-                        { id: 'tuba', label: 'Tuba' },
-                        { id: 'timpani', label: 'Timpani & Percussion' },
-                        { id: 'harp', label: 'Orchestral Harp' },
-                        { id: 'grand_piano', label: 'Grand Piano' },
-                        { id: 'tutti', label: 'Full Orchestra (Tutti)' }
-                      ].map((patch) => {
-                        const curPatch = editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto') : 'auto';
-                        const isSel = curPatch === patch.id;
+                    
+                    {/* Tier 1: Category Selector Pills */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4, marginBottom: 8 }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.presetBadge,
+                          selectedVstCategory === 'Auto' ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                        ]}
+                        onPress={() => setSelectedVstCategory('Auto')}
+                      >
+                        <Text style={[styles.presetBadgeText, { color: selectedVstCategory === 'Auto' ? '#fff' : themeColors.text, fontWeight: 'bold' }]}>
+                          Auto (GM)
+                        </Text>
+                      </TouchableOpacity>
+
+                      {Object.keys(vstCategories).map((catName) => {
+                        const isCatSel = selectedVstCategory === catName;
                         return (
                           <TouchableOpacity
-                            key={patch.id}
+                            key={catName}
                             style={[
                               styles.presetBadge,
-                              isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                              isCatSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
                             ]}
-                            onPress={() => {
-                              if (editingTrackIndex === null) return;
-                              setTracksConfig(prev => ({
-                                ...prev,
-                                [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], instrument_patch: patch.id }
-                              }));
-                            }}
+                            onPress={() => setSelectedVstCategory(catName)}
                           >
-                            <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
-                              {patch.label}
+                            <Text style={[styles.presetBadgeText, { color: isCatSel ? '#fff' : themeColors.text, fontWeight: 'bold' }]}>
+                              {catName}
                             </Text>
                           </TouchableOpacity>
                         );
                       })}
+                    </ScrollView>
+
+                    {/* Tier 2: Instrument Options inside Selected Category */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4 }}>
+                      {selectedVstCategory === 'Auto' ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.presetBadge,
+                            (editingTrackIndex !== null && (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto') === 'auto')
+                              ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent }
+                              : { backgroundColor: themeColors.surfaceSecondary }
+                          ]}
+                          onPress={() => {
+                            if (editingTrackIndex === null) return;
+                            setTracksConfig(prev => ({
+                              ...prev,
+                              [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], instrument_patch: 'auto' }
+                            }));
+                          }}
+                        >
+                          <Text style={[styles.presetBadgeText, { color: (editingTrackIndex !== null && (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto') === 'auto') ? '#fff' : themeColors.text }]}>
+                            Auto (Detect from Track)
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        (vstCategories[selectedVstCategory] || []).map((instItem) => {
+                          const curPatch = editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto') : 'auto';
+                          const isSel = curPatch === instItem.id || curPatch === instItem.filename;
+                          return (
+                            <TouchableOpacity
+                              key={instItem.filename}
+                              style={[
+                                styles.presetBadge,
+                                isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
+                              ]}
+                              onPress={() => {
+                                if (editingTrackIndex === null) return;
+                                setTracksConfig(prev => ({
+                                  ...prev,
+                                  [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], instrument_patch: instItem.id }
+                                }));
+                              }}
+                            >
+                              <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
+                                {instItem.title}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })
+                      )}
                     </ScrollView>
                   </View>
 

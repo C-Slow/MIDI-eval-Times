@@ -1960,6 +1960,52 @@ async def get_midi_orchestrator_preview(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/midi-orchestrator/vst-presets")
+async def get_vst_presets():
+    """Scan C:\\app\\storage\\vst_presets and return category-grouped preset list with case-insensitive normalization."""
+    preset_dir = Path(utils.PROJECT_ROOT) / "storage" / "vst_presets"
+    categories = {}
+    
+    if preset_dir.exists():
+        for file in sorted(preset_dir.glob("*.vstpreset")):
+            fname = file.name
+            stem = file.stem
+            parts = stem.split(" ", 1)
+            
+            if len(parts) == 2:
+                raw_cat = parts[0].strip()
+                inst_name = parts[1].strip()
+            else:
+                raw_cat = "General"
+                inst_name = stem
+                
+            # Case-insensitive category normalization
+            cat_normalized = raw_cat.capitalize()
+            if cat_normalized.lower().startswith("woodwind"):
+                cat_normalized = "Woodwind"
+            elif cat_normalized.lower().startswith("percussion"):
+                cat_normalized = "Percussion"
+            elif cat_normalized.lower().startswith("string"):
+                cat_normalized = "Strings"
+            elif cat_normalized.lower().startswith("brass"):
+                cat_normalized = "Brass"
+                
+            if cat_normalized not in categories:
+                categories[cat_normalized] = []
+                
+            clean_title = inst_name.replace("_", " ").title()
+            patch_id = inst_name.lower().replace(" ", "_")
+            
+            categories[cat_normalized].append({
+                "id": patch_id,
+                "filename": fname,
+                "title": clean_title,
+                "category": cat_normalized
+            })
+            
+    return {"categories": categories}
+
+
 class ConnectDeviceRequest(BaseModel):
     device_name: str
 

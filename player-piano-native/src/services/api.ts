@@ -352,6 +352,10 @@ export const midiOrchestratorApi = {
     const res = await api.delete(`/midi-orchestrator/jobs/${jobId}`);
     return res.data;
   },
+  getVstPresets: async () => {
+    const res = await api.get('/midi-orchestrator/vst-presets');
+    return res.data;
+  },
   getBackingAudioUrl: (jobId: string) => {
     const token = getToken();
     return `${getBaseUrl()}/midi-orchestrator/backing-audio/${jobId}?token=${encodeURIComponent(token || '')}`;
