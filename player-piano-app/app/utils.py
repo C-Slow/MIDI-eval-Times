@@ -601,6 +601,9 @@ def get_orchestral_seating_pan(program: int, track_patch: str) -> float:
     return 0.0
 
 
+_VST_PLUGIN_CACHE = {}
+
+
 def render_orchestrator_tracks(
     pm: pretty_midi.PrettyMIDI,
     speaker_track_indices: List[int],
@@ -610,7 +613,8 @@ def render_orchestrator_tracks(
     reverb_enabled: bool = True,
     reverb_room_size: float = 0.55,
     peak_ceiling_db: float = -6.0,
-    time_shift: float = 0.0
+    time_shift: float = 0.0,
+    is_preview: bool = False
 ) -> str:
     """Render backing speaker tracks in parallel concurrently using per-track tracks_config settings and symphonic seating."""
     import numpy as np
@@ -705,7 +709,9 @@ def render_orchestrator_tracks(
                 if not os.path.exists(dll_path):
                     dll_path = sf_path
                 try:
-                    plugin_obj = load_plugin(dll_path)
+                    if dll_path not in _VST_PLUGIN_CACHE:
+                        _VST_PLUGIN_CACHE[dll_path] = load_plugin(dll_path)
+                    plugin_obj = _VST_PLUGIN_CACHE[dll_path]
                     vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name)
                     if vst_preset and os.path.exists(vst_preset):
                         try:
@@ -734,11 +740,15 @@ def render_orchestrator_tracks(
                     import mido
                     pm_task = pretty_midi.PrettyMIDI(stem_midi)
                     duration_sec = max(3.0, pm_task.get_end_time() + 2.0)
+                    if is_preview and duration_sec > 60.0:
+                        duration_sec = 60.0
                     messages = []
                     for inst in pm_task.instruments:
                         for n in inst.notes:
+                            if is_preview and n.start > 60.0:
+                                continue
                             messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
-                            messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n.end))
+                            messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=min(n.end, duration_sec)))
                     if not messages:
                         messages.append(mido.Message('note_on', note=60, velocity=100, time=0.0))
                         messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
@@ -787,8 +797,8 @@ def render_orchestrator_tracks(
                 return sr, data
             return None
 
-        # Execute Stage 2 parallel worker rendering across CPU cores
-        max_workers = min(4, len(render_tasks))
+        # Execute Stage 2 parallel worker rendering across all CPU cores
+        max_workers = min(os.cpu_count() or 8, len(render_tasks))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             stem_results = list(executor.map(_execute_render_task, render_tasks))
 

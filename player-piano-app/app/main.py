@@ -1925,7 +1925,8 @@ async def get_midi_orchestrator_preview(
                 str(temp_wav),
                 reverb_enabled=preview_reverb_enabled,
                 reverb_room_size=preview_reverb_room_size,
-                peak_ceiling_db=preview_peak_ceiling_db
+                peak_ceiling_db=preview_peak_ceiling_db,
+                is_preview=True
             )
         else:
             sf_path = utils.resolve_soundfont_path(sf_name)
