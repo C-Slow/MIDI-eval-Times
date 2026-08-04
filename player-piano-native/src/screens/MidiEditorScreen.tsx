@@ -661,6 +661,7 @@ export const MidiEditorScreen = () => {
   const [reverbRoomSize, setReverbRoomSize] = useState<number>(0.75);
 
   const [peakCeilingDb, setPeakCeilingDb] = useState<number>(-6.0);
+  const [fullPreviewMode, setFullPreviewMode] = useState<boolean>(false);
 
   // Track Settings & Customization states
   const [tracksConfig, setTracksConfig] = useState<Record<string, any>>({});
@@ -1687,7 +1688,8 @@ export const MidiEditorScreen = () => {
         Array.from(speakerTracks),
         Array.from(vocalMaleTracks),
         Array.from(vocalFemaleTracks),
-        { soundfont: activeSoundfont, reverb_enabled: reverbEnabled, reverb_room_size: reverbRoomSize, peak_ceiling_db: peakCeilingDb }
+        { soundfont: activeSoundfont, reverb_enabled: reverbEnabled, reverb_room_size: reverbRoomSize, peak_ceiling_db: peakCeilingDb },
+        fullPreviewMode
       );
 
       const initialStatus = {
@@ -3594,6 +3596,26 @@ export const MidiEditorScreen = () => {
               {playbackMode === 'preview' ? (
                 // PREVIEW PLAY BUTTONS
                 <>
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 8,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: fullPreviewMode ? 'rgba(162, 155, 254, 0.25)' : themeColors.surfaceSecondary,
+                      borderWidth: 1,
+                      borderColor: fullPreviewMode ? '#a29bfe' : themeColors.border,
+                      marginRight: 6
+                    }}
+                    onPress={() => setFullPreviewMode(prev => !prev)}
+                  >
+                    <Ionicons name={fullPreviewMode ? "infinite-outline" : "timer-outline"} size={14} color={fullPreviewMode ? '#a29bfe' : themeColors.text} style={{ marginRight: 4 }} />
+                    <Text style={{ fontSize: 11, color: fullPreviewMode ? '#a29bfe' : themeColors.text, fontWeight: 'bold' }}>
+                      {fullPreviewMode ? 'Full Preview' : '60s Preview'}
+                    </Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity 
                     style={[styles.playbackStopBtn, { backgroundColor: themeColors.surfaceSecondary }]}
                     onPress={stopPreview}

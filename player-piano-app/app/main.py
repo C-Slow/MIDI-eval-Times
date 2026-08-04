@@ -1811,6 +1811,7 @@ async def get_midi_orchestrator_preview(
     reverb_enabled: Optional[bool] = Query(None),
     reverb_room_size: Optional[float] = Query(None),
     peak_ceiling_db: Optional[float] = Query(None),
+    full_preview: bool = Query(False),
     token: Optional[str] = None, 
     authorization: Optional[str] = Header(None),
     background_tasks: BackgroundTasks = None
@@ -1908,7 +1909,7 @@ async def get_midi_orchestrator_preview(
         cache_dir = Path(utils.PROJECT_ROOT) / "storage" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_peak_ceiling_db}_{job_tracks_cfg}"
+        cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_peak_ceiling_db}_{full_preview}_{job_tracks_cfg}"
         cache_key = hashlib.md5(cache_raw.encode('utf-8')).hexdigest()
         cached_preview_wav = cache_dir / f"preview_{cache_key}.wav"
         
@@ -1926,7 +1927,7 @@ async def get_midi_orchestrator_preview(
                 reverb_enabled=preview_reverb_enabled,
                 reverb_room_size=preview_reverb_room_size,
                 peak_ceiling_db=preview_peak_ceiling_db,
-                is_preview=True
+                is_preview=not full_preview
             )
         else:
             sf_path = utils.resolve_soundfont_path(sf_name)
