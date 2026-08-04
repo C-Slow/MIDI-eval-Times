@@ -1913,7 +1913,7 @@ async def get_midi_orchestrator_preview(
         cached_preview_wav = cache_dir / f"preview_{cache_key}.wav"
         
         if cached_preview_wav.exists() and cached_preview_wav.stat().st_size > 1000:
-            _log(f"Serving cached preview audio instantly (0ms delay): {cached_preview_wav}")
+            utils._log(f"Serving cached preview audio instantly (0ms delay): {cached_preview_wav}")
             return FileResponse(str(cached_preview_wav), media_type="audio/wav")
         
         if s_tracks:
