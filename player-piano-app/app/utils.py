@@ -851,7 +851,7 @@ def render_orchestrator_tracks(
             wavfile.write(out_wav_path, sample_rate, int16_audio)
             
             # Normalize peak ceiling dB
-            apply_audio_dsp(out_wav_path, reverb_enabled=reverb_enabled, room_size=reverb_room_size, peak_ceiling_db=peak_ceiling_db)
+            normalize_wav_file(out_wav_path, target_peak_db=peak_ceiling_db)
             
             actual_sf = "FluidR3_GM.sf2 (Fallback)" if used_fallbacks else (job_sf_name or "SGM-V2.01.sf2")
             return out_wav_path, actual_sf
