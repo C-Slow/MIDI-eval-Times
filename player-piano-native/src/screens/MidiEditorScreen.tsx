@@ -1099,13 +1099,17 @@ export const MidiEditorScreen = () => {
 
       // 3. If job is completed, pre-load backing audio for performance play
       if (job.status === 'completed') {
-        const url = midiOrchestratorApi.getBackingAudioUrl(jobId);
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: url },
-          { shouldPlay: false, progressUpdateIntervalMillis: 100 },
-          onPlaybackStatusUpdate
-        );
-        soundRef.current = sound;
+        try {
+          const url = midiOrchestratorApi.getBackingAudioUrl(jobId);
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: url },
+            { shouldPlay: false, progressUpdateIntervalMillis: 100 },
+            onPlaybackStatusUpdate
+          );
+          soundRef.current = sound;
+        } catch (backingErr) {
+          console.warn('Could not pre-load performance backing audio:', backingErr);
+        }
       }
 
       setStage('visualizer');

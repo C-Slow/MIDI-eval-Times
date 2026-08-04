@@ -297,7 +297,9 @@ class MidiOrchestrator:
             # Check job folder
             midi_path = self.jobs_dir / job_id / "original.mid"
             if not midi_path.exists():
-                return {}
+                midi_path = self.jobs_dir / job_id / "piano.mid"
+                if not midi_path.exists():
+                    return {}
 
         try:
             pm = pretty_midi.PrettyMIDI(str(midi_path))
