@@ -494,8 +494,7 @@ def render_midi_to_wav_with_soundfont(
     ])
     
     try:
-        with fs_lock:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             _log(f"FluidSynth error: {result.stderr}")
             raise RuntimeError(f"FluidSynth failed: {result.stderr}")
@@ -763,8 +762,8 @@ def render_orchestrator_tracks(
                         messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
                     messages.sort(key=lambda m: m.time)
                     
-                    with vst_lock:
-                        audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
+                    time.sleep(idx * 0.4)
+                    audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
                     if audio.ndim == 2:
                         audio = audio.T
                     if track_gain is not None:

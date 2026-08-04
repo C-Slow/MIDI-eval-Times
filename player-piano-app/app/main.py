@@ -1893,7 +1893,7 @@ async def get_midi_orchestrator_preview(
         if (soundfont is None or soundfont == saved_sf):
             for candidate in [pre_rendered_backing, pre_rendered_insts, pre_rendered_final]:
                 if candidate.exists() and candidate.stat().st_size > 1000:
-                    _log(f"Serving pre-rendered backing audio instantly for preview: {candidate}")
+                    print(f"Serving pre-rendered backing audio instantly for preview: {candidate}")
                     return FileResponse(str(candidate), media_type="audio/wav")
         
         # Resolve soundfont and DSP parameters for preview
