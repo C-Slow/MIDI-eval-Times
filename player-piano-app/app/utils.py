@@ -176,13 +176,73 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
         _log(f"Peak normalization skipped: {e}")
 
 
+def resolve_vst_preset(track_patch: str = "auto", program: int = 0) -> Optional[str]:
+    """Find a matching .vstpreset file in C:\\app\\storage\\vst_presets for a given instrument patch or GM program."""
+    preset_dir = os.path.join(PROJECT_ROOT, 'storage', 'vst_presets')
+    if not os.path.exists(preset_dir):
+        return None
+
+    files = [f for f in os.listdir(preset_dir) if f.lower().endswith('.vstpreset')]
+    if not files:
+        return None
+
+    patch_clean = (track_patch or "").lower().replace("_", "").replace(" ", "")
+
+    keywords = []
+    if "cello" in patch_clean or "celli" in patch_clean or program == 42:
+        keywords = ["celli", "cello"]
+    elif "violin1" in patch_clean or "violins1" in patch_clean or program in (40, 48):
+        keywords = ["violin 1", "violins 1", "violin1", "violins1"]
+    elif "violin2" in patch_clean or "violins2" in patch_clean:
+        keywords = ["violin 2", "violins 2", "violin2", "violins2"]
+    elif "viola" in patch_clean or program in (41, 49):
+        keywords = ["viola", "violas"]
+    elif "bass" in patch_clean or "contrabass" in patch_clean or program == 43:
+        keywords = ["bass", "basses", "double bass", "doublebasses"]
+    elif "flute" in patch_clean or program == 73:
+        keywords = ["flute", "flutes"]
+    elif "oboe" in patch_clean or program == 68:
+        keywords = ["oboe", "oboes"]
+    elif "clarinet" in patch_clean or program == 71:
+        keywords = ["clarinet", "clarinets"]
+    elif "bassoon" in patch_clean or program == 70:
+        keywords = ["bassoon", "bassoons"]
+    elif "horn" in patch_clean or program == 60:
+        keywords = ["horn", "horns"]
+    elif "trumpet" in patch_clean or program == 56:
+        keywords = ["trumpet", "trumpets"]
+    elif "trombone" in patch_clean or program in (57, 58):
+        keywords = ["trombone", "trombones"]
+    elif "tuba" in patch_clean:
+        keywords = ["tuba"]
+    elif "timpani" in patch_clean or program == 47:
+        keywords = ["timpani"]
+    elif "harp" in patch_clean or program == 46:
+        keywords = ["harp"]
+    elif "piano" in patch_clean or program == 0:
+        keywords = ["piano"]
+
+    for kw in keywords:
+        for f in files:
+            if kw in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if patch_clean and patch_clean != "auto":
+        for f in files:
+            if patch_clean in f.lower().replace(" ", "").replace("_", ""):
+                return os.path.join(preset_dir, f)
+
+    return None
+
+
 def render_midi_to_wav_with_vst3(
     midi_path: str,
     vst3_path: str,
     out_wav_path: str,
-    gain: float = None
+    gain: float = None,
+    preset_path: str = None
 ) -> str:
-    """Render MIDI to WAV using Pedalboard VST3 host (Spitfire BBC Symphony Orchestra)."""
+    """Render MIDI to WAV using Pedalboard VST3 host with Spitfire .vstpreset support."""
     import numpy as np
     from scipy.io import wavfile
     import pretty_midi
@@ -196,6 +256,15 @@ def render_midi_to_wav_with_vst3(
         dll_path = vst3_path
         
     plugin = load_plugin(dll_path)
+
+    # Load preset if provided
+    if preset_path and os.path.exists(preset_path):
+        try:
+            plugin.load_preset(preset_path)
+            _log(f"Loaded VST3 preset: {preset_path}")
+        except Exception as p_err:
+            _log(f"Notice: Failed to load VST3 preset {preset_path}: {p_err}")
+
     pm = pretty_midi.PrettyMIDI(midi_path)
     duration_sec = max(3.0, pm.get_end_time() + 2.0)
     
@@ -528,11 +597,13 @@ def render_orchestrator_tracks(
             # Render track stem via VST3 or SoundFont engine
             if sf_path and sf_path.lower().endswith('.vst3'):
                 try:
+                    vst_preset = resolve_vst_preset(track_patch, new_inst.program)
                     render_midi_to_wav_with_vst3(
                         stem_midi,
                         sf_path,
                         stem_wav,
-                        gain=track_gain
+                        gain=track_gain,
+                        preset_path=vst_preset
                     )
                 except Exception as vst_err:
                     _log(f"VST3 stem render notice ({vst_err}), falling back to SoundFont for track {idx}...")
