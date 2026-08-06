@@ -5,6 +5,7 @@ import threading
 import shutil
 import re
 import tempfile
+import soundfile as sf
 from typing import List, Optional, Dict, Any
 import mido
 import pretty_midi
@@ -146,7 +147,6 @@ def resolve_soundfont_path(sf_filename: str = None) -> str:
 
 def normalize_wav_file(wav_path: str, target_peak_db: float = None):
     """Normalize a WAV file so peaks top out cleanly below 0 dBFS without clipping, supporting 16-bit, 24-bit, and float formats."""
-    import soundfile as sf
     import numpy as np
     try:
         if not os.path.exists(wav_path):
@@ -420,8 +420,6 @@ def render_midi_to_wav_with_vst3(
         
     messages.sort(key=lambda m: m.time)
     
-    import soundfile as sf
-
     sample_rate = 48000.0
     audio = plugin(messages, duration=duration_sec, sample_rate=sample_rate, reset=False)
     if audio.ndim == 2:
@@ -781,7 +779,6 @@ def render_orchestrator_tracks(
 
         # Stage 2: Render audio buffers in parallel concurrently across worker threads
         def _execute_render_task(task):
-            import soundfile as sf
             idx = task["idx"]
             stem_midi = task["stem_midi"]
             stem_wav = task["stem_wav"]
