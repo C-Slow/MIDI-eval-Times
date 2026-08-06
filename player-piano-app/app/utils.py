@@ -180,8 +180,44 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
         _log(f"Peak normalization skipped: {e}")
 
 
-def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "") -> Optional[str]:
-    """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, or track name."""
+SPITFIRE_KEYSWITCHES = {
+    "long": 12,        # C-1: Long (Arco)
+    "con_sordino": 13,  # C#-1: Con Sordino
+    "flautando": 14,   # D-1: Flautando
+    "sul_tasto": 15,   # D#-1: Sul Tasto
+    "tremolo": 16,     # E-1: Tremolo
+    "spiccato": 17,    # F-1: Spiccato
+    "staccato": 18,    # F#-1: Staccato
+    "pizzicato": 19,   # G-1: Pizzicato
+    "col_legno": 20,   # G#-1: Col Legno
+    "marcato": 21,     # A-1: Marcato
+    "harmonics": 22    # A#-1: Harmonics
+}
+
+def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]:
+    text = (track_name or "").lower()
+    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
+        return "pizzicato"
+    if any(k in text for k in ["spicc", "spiccato"]):
+        return "spiccato"
+    if any(k in text for k in ["stacc", "staccato", "short"]):
+        return "staccato"
+    if (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo"]):
+        return "tremolo"
+    if any(k in text for k in ["col legno", "legno"]):
+        return "col_legno"
+    if any(k in text for k in ["sord", "sordino", "muted"]):
+        return "con_sordino"
+    if "marcato" in text:
+        return "marcato"
+    if "flaut" in text:
+        return "flautando"
+    if "harmonic" in text:
+        return "harmonics"
+    return None
+
+def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None) -> Optional[str]:
+    """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, track name, or articulation."""
     preset_dir = os.path.join(PROJECT_ROOT, 'storage', 'vst_presets')
     if not os.path.exists(preset_dir):
         return None
@@ -190,7 +226,21 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if not files:
         return None
 
-    combined_text = f"{track_patch or ''} {track_name or ''}".lower()
+    articulation = articulation or detect_articulation(track_name, program)
+    combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
+
+    # Priority 0: Exact match with articulation in filename if specified
+    if articulation and articulation != "auto":
+        clean_art = articulation.replace("_", " ")
+        for f in files:
+            if clean_art in f.lower():
+                inst_match = False
+                for inst_k in ["celli", "cello", "violin 1", "violin 2", "violin", "viola", "basses", "bass"]:
+                    if inst_k in combined_text and inst_k in f.lower():
+                        inst_match = True
+                        break
+                if inst_match:
+                    return os.path.join(preset_dir, f)
 
     # Map file basenames stripped of category prefixes (e.g. "Strings celli.vstpreset" -> "celli.vstpreset")
     preset_map = {}
@@ -696,10 +746,14 @@ def render_orchestrator_tracks(
             stem_wav = os.path.join(temp_dir, f"track_{idx}.wav")
             single_pm.write(stem_midi)
             
+            user_art = track_cfg.get("articulation", "auto")
+            articulation = user_art if user_art != "auto" else detect_articulation(orig_inst.name, new_inst.program)
+
             task = {
                 "idx": idx,
                 "program": new_inst.program,
                 "track_patch": track_patch,
+                "articulation": articulation,
                 "sf_path": sf_path,
                 "stem_midi": stem_midi,
                 "stem_wav": stem_wav,
@@ -716,7 +770,7 @@ def render_orchestrator_tracks(
                 try:
                     # Create a fresh, dedicated plugin instance for this specific track
                     plugin_obj = load_plugin(dll_path)
-                    vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name)
+                    vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
                     if vst_preset and os.path.exists(vst_preset):
                         try:
                             plugin_obj.load_preset(vst_preset)
@@ -740,6 +794,7 @@ def render_orchestrator_tracks(
             sf_path = task["sf_path"]
             track_gain = task["track_gain"]
             plugin_obj = task["plugin_obj"]
+            articulation = task.get("articulation")
             
             if plugin_obj is not None:
                 try:
@@ -749,6 +804,13 @@ def render_orchestrator_tracks(
                     duration_sec = min(60.0, full_duration) if (is_preview and full_duration > 60.0) else full_duration
                     
                     messages = []
+                    # Inject Spitfire Keyswitch at t=0s if an articulation is active
+                    if articulation and articulation in SPITFIRE_KEYSWITCHES:
+                        ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
+                        messages.append(mido.Message('note_on', note=ks_pitch, velocity=100, time=0.0))
+                        messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.05))
+                        _log(f"Track {idx}: Injected Spitfire Keyswitch for {articulation.upper()} (Pitch {ks_pitch}) at t=0s")
+
                     for inst in pm_task.instruments:
                         for n in inst.notes:
                             if is_preview and n.start >= duration_sec:

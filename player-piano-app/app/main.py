@@ -1952,7 +1952,7 @@ async def get_midi_orchestrator_preview(
                 s_tracks,
                 sf_name,
                 job_tracks_cfg,
-                str(temp_wav),
+                str(cached_preview_wav),
                 reverb_enabled=preview_reverb_enabled,
                 reverb_room_size=preview_reverb_room_size,
                 peak_ceiling_db=preview_peak_ceiling_db,
@@ -1966,18 +1966,12 @@ async def get_midi_orchestrator_preview(
             utils.render_midi_to_wav_with_soundfont(
                 str(temp_midi),
                 sf_path,
-                str(temp_wav),
+                str(cached_preview_wav),
                 reverb_enabled=preview_reverb_enabled,
                 reverb_room_size=preview_reverb_room_size,
                 peak_ceiling_db=preview_peak_ceiling_db
             )
         
-        if temp_wav.exists() and temp_wav.stat().st_size > 1000:
-            try:
-                shutil.copyfile(str(temp_wav), str(cached_preview_wav))
-            except Exception:
-                pass
-
         def cleanup():
             try:
                 shutil.rmtree(str(temp_dir))
@@ -1987,7 +1981,10 @@ async def get_midi_orchestrator_preview(
         if background_tasks:
             background_tasks.add_task(cleanup)
             
-        return FileResponse(str(temp_wav), media_type="audio/wav")
+        if cached_preview_wav.exists() and cached_preview_wav.stat().st_size > 1000:
+            return FileResponse(str(cached_preview_wav), media_type="audio/wav")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate preview audio file.")
     except Exception as e:
         import traceback
         traceback.print_exc()
