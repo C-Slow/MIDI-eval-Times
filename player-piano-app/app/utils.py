@@ -226,9 +226,63 @@ SPITFIRE_UACC = {
     "tam_tam": 20,
     "tambourine": 21,
     "tenor_drum": 22,
-    "toys": 23,
-    "triangle": 24
-}
+PERCUSSION_TECHNIQUE_KEYS = [
+    "anvil", "bass_drum_1", "bass_drum_2", "cymbal", "military_drum",
+    "piatti", "snare_1", "snare_2", "tam_tam", "tambourine",
+    "tenor_drum", "toys", "triangle"
+]
+
+def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]:
+    text = (track_name or "").lower()
+
+    # Untuned Percussion Techniques
+    if "anvil" in text:
+        return "anvil"
+    if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
+        return "bass_drum_2"
+    if any(k in text for k in ["bass drum", "bd", "kick"]):
+        return "bass_drum_1"
+    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals"]):
+        return "piatti"
+    if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat"]):
+        return "cymbal"
+    if any(k in text for k in ["military drum", "march drum"]):
+        return "military_drum"
+    if any(k in text for k in ["snare 2", "sd 2"]):
+        return "snare_2"
+    if any(k in text for k in ["snare 1", "snare", "sd"]):
+        return "snare_1"
+    if any(k in text for k in ["tam tam", "tamtam", "gong"]):
+        return "tam_tam"
+    if "tambourine" in text:
+        return "tambourine"
+    if "tenor drum" in text:
+        return "tenor_drum"
+    if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets"]):
+        return "toys"
+    if "triangle" in text:
+        return "triangle"
+
+    # String Articulations
+    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
+        return "pizzicato"
+    if any(k in text for k in ["spicc", "spiccato"]):
+        return "spiccato"
+    if any(k in text for k in ["stacc", "staccato", "short"]):
+        return "staccato"
+    if (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo"]):
+        return "tremolo"
+    if any(k in text for k in ["col legno", "legno"]):
+        return "col_legno"
+    if any(k in text for k in ["sord", "sordino", "muted"]):
+        return "con_sordino"
+    if "marcato" in text:
+        return "marcato"
+    if "flaut" in text:
+        return "flautando"
+    if "harmonic" in text:
+        return "harmonics"
+    return None
 
 def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None) -> Optional[str]:
     """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, track name, or articulation."""
