@@ -202,63 +202,33 @@ SPITFIRE_KEYSWITCHES = {
     "triangle": 24         # C0: Triangle
 }
 
-PERCUSSION_TECHNIQUE_KEYS = [
-    "anvil", "bass_drum_1", "bass_drum_2", "cymbal", "military_drum",
-    "piatti", "snare_1", "snare_2", "tam_tam", "tambourine",
-    "tenor_drum", "toys", "triangle"
-]
+SPITFIRE_UACC = {
+    "long": 1,          # Long (Arco)
+    "con_sordino": 7,   # Con Sordino
+    "flautando": 8,     # Flautando
+    "sul_tasto": 9,     # Sul Tasto
+    "tremolo": 11,      # Tremolo
+    "spiccato": 42,     # Spiccato
+    "staccato": 42,     # Staccato
+    "pizzicato": 56,    # Pizzicato
+    "col_legno": 9,     # Col Legno
+    "marcato": 16,      # Marcato
+    "harmonics": 15,    # Harmonics
 
-def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]:
-    text = (track_name or "").lower()
-
-    # Untuned Percussion Techniques
-    if "anvil" in text:
-        return "anvil"
-    if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
-        return "bass_drum_2"
-    if any(k in text for k in ["bass drum", "bd", "kick"]):
-        return "bass_drum_1"
-    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals"]):
-        return "piatti"
-    if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat"]):
-        return "cymbal"
-    if any(k in text for k in ["military drum", "march drum"]):
-        return "military_drum"
-    if any(k in text for k in ["snare 2", "sd 2"]):
-        return "snare_2"
-    if any(k in text for k in ["snare 1", "snare", "sd"]):
-        return "snare_1"
-    if any(k in text for k in ["tam tam", "tamtam", "gong"]):
-        return "tam_tam"
-    if "tambourine" in text:
-        return "tambourine"
-    if "tenor drum" in text:
-        return "tenor_drum"
-    if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets"]):
-        return "toys"
-    if "triangle" in text:
-        return "triangle"
-
-    # String Articulations
-    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
-        return "pizzicato"
-    if any(k in text for k in ["spicc", "spiccato"]):
-        return "spiccato"
-    if any(k in text for k in ["stacc", "staccato", "short"]):
-        return "staccato"
-    if (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo"]):
-        return "tremolo"
-    if any(k in text for k in ["col legno", "legno"]):
-        return "col_legno"
-    if any(k in text for k in ["sord", "sordino", "muted"]):
-        return "con_sordino"
-    if "marcato" in text:
-        return "marcato"
-    if "flaut" in text:
-        return "flautando"
-    if "harmonic" in text:
-        return "harmonics"
-    return None
+    "anvil": 12,
+    "bass_drum_1": 13,
+    "bass_drum_2": 14,
+    "cymbal": 15,
+    "military_drum": 16,
+    "piatti": 17,
+    "snare_1": 18,
+    "snare_2": 19,
+    "tam_tam": 20,
+    "tambourine": 21,
+    "tenor_drum": 22,
+    "toys": 23,
+    "triangle": 24
+}
 
 def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None) -> Optional[str]:
     """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, track name, or articulation."""
@@ -272,6 +242,40 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
 
     articulation = articulation or detect_articulation(track_name, program)
     combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
+
+    # Priority -2: Specific British Tool Kit instruments (Saxophones, Flugelhorn, Recorder, Cor Anglais, Brass Combis)
+    if any(k in combined_text for k in ["alto sax", "bass sax", "saxophone", "sax"]) or program in (64, 65, 66, 67):
+        if "bass sax" in combined_text or program == 67:
+            for f in files:
+                if "bass sax" in f.lower():
+                    return os.path.join(preset_dir, f)
+        elif "alto sax" in combined_text or program == 65:
+            for f in files:
+                if "alto sax" in f.lower():
+                    return os.path.join(preset_dir, f)
+        for f in files:
+            if "saxophone ensemble" in f.lower() or "sax" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if "flugelhorn" in combined_text:
+        for f in files:
+            if "flugelhorn" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if "recorder" in combined_text or program == 74:
+        for f in files:
+            if "recorder" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["cor anglais", "english horn"]) or program == 69:
+        for f in files:
+            if "cor anglais" in f.lower() or "english horn" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["brass combi", "brass ensemble", "brass section"]) or program == 61:
+        for f in files:
+            if "brass combis" in f.lower():
+                return os.path.join(preset_dir, f)
 
     # Priority -1: Untuned Percussion preset match
     if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "percussion"]) or program in (47, 114, 115, 116, 117, 118, 119, 127):
@@ -296,7 +300,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     preset_map = {}
     for f in files:
         clean_f = f.lower()
-        for prefix in ["strings ", "woodwind ", "woodwinds ", "brass ", "percussion "]:
+        for prefix in ["strings ", "woodwind ", "woodwinds ", "brass ", "percussion ", "saxophones ", "recorders "]:
             if clean_f.startswith(prefix):
                 clean_f = clean_f[len(prefix):]
         preset_map[f] = clean_f
@@ -307,7 +311,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             if "basses" in clean or "double bass" in clean or "contrabass" in clean:
                 return os.path.join(preset_dir, f)
         for f, clean in preset_map.items():
-            if "bass" in clean and "trombone" not in clean:
+            if "bass" in clean and "trombone" not in clean and "sax" not in clean:
                 return os.path.join(preset_dir, f)
 
     # Priority 2: Violoncello / Celli / Cello
@@ -365,7 +369,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     # Priority 10: French Horn / Horns
     if any(k in combined_text for k in ["french horn", "horn"]) or program == 60:
         for f, clean in preset_map.items():
-            if "horn" in clean:
+            if "horn" in clean and "flugelhorn" not in clean:
                 return os.path.join(preset_dir, f)
 
     # Priority 11: Trumpet
@@ -853,21 +857,29 @@ def render_orchestrator_tracks(
                     duration_sec = min(60.0, full_duration) if (is_preview and full_duration > 60.0) else full_duration
                     
                     messages = []
-                    # Inject Spitfire Keyswitch at t=0s if an articulation is active
+                    # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active
                     if articulation and articulation in SPITFIRE_KEYSWITCHES:
                         ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
-                        messages.append(mido.Message('note_on', note=ks_pitch, velocity=100, time=0.0))
-                        messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.05))
-                        _log(f"Track {idx}: Injected Spitfire Keyswitch for {articulation.upper()} (Pitch {ks_pitch}) at t=0s")
+                        messages.append(mido.Message('note_on', note=ks_pitch, velocity=127, time=0.0, channel=0))
+                        messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.04, channel=0))
+                        
+                        if articulation in SPITFIRE_UACC:
+                            uacc_val = SPITFIRE_UACC[articulation]
+                            messages.append(mido.Message('control_change', control=32, value=uacc_val, time=0.0, channel=0))
+                            
+                        _log(f"Track {idx}: Injected Spitfire Keyswitch (Pitch {ks_pitch}) + UACC CC32 ({SPITFIRE_UACC.get(articulation, 'N/A')}) for {articulation.upper()} at t=0s")
 
+                    # Apply 50ms lead offset so keyswitch takes effect before musical notes sound
+                    lead_offset = 0.05
                     for inst in pm_task.instruments:
                         for n in inst.notes:
-                            if is_preview and n.start >= duration_sec:
+                            start_t = n.start + lead_offset
+                            if is_preview and start_t >= duration_sec:
                                 continue
-                            n_end = min(n.end, duration_sec) if is_preview else n.end
-                            if n_end > n.start:
-                                messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=max(0.0, n.start)))
-                                messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n_end))
+                            n_end = min(n.end + lead_offset, duration_sec) if is_preview else (n.end + lead_offset)
+                            if n_end > start_t:
+                                messages.append(mido.Message('note_on', note=n.pitch, velocity=n.velocity, time=start_t, channel=0))
+                                messages.append(mido.Message('note_off', note=n.pitch, velocity=0, time=n_end, channel=0))
                     if not messages:
                         messages.append(mido.Message('note_on', note=60, velocity=100, time=0.0))
                         messages.append(mido.Message('note_off', note=60, velocity=0, time=2.0))
