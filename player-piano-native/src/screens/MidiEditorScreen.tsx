@@ -4260,7 +4260,7 @@ export const MidiEditorScreen = () => {
                   {/* Articulation Selector */}
                   <View style={{ marginBottom: 15 }}>
                     <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
-                      String Articulation / Playing Style
+                      Articulation / Playing Technique
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                       {[
@@ -4275,6 +4275,19 @@ export const MidiEditorScreen = () => {
                         { id: 'marcato', label: 'Marcato' },
                         { id: 'flautando', label: 'Flautando' },
                         { id: 'harmonics', label: 'Harmonics' },
+                        { id: 'anvil', label: 'Anvil' },
+                        { id: 'bass_drum_1', label: 'Bass Drum 1' },
+                        { id: 'bass_drum_2', label: 'Bass Drum 2' },
+                        { id: 'cymbal', label: 'Cymbal' },
+                        { id: 'military_drum', label: 'Military Drum' },
+                        { id: 'piatti', label: 'Piatti' },
+                        { id: 'snare_1', label: 'Snare 1' },
+                        { id: 'snare_2', label: 'Snare 2' },
+                        { id: 'tam_tam', label: 'Tam Tam' },
+                        { id: 'tambourine', label: 'Tambourine' },
+                        { id: 'tenor_drum', label: 'Tenor Drum' },
+                        { id: 'toys', label: 'Toys' },
+                        { id: 'triangle', label: 'Triangle' },
                       ].map(art => {
                         const curArt = editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.articulation || 'auto') : 'auto';
                         const isSelected = curArt === art.id;

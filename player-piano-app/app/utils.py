@@ -173,6 +173,7 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
 
 
 SPITFIRE_KEYSWITCHES = {
+    # String Articulations
     "long": 12,        # C-1: Long (Arco)
     "con_sordino": 13,  # C#-1: Con Sordino
     "flautando": 14,   # D-1: Flautando
@@ -183,11 +184,62 @@ SPITFIRE_KEYSWITCHES = {
     "pizzicato": 19,   # G-1: Pizzicato
     "col_legno": 20,   # G#-1: Col Legno
     "marcato": 21,     # A-1: Marcato
-    "harmonics": 22    # A#-1: Harmonics
+    "harmonics": 22,   # A#-1: Harmonics
+
+    # Untuned Percussion Techniques
+    "anvil": 12,           # C-1: Anvil
+    "bass_drum_1": 13,     # C#-1: Bass Drum 1
+    "bass_drum_2": 14,     # D-1: Bass Drum 2
+    "cymbal": 15,          # D#-1: Cymbal
+    "military_drum": 16,   # E-1: Military Drum
+    "piatti": 17,          # F-1: Piatti
+    "snare_1": 18,         # F#-1: Snare 1
+    "snare_2": 19,         # G-1: Snare 2
+    "tam_tam": 20,         # G#-1: Tam Tam
+    "tambourine": 21,      # A-1: Tambourine
+    "tenor_drum": 22,      # A#-1: Tenor Drum
+    "toys": 23,            # B-1: Toys
+    "triangle": 24         # C0: Triangle
 }
+
+PERCUSSION_TECHNIQUE_KEYS = [
+    "anvil", "bass_drum_1", "bass_drum_2", "cymbal", "military_drum",
+    "piatti", "snare_1", "snare_2", "tam_tam", "tambourine",
+    "tenor_drum", "toys", "triangle"
+]
 
 def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]:
     text = (track_name or "").lower()
+
+    # Untuned Percussion Techniques
+    if "anvil" in text:
+        return "anvil"
+    if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
+        return "bass_drum_2"
+    if any(k in text for k in ["bass drum", "bd", "kick"]):
+        return "bass_drum_1"
+    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals"]):
+        return "piatti"
+    if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat"]):
+        return "cymbal"
+    if any(k in text for k in ["military drum", "march drum"]):
+        return "military_drum"
+    if any(k in text for k in ["snare 2", "sd 2"]):
+        return "snare_2"
+    if any(k in text for k in ["snare 1", "snare", "sd"]):
+        return "snare_1"
+    if any(k in text for k in ["tam tam", "tamtam", "gong"]):
+        return "tam_tam"
+    if "tambourine" in text:
+        return "tambourine"
+    if "tenor drum" in text:
+        return "tenor_drum"
+    if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets"]):
+        return "toys"
+    if "triangle" in text:
+        return "triangle"
+
+    # String Articulations
     if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
         return "pizzicato"
     if any(k in text for k in ["spicc", "spiccato"]):
@@ -220,6 +272,12 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
 
     articulation = articulation or detect_articulation(track_name, program)
     combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
+
+    # Priority -1: Untuned Percussion preset match
+    if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "percussion"]) or program in (47, 114, 115, 116, 117, 118, 119, 127):
+        for f in files:
+            if "untuned percussion" in f.lower():
+                return os.path.join(preset_dir, f)
 
     # Priority 0: Exact match with articulation in filename if specified
     if articulation and articulation != "auto":
