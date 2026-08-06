@@ -174,43 +174,43 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
 
 SPITFIRE_KEYSWITCHES = {
     # STRINGS
-    "legato": 12,          # C-1: Legato
-    "long": 13,            # C#-1: Long (Arco)
-    "con_sordino": 14,     # D-1: Long CS (Muted)
-    "flautando": 15,       # D#-1: Long Flautando
-    "spiccato": 16,        # E-1: Spiccato
-    "staccato": 17,        # F-1: Staccato
-    "pizzicato": 18,       # F#-1: PIZZICATO (Plucked)
-    "col_legno": 19,       # G-1: Col Legno (Wood)
+    "legato": pretty_midi.note_name_to_number("C-1"),       # Pitch 0
+    "long": pretty_midi.note_name_to_number("C#-1"),       # Pitch 1
+    "con_sordino": pretty_midi.note_name_to_number("D-1"), # Pitch 2
+    "flautando": pretty_midi.note_name_to_number("D#-1"),  # Pitch 3
+    "spiccato": pretty_midi.note_name_to_number("E-1"),    # Pitch 4
+    "staccato": pretty_midi.note_name_to_number("F-1"),    # Pitch 5
+    "pizzicato": pretty_midi.note_name_to_number("F#-1"),  # Pitch 6 (PIZZICATO)
+    "col_legno": pretty_midi.note_name_to_number("G-1"),   # Pitch 7
 
     # BRASS
-    "legato_extended": 12, # C-1: Legato (Extended)
-    "staccatissimo": 14,   # D-1: Staccatissimo
-    "marcato": 15,         # D#-1: Marcato
-    "long_cuivre": 16,     # E-1: Long Cuivre
-    "long_sfz": 17,        # F-1: Long Sforzando
-    "long_flutter": 18,    # F#-1: Long Flutter
-    "multi_tongue": 19,    # G-1: Multi-Tongue
+    "legato_extended": pretty_midi.note_name_to_number("C-1"), # Pitch 0
+    "staccatissimo": pretty_midi.note_name_to_number("D-1"),   # Pitch 2
+    "marcato": pretty_midi.note_name_to_number("D#-1"),         # Pitch 3
+    "long_cuivre": pretty_midi.note_name_to_number("E-1"),     # Pitch 4
+    "long_sfz": pretty_midi.note_name_to_number("F-1"),        # Pitch 5
+    "long_flutter": pretty_midi.note_name_to_number("F#-1"),    # Pitch 6
+    "multi_tongue": pretty_midi.note_name_to_number("G-1"),    # Pitch 7
 
     # WOODWINDS
-    "trill_maj2": 14,      # D-1: Trill Major 2nd
-    "trill_min2": 15,      # D#-1: Trill Minor 2nd
-    "tenuto": 17,          # F-1: Tenuto
+    "trill_maj2": pretty_midi.note_name_to_number("D-1"),      # Pitch 2
+    "trill_min2": pretty_midi.note_name_to_number("D#-1"),     # Pitch 3
+    "tenuto": pretty_midi.note_name_to_number("F-1"),          # Pitch 5
 
     # UNTUNED PERCUSSION
-    "anvil": 12,           # C-1: Anvil
-    "bass_drum_1": 13,     # C#-1: Bass Drum 1
-    "bass_drum_2": 14,     # D-1: Bass Drum 2
-    "cymbal": 15,          # D#-1: Cymbal
-    "military_drum": 16,   # E-1: Military Drum
-    "piatti": 17,          # F-1: Piatti
-    "snare_1": 18,         # F#-1: Snare 1
-    "snare_2": 19,         # G-1: Snare 2
-    "tam_tam": 20,         # G#-1: Tam Tam
-    "tambourine": 21,      # A-1: Tambourine
-    "tenor_drum": 22,      # A#-1: Tenor Drum
-    "toys": 23,            # B-1: Toys
-    "triangle": 24         # C0: Triangle
+    "anvil": pretty_midi.note_name_to_number("C-1"),           # Pitch 0
+    "bass_drum_1": pretty_midi.note_name_to_number("C#-1"),     # Pitch 1
+    "bass_drum_2": pretty_midi.note_name_to_number("D-1"),     # Pitch 2
+    "cymbal": pretty_midi.note_name_to_number("D#-1"),          # Pitch 3
+    "military_drum": pretty_midi.note_name_to_number("E-1"),   # Pitch 4
+    "piatti": pretty_midi.note_name_to_number("F-1"),          # Pitch 5
+    "snare_1": pretty_midi.note_name_to_number("F#-1"),         # Pitch 6
+    "snare_2": pretty_midi.note_name_to_number("G-1"),         # Pitch 7
+    "tam_tam": pretty_midi.note_name_to_number("G#-1"),        # Pitch 8
+    "tambourine": pretty_midi.note_name_to_number("A-1"),      # Pitch 9
+    "tenor_drum": pretty_midi.note_name_to_number("A#-1"),     # Pitch 10
+    "toys": pretty_midi.note_name_to_number("B-1"),            # Pitch 11
+    "triangle": pretty_midi.note_name_to_number("C0")          # Pitch 12
 }
 
 SPITFIRE_UACC = {
