@@ -226,6 +226,10 @@ SPITFIRE_UACC = {
     "tam_tam": 20,
     "tambourine": 21,
     "tenor_drum": 22,
+    "toys": 23,
+    "triangle": 24
+}
+
 PERCUSSION_TECHNIQUE_KEYS = [
     "anvil", "bass_drum_1", "bass_drum_2", "cymbal", "military_drum",
     "piatti", "snare_1", "snare_2", "tam_tam", "tambourine",
