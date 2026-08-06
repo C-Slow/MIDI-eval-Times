@@ -145,9 +145,9 @@ def resolve_soundfont_path(sf_filename: str = None) -> str:
 
 
 def normalize_wav_file(wav_path: str, target_peak_db: float = None):
-    """Normalize a 16-bit WAV file so peaks top out cleanly below 0 dBFS without clipping."""
-    import wave
-    import struct
+    """Normalize a WAV file so peaks top out cleanly below 0 dBFS without clipping, supporting 16-bit, 24-bit, and float formats."""
+    import soundfile as sf
+    import numpy as np
     try:
         if not os.path.exists(wav_path):
             return
@@ -155,29 +155,21 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
             settings = load_settings()
             target_peak_db = float(settings.get("peak_ceiling_db", -6.0))
 
-        with wave.open(wav_path, 'rb') as wf:
-            params = wf.getparams()
-            if params.sampwidth != 2:
-                return
-            frames = wf.readframes(params.nframes)
-
-        samples = list(struct.unpack(f"<{len(frames)//2}h", frames))
-        max_val = max(abs(s) for s in samples) if samples else 0
+        data, sr = sf.read(wav_path)
+        max_val = np.max(np.abs(data))
         if max_val <= 0:
             return
 
-        target_max = int(32767.0 * (10.0 ** (target_peak_db / 20.0)))
+        target_max = 10.0 ** (target_peak_db / 20.0)
         scale = target_max / float(max_val)
-
-        norm_samples = [max(-32768, min(32767, int(s * scale))) for s in samples]
-        norm_frames = struct.pack(f"<{len(norm_samples)}h", *norm_samples)
-
-        with wave.open(wav_path, 'wb') as wf:
-            wf.setparams(params)
-            wf.writeframes(norm_frames)
-        _log(f"Normalized {os.path.basename(wav_path)} to {target_peak_db:.1f} dBFS (scale: {scale:.2f})")
+        norm_data = data * scale
+        
+        info = sf.info(wav_path)
+        sf.write(wav_path, norm_data, sr, subtype=info.subtype)
+        _log(f"Normalized {os.path.basename(wav_path)} to {target_peak_db:.1f} dBFS (scale: {scale:.2f}, format: {info.subtype})")
     except Exception as e:
         _log(f"Peak normalization skipped: {e}")
+
 
 
 SPITFIRE_KEYSWITCHES = {
@@ -428,7 +420,9 @@ def render_midi_to_wav_with_vst3(
         
     messages.sort(key=lambda m: m.time)
     
-    sample_rate = 44100.0
+    import soundfile as sf
+
+    sample_rate = 48000.0
     audio = plugin(messages, duration=duration_sec, sample_rate=sample_rate, reset=False)
     if audio.ndim == 2:
         audio = audio.T
@@ -440,10 +434,9 @@ def render_midi_to_wav_with_vst3(
     if max_val <= 0:
         raise ValueError("VST3 engine returned silent audio")
         
-    audio = (audio / max_val) * 0.9 * 32767.0
-    audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
-    wavfile.write(out_wav_path, int(sample_rate), audio_int16)
-    _log(f"Spitfire VST3 Render Complete: {out_wav_path} (Peak: {max_val:.4f})")
+    audio = (audio / max_val) * 0.9
+    sf.write(out_wav_path, audio, int(sample_rate), subtype='PCM_24')
+    _log(f"Spitfire VST3 Render Complete: {out_wav_path} (48kHz/24-bit, Peak: {max_val:.4f})")
     return out_wav_path
 
 
@@ -684,7 +677,7 @@ def render_orchestrator_tracks(
     temp_dir = tempfile.mkdtemp()
     
     try:
-        sample_rate = 44100
+        sample_rate = 48000
         
         patch_map = {
             "violins_1": 40,
@@ -788,6 +781,7 @@ def render_orchestrator_tracks(
 
         # Stage 2: Render audio buffers in parallel concurrently across worker threads
         def _execute_render_task(task):
+            import soundfile as sf
             idx = task["idx"]
             stem_midi = task["stem_midi"]
             stem_wav = task["stem_wav"]
@@ -825,16 +819,15 @@ def render_orchestrator_tracks(
                     messages.sort(key=lambda m: m.time)
                     
                     time.sleep(idx * 0.4)
-                    audio = plugin_obj(messages, duration=duration_sec, sample_rate=44100.0, reset=False)
+                    audio = plugin_obj(messages, duration=duration_sec, sample_rate=48000.0, reset=False)
                     if audio.ndim == 2:
                         audio = audio.T
                     if track_gain is not None:
                         audio = audio * track_gain
                     max_val = np.max(np.abs(audio))
                     if max_val > 0:
-                        audio = (audio / max_val) * 0.9 * 32767.0
-                        audio_int16 = np.clip(audio, -32768, 32767).astype(np.int16)
-                        wavfile.write(stem_wav, 44100, audio_int16)
+                        audio = (audio / max_val) * 0.9
+                        sf.write(stem_wav, audio, 48000, subtype='PCM_24')
                 except Exception as vst_exec_err:
                     _log(f"Track {idx}: Parallel VST3 audio processing notice ({vst_exec_err}), falling back to SoundFont...")
                     used_fallbacks.append(True)
@@ -854,7 +847,7 @@ def render_orchestrator_tracks(
                 )
                 
             if os.path.exists(stem_wav):
-                sr, data = wavfile.read(stem_wav)
+                data, sr = sf.read(stem_wav)
                 if data.ndim == 1:
                     data = np.column_stack((data, data))
                 elif data.ndim > 2:
@@ -913,9 +906,8 @@ def render_orchestrator_tracks(
         if combined_audio is not None:
             max_val = np.max(np.abs(combined_audio))
             if max_val > 0:
-                combined_audio = (combined_audio / max_val) * 32767.0
-            int16_audio = np.clip(combined_audio, -32768, 32767).astype(np.int16)
-            wavfile.write(out_wav_path, sample_rate, int16_audio)
+                combined_audio = (combined_audio / max_val) * 0.9
+            sf.write(out_wav_path, combined_audio, int(sample_rate), subtype='PCM_24')
             
             # Normalize peak ceiling dB
             normalize_wav_file(out_wav_path, target_peak_db=peak_ceiling_db)
