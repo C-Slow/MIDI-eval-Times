@@ -175,16 +175,15 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
 SPITFIRE_KEYSWITCHES = {
     # String Articulations
     "long": 12,        # C-1: Long (Arco)
-    "con_sordino": 13,  # C#-1: Con Sordino
-    "flautando": 14,   # D-1: Flautando
-    "sul_tasto": 15,   # D#-1: Sul Tasto
-    "tremolo": 16,     # E-1: Tremolo
-    "spiccato": 17,    # F-1: Spiccato
-    "staccato": 18,    # F#-1: Staccato
-    "pizzicato": 19,   # G-1: Pizzicato
-    "col_legno": 20,   # G#-1: Col Legno
-    "marcato": 21,     # A-1: Marcato
-    "harmonics": 22,   # A#-1: Harmonics
+    "spiccato": 13,    # C#-1: Spiccato
+    "staccato": 14,    # D-1: Staccato
+    "pizzicato": 15,   # D#-1: Pizzicato (Plucked)
+    "col_legno": 16,   # E-1: Col Legno
+    "tremolo": 17,     # F-1: Tremolo
+    "con_sordino": 18, # F#-1: Con Sordino
+    "marcato": 19,     # G-1: Marcato (Short Bowed)
+    "flautando": 20,   # G#-1: Flautando
+    "harmonics": 21,   # A-1: Harmonics
 
     # Untuned Percussion Techniques
     "anvil": 12,           # C-1: Anvil
