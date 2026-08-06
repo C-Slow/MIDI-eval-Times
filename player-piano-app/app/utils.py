@@ -173,19 +173,31 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
 
 
 SPITFIRE_KEYSWITCHES = {
-    # String Articulations
-    "long": 12,        # C-1: Long (Arco)
-    "spiccato": 13,    # C#-1: Spiccato
-    "staccato": 14,    # D-1: Staccato
-    "pizzicato": 15,   # D#-1: Pizzicato (Plucked)
-    "col_legno": 16,   # E-1: Col Legno
-    "tremolo": 17,     # F-1: Tremolo
-    "con_sordino": 18, # F#-1: Con Sordino
-    "marcato": 19,     # G-1: Marcato (Short Bowed)
-    "flautando": 20,   # G#-1: Flautando
-    "harmonics": 21,   # A-1: Harmonics
+    # STRINGS
+    "legato": 12,          # C-1: Legato
+    "long": 13,            # C#-1: Long (Arco)
+    "con_sordino": 14,     # D-1: Long CS (Muted)
+    "flautando": 15,       # D#-1: Long Flautando
+    "spiccato": 16,        # E-1: Spiccato
+    "staccato": 17,        # F-1: Staccato
+    "pizzicato": 18,       # F#-1: PIZZICATO (Plucked)
+    "col_legno": 19,       # G-1: Col Legno (Wood)
 
-    # Untuned Percussion Techniques
+    # BRASS
+    "legato_extended": 12, # C-1: Legato (Extended)
+    "staccatissimo": 14,   # D-1: Staccatissimo
+    "marcato": 15,         # D#-1: Marcato
+    "long_cuivre": 16,     # E-1: Long Cuivre
+    "long_sfz": 17,        # F-1: Long Sforzando
+    "long_flutter": 18,    # F#-1: Long Flutter
+    "multi_tongue": 19,    # G-1: Multi-Tongue
+
+    # WOODWINDS
+    "trill_maj2": 14,      # D-1: Trill Major 2nd
+    "trill_min2": 15,      # D#-1: Trill Minor 2nd
+    "tenuto": 17,          # F-1: Tenuto
+
+    # UNTUNED PERCUSSION
     "anvil": 12,           # C-1: Anvil
     "bass_drum_1": 13,     # C#-1: Bass Drum 1
     "bass_drum_2": 14,     # D-1: Bass Drum 2
