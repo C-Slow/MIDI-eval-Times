@@ -312,6 +312,52 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     articulation = articulation or detect_articulation(track_name, program)
     combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
 
+    # Priority -3: Epic Choir presets
+    if any(k in combined_text for k in ["choir", "vocal", "vocals", "voice", "voices", "soprano", "alto", "tenor", "epic choir"]) or program in (52, 53, 54):
+        is_staccato = (articulation == "staccato") or any(k in combined_text for k in ["staccato", "short", "syllable", "syllables"])
+        if any(k in combined_text for k in ["tenor", "bass choir", "men", "male"]):
+            if is_staccato:
+                for f in files:
+                    if "choir tenor and bass short staccato syllables keyswitch" in f.lower():
+                        return os.path.join(preset_dir, f)
+            for f in files:
+                if "choir tenor and bass long ahh" in f.lower():
+                    return os.path.join(preset_dir, f)
+        else:
+            if is_staccato:
+                for f in files:
+                    if "choir soprano and alto short staccato syllables keyswitch" in f.lower():
+                        return os.path.join(preset_dir, f)
+            for f in files:
+                if "choir soprano and alto long ahh" in f.lower():
+                    return os.path.join(preset_dir, f)
+
+    # Priority -2.5: Cinematic Percussion presets
+    if any(k in combined_text for k in ["earthquake", "sub hit", "impact", "cinematic bass"]):
+        for f in files:
+            if "earthquake hits" in f.lower():
+                return os.path.join(preset_dir, f)
+    if any(k in combined_text for k in ["metal hit", "metallic hit"]):
+        for f in files:
+            if "metal hits" in f.lower():
+                return os.path.join(preset_dir, f)
+    if any(k in combined_text for k in ["percussion high", "hi hit"]):
+        for f in files:
+            if "percussions hits - high" in f.lower():
+                return os.path.join(preset_dir, f)
+    if any(k in combined_text for k in ["percussion low", "low hit"]):
+        for f in files:
+            if "percussions hits - low" in f.lower():
+                return os.path.join(preset_dir, f)
+    if any(k in combined_text for k in ["swell", "crescendo", "roll"]):
+        for f in files:
+            if "swells" in f.lower():
+                return os.path.join(preset_dir, f)
+    if any(k in combined_text for k in ["tams", "gong"]):
+        for f in files:
+            if "tams and gongs" in f.lower():
+                return os.path.join(preset_dir, f)
+
     # Priority -2: Specific British Tool Kit instruments (Saxophones, Flugelhorn, Recorder, Cor Anglais, Brass Combis)
     if any(k in combined_text for k in ["alto sax", "bass sax", "saxophone", "sax"]) or program in (64, 65, 66, 67):
         if "bass sax" in combined_text or program == 67:
