@@ -552,6 +552,28 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     return None
 
 
+def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: Optional[str] = None) -> str:
+    """Resolve the appropriate VST3 plugin DLL path based on preset name (Splice INSTRUMENT, British Drama Toolkit, or BBC SO)."""
+    bbc_dll = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
+    splice_dll = r"C:\Program Files\Common Files\VST3\Splice\Splice INSTRUMENT.vst3\Contents\x86_64-win\Splice INSTRUMENT.vst3"
+    bdt_dll = r"C:\Program Files\Common Files\VST3\British Drama Toolkit.vst3"
+
+    if preset_path:
+        p_lower = preset_path.lower()
+        if any(k in p_lower for k in ["epic choir", "cinematic percussion", "splice"]):
+            if os.path.exists(splice_dll):
+                return splice_dll
+        if any(k in p_lower for k in ["british tool kit", "british drama"]):
+            if os.path.exists(bdt_dll):
+                return bdt_dll
+
+    if default_vst3_path and os.path.exists(default_vst3_path):
+        return default_vst3_path
+    if os.path.exists(bbc_dll):
+        return bbc_dll
+    return default_vst3_path or bbc_dll
+
+
 def render_midi_to_wav_with_vst3(
     midi_path: str,
     vst3_path: str,
@@ -568,10 +590,7 @@ def render_midi_to_wav_with_vst3(
 
     _log(f"Rendering MIDI via Spitfire VST3 engine ({vst3_path}) -> {out_wav_path}")
     
-    dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
-    if not os.path.exists(dll_path):
-        dll_path = vst3_path
-        
+    dll_path = get_vst3_plugin_path(preset_path, vst3_path)
     plugin = load_plugin(dll_path)
 
     # Load preset if provided
@@ -932,23 +951,21 @@ def render_orchestrator_tracks(
             # If VST3, pre-instantiate an INDEPENDENT plugin instance per track ON MAIN THREAD
             if sf_path and ('vst' in sf_path.lower() or sf_path.lower().endswith('.vst3')):
                 from pedalboard import load_plugin
-                dll_path = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
-                if not os.path.exists(dll_path):
-                    dll_path = sf_path
+                vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
+                dll_path = get_vst3_plugin_path(vst_preset, sf_path)
                 try:
                     # Create a fresh, dedicated plugin instance for this specific track
                     plugin_obj = load_plugin(dll_path)
-                    vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
                     if vst_preset and os.path.exists(vst_preset):
                         try:
                             plugin_obj.load_preset(vst_preset)
-                            _log(f"Track {idx}: Dedicated VST3 instance loaded preset {vst_preset}")
+                            _log(f"Track {idx}: Dedicated VST3 instance ({os.path.basename(dll_path)}) loaded preset {os.path.basename(vst_preset)}")
                         except Exception as p_err:
                             plugin_obj.raw_state = open(vst_preset, 'rb').read()
-                            _log(f"Track {idx}: Dedicated VST3 instance raw-state preset {vst_preset}")
+                            _log(f"Track {idx}: Dedicated VST3 instance ({os.path.basename(dll_path)}) raw-state preset {os.path.basename(vst_preset)}")
                     task["plugin_obj"] = plugin_obj
                 except Exception as init_err:
-                    _log(f"Track {idx}: VST3 pre-init notice: {init_err}")
+                    _log(f"Track {idx}: VST3 pre-init notice ({dll_path}): {init_err}")
                     
             render_tasks.append(task)
 
