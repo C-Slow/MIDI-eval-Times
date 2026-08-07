@@ -567,10 +567,30 @@ def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: O
             if os.path.exists(bdt_dll):
                 return bdt_dll
 
-    if default_vst3_path and os.path.exists(default_vst3_path):
-        return default_vst3_path
-    if os.path.exists(bbc_dll):
-        return bbc_dll
+    def _resolve_binary_file(path_str: Optional[str]) -> Optional[str]:
+        if not path_str or not os.path.exists(path_str):
+            return None
+        if os.path.isfile(path_str):
+            return path_str
+        base = os.path.basename(path_str)
+        inner = os.path.join(path_str, "Contents", "x86_64-win", base)
+        if os.path.isfile(inner):
+            return inner
+        win_dir = os.path.join(path_str, "Contents", "x86_64-win")
+        if os.path.exists(win_dir):
+            for f in os.listdir(win_dir):
+                if f.lower().endswith(".vst3"):
+                    return os.path.join(win_dir, f)
+        return None
+
+    resolved_default = _resolve_binary_file(default_vst3_path)
+    if resolved_default:
+        return resolved_default
+
+    resolved_bbc = _resolve_binary_file(bbc_dll)
+    if resolved_bbc:
+        return resolved_bbc
+
     return default_vst3_path or bbc_dll
 
 
@@ -945,6 +965,7 @@ def render_orchestrator_tracks(
                 "stem_midi": stem_midi,
                 "stem_wav": stem_wav,
                 "track_gain": track_gain,
+                "vst_preset": None,
                 "plugin_obj": None
             }
             
@@ -952,6 +973,7 @@ def render_orchestrator_tracks(
             if sf_path and ('vst' in sf_path.lower() or sf_path.lower().endswith('.vst3')):
                 from pedalboard import load_plugin
                 vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
+                task["vst_preset"] = vst_preset
                 dll_path = get_vst3_plugin_path(vst_preset, sf_path)
                 try:
                     # Create a fresh, dedicated plugin instance for this specific track
@@ -980,6 +1002,7 @@ def render_orchestrator_tracks(
             track_gain = task["track_gain"]
             plugin_obj = task["plugin_obj"]
             articulation = task.get("articulation")
+            vst_preset = task.get("vst_preset")
             
             if plugin_obj is not None:
                 try:
@@ -989,8 +1012,9 @@ def render_orchestrator_tracks(
                     duration_sec = min(60.0, full_duration) if (is_preview and full_duration > 60.0) else full_duration
                     
                     messages = []
-                    # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active
-                    if articulation and articulation in SPITFIRE_KEYSWITCHES:
+                    # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active (BBC SO only)
+                    is_splice_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice"])
+                    if not is_splice_inst and articulation and articulation in SPITFIRE_KEYSWITCHES:
                         ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
                         messages.append(mido.Message('note_on', note=ks_pitch, velocity=127, time=0.0, channel=0))
                         messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.04, channel=0))
@@ -1002,7 +1026,7 @@ def render_orchestrator_tracks(
                         _log(f"Track {idx}: Injected Spitfire Keyswitch (Pitch {ks_pitch}) + UACC CC32 ({SPITFIRE_UACC.get(articulation, 'N/A')}) for {articulation.upper()} at t=0s")
 
                     # Apply 50ms lead offset so keyswitch takes effect before musical notes sound
-                    lead_offset = 0.05
+                    lead_offset = 0.05 if (not is_splice_inst and articulation and articulation in SPITFIRE_KEYSWITCHES) else 0.0
                     for inst in pm_task.instruments:
                         for n in inst.notes:
                             start_t = n.start + lead_offset
@@ -1025,7 +1049,8 @@ def render_orchestrator_tracks(
                         audio = audio * track_gain
                     max_val = np.max(np.abs(audio))
                     if max_val > 0:
-                        audio = (audio / max_val) * 0.9
+                        headroom_limit = min(0.85, 0.85 / np.sqrt(max(1.0, float(len(speaker_track_indices)))))
+                        audio = (audio / max_val) * headroom_limit
                         sf.write(stem_wav, audio, 48000, subtype='PCM_24')
                 except Exception as vst_exec_err:
                     _log(f"Track {idx}: Parallel VST3 audio processing notice ({vst_exec_err}), falling back to SoundFont...")
