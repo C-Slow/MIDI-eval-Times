@@ -2744,6 +2744,13 @@ export const MidiEditorScreen = () => {
                           </View>
                         )}
 
+                        {/* Comments Badge */}
+                        {!!(item.comments && item.comments.trim()) && (
+                          <View style={[styles.statBadge, { backgroundColor: 'rgba(52, 152, 219, 0.15)', paddingHorizontal: 6, paddingVertical: 2 }]}>
+                            <Ionicons name="chatbox-ellipses-outline" size={12} color="#3498db" />
+                          </View>
+                        )}
+
                         {/* Soundfont / VST Badge */}
                         {(() => {
                           const sfBadge = getSoundfontLabel(item.soundfont, item.last_built_soundfont);
