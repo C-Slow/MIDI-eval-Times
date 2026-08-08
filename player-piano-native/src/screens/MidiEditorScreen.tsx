@@ -1581,8 +1581,10 @@ export const MidiEditorScreen = () => {
       setDetailsGenre(meta.genre || job.genre || '');
       setDetailsMood(meta.mood || job.mood || '');
       setDetailsSource(meta.source || job.source || '');
-      setDetailsDnu(meta.dnu || job.dnu || false);
-      setDetailsValidated(meta.validated || job.validated || false);
+      const isMetaDnu = meta.dnu !== undefined ? meta.dnu : job.dnu;
+      setDetailsDnu(isMetaDnu === true || isMetaDnu === 'true' || isMetaDnu === 1);
+      const isMetaValidated = meta.validated !== undefined ? meta.validated : job.validated;
+      setDetailsValidated(isMetaValidated === true || isMetaValidated === 'true' || isMetaValidated === 1);
       setDetailsVisible(true);
     } catch (e: any) {
       console.error(e);
@@ -1600,10 +1602,11 @@ export const MidiEditorScreen = () => {
 
       const oldTitle = getCleanTitle(contextJob.filename || '');
       const newTitle = detailsTitle.trim();
+      let updatedFilename = contextJob.filename;
       if (newTitle && newTitle !== oldTitle) {
         const originalExt = (contextJob.filename || '').split('.').pop() || 'mid';
-        const finalName = newTitle.endsWith('.' + originalExt) ? newTitle : `${newTitle}.${originalExt}`;
-        await midiOrchestratorApi.rename(contextJob.job_id, finalName);
+        updatedFilename = newTitle.endsWith('.' + originalExt) ? newTitle : `${newTitle}.${originalExt}`;
+        await midiOrchestratorApi.rename(contextJob.job_id, updatedFilename);
       }
 
       await midiOrchestratorApi.updateMetadata(contextJob.job_id, {
@@ -1616,6 +1619,25 @@ export const MidiEditorScreen = () => {
         dnu: detailsDnu,
         validated: detailsValidated
       });
+
+      // Update local state immediately for snappy UI reactivity
+      setJobs(prevJobs => prevJobs.map(j => {
+        if (j.job_id === contextJob.job_id) {
+          return {
+            ...j,
+            filename: updatedFilename,
+            artist: detailsArtist.trim(),
+            comments: detailsComments.trim(),
+            rating: detailsRating,
+            genre: detailsGenre.trim(),
+            mood: detailsMood.trim(),
+            source: detailsSource.trim(),
+            dnu: detailsDnu,
+            validated: detailsValidated
+          };
+        }
+        return j;
+      }));
 
       Alert.alert('Success', 'Song metadata updated successfully.');
       fetchJobs();
@@ -2702,19 +2724,21 @@ export const MidiEditorScreen = () => {
                                 <Text style={[styles.statBadgeText, { color: themeColors.textMuted }]}>P:{item.pedal_preset.charAt(0).toUpperCase()}</Text>
                               </View>
                             )}
-                            {item.validated && (
-                              <View style={[styles.statBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)' }]}>
-                                <Text style={[styles.statBadgeText, { color: '#2ecc71', fontWeight: 'bold' }]}>V</Text>
-                              </View>
-                            )}
                           </>
                         )}
 
                         {/* Stars */}
                         {renderStars(item.rating)}
 
+                        {/* Validated Badge */}
+                        {(item.validated === true || item.validated === 'true' || item.validated === 1) && (
+                          <View style={[styles.statBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)' }]}>
+                            <Text style={[styles.statBadgeText, { color: '#2ecc71', fontWeight: 'bold' }]}>V</Text>
+                          </View>
+                        )}
+
                         {/* DNU Badge */}
-                        {item.dnu && (
+                        {(item.dnu === true || item.dnu === 'true' || item.dnu === 1) && (
                           <View style={[styles.statBadge, { backgroundColor: 'rgba(231, 76, 60, 0.15)' }]}>
                             <Text style={[styles.statBadgeText, { color: '#e74c3c' }]}>DNU</Text>
                           </View>
