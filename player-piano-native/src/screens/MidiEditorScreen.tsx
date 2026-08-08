@@ -986,6 +986,25 @@ export const MidiEditorScreen = () => {
     return jobs.find(j => j.job_id === selectedJobId) || null;
   }, [jobs, selectedJobId]);
 
+  const editingTrackInfo = useMemo(() => {
+    if (editingTrackIndex === null || !currentJob || !currentJob.tracks) return null;
+    return currentJob.tracks.find((t: any) => t.index === editingTrackIndex) || null;
+  }, [editingTrackIndex, currentJob]);
+
+  // Pre-fill Custom Track Name when opening Track Settings Modal if not already customized
+  useEffect(() => {
+    if (editingTrackIndex !== null && editingTrackInfo) {
+      const existingName = tracksConfig[String(editingTrackIndex)]?.name;
+      if (existingName === undefined || existingName === null || existingName.trim() === '') {
+        const fullDefaultName = editingTrackInfo.display_name || editingTrackInfo.name || editingTrackInfo.instrument_name || `Track ${editingTrackIndex}`;
+        setTracksConfig(prev => ({
+          ...prev,
+          [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], name: fullDefaultName }
+        }));
+      }
+    }
+  }, [editingTrackIndex, editingTrackInfo]);
+
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
     
@@ -2314,14 +2333,20 @@ export const MidiEditorScreen = () => {
                 );
               }
 
+              const fullLaneTitle = tracksConfig[String(lane.index)]?.name || lane.display_name || lane.name || lane.instrument_name || `Track ${lane.index}`;
               return (
                 <View key={lane.index} style={[styles.sidebarLane, { height: LANE_HEIGHT, borderBottomColor: themeColors.border }]}>
                   <TouchableOpacity
                     onLongPress={() => setEditingTrackIndex(lane.index)}
                     style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}
                   >
-                    <Text style={[styles.sidebarLaneTitle, { color: themeColors.text, flex: 1 }]} numberOfLines={1}>
-                      {tracksConfig[String(lane.index)]?.name || lane.display_name || lane.name}
+                    <Text 
+                      style={[styles.sidebarLaneTitle, { color: themeColors.text, flex: 1 }]} 
+                      numberOfLines={1}
+                      accessibilityLabel={fullLaneTitle}
+                      {...(Platform.OS === 'web' ? { title: fullLaneTitle } as any : {})}
+                    >
+                      {fullLaneTitle}
                     </Text>
                     <TouchableOpacity onPress={() => setEditingTrackIndex(lane.index)} style={{ padding: 2 }}>
                       <Ionicons 
@@ -4092,6 +4117,26 @@ export const MidiEditorScreen = () => {
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                  {/* Original Track Information Card */}
+                  {editingTrackInfo && (
+                    <View style={{ backgroundColor: themeColors.surfaceSecondary, borderRadius: 10, padding: 12, marginBottom: 15, borderLeftWidth: 3, borderLeftColor: themeColors.accent }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: themeColors.accent, textTransform: 'uppercase', marginBottom: 4 }}>
+                        Original MIDI Track Details
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: themeColors.text, marginBottom: 2 }}>
+                        📌 Track Title: {editingTrackInfo.display_name || editingTrackInfo.name || 'Unnamed Track'}
+                      </Text>
+                      {!!editingTrackInfo.instrument_name && (
+                        <Text style={{ fontSize: 12, color: themeColors.textMuted, marginBottom: 2 }}>
+                          🎻 MIDI Instrument: {editingTrackInfo.instrument_name} (Program #{editingTrackInfo.program})
+                        </Text>
+                      )}
+                      <Text style={{ fontSize: 11, color: themeColors.textMuted }}>
+                        🎵 Track Index #{editingTrackIndex} • {editingTrackInfo.is_drum ? 'Percussion / Drums' : `${editingTrackInfo.note_count || 0} notes`}
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Custom Track Name */}
                   <View style={{ marginBottom: 15 }}>
                     <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>Custom Track Name</Text>
