@@ -781,7 +781,7 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  const handleUpdateReverbPreset = async (presetFilename: string) => {
+  const handleUpdateReverbPreset = async (presetFilename: string, forceRerender: boolean = true) => {
     setSelectedReverbPreset(presetFilename);
     if (!selectedJobId) return;
     setIsUpdatingReverb(true);
@@ -790,19 +790,22 @@ export const MidiEditorScreen = () => {
         reverb_enabled: true,
         reverb_preset: presetFilename
       });
-      await midiOrchestratorApi.renderPreview(
+      const previewUrl = midiOrchestratorApi.renderPreview(
         selectedJobId,
-        activeTrackIndices.join(','),
-        silentTrackIndices.join(','),
-        soloTrackIndices.join(','),
-        softMuteTrackIndices.join(','),
-        activeSoundfont,
-        true,
-        reverbRoomSize,
-        peakCeilingDb,
-        true,
-        tracksConfig
+        activeTrackIndices,
+        silentTrackIndices,
+        vocalMaleTrackIndices,
+        vocalFemaleTrackIndices,
+        {
+          soundfont: activeSoundfont,
+          reverb_enabled: true,
+          reverb_room_size: reverbRoomSize,
+          peak_ceiling_db: peakCeilingDb,
+          force_rerender: forceRerender
+        },
+        true
       );
+      await fetch(previewUrl);
     } catch (err) {
       console.error('Failed to update reverb preset for backing file', err);
     } finally {
@@ -3586,7 +3589,7 @@ export const MidiEditorScreen = () => {
                                 styles.presetBadge,
                                 isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
                               ]}
-                              onPress={() => handleUpdateReverbPreset(preset.filename)}
+                              onPress={() => setSelectedReverbPreset(preset.filename)}
                             >
                               <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
                                 {preset.title}
@@ -3595,6 +3598,33 @@ export const MidiEditorScreen = () => {
                           );
                         })}
                       </View>
+
+                      {/* Explicit Update Reverb Backing File Button */}
+                      <TouchableOpacity
+                        disabled={isUpdatingReverb || !selectedJobId}
+                        style={{
+                          backgroundColor: themeColors.accent,
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          marginTop: 10,
+                          opacity: (isUpdatingReverb || !selectedJobId) ? 0.6 : 1.0
+                        }}
+                        onPress={() => handleUpdateReverbPreset(selectedReverbPreset, true)}
+                      >
+                        {isUpdatingReverb ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Ionicons name="refresh-outline" size={14} color="#fff" />
+                        )}
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                          {isUpdatingReverb ? 'Updating Reverb Backing File...' : 'Update Reverb Backing File'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 

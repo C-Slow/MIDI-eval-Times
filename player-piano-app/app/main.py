@@ -1835,6 +1835,7 @@ async def get_midi_orchestrator_preview(
     reverb_room_size: Optional[float] = Query(None),
     peak_ceiling_db: Optional[float] = Query(None),
     full_preview: bool = Query(False),
+    force_rerender: bool = Query(False),
     token: Optional[str] = None, 
     authorization: Optional[str] = Header(None),
     background_tasks: BackgroundTasks = None
@@ -1923,7 +1924,7 @@ async def get_midi_orchestrator_preview(
         saved_speaker_cfg = {str(k): v for k, v in saved_tracks_cfg.items() if int(k) in saved_s_tracks}
         speaker_cfg_match = curr_speaker_cfg == saved_speaker_cfg
 
-        if soundfont_matches and speaker_tracks_match and speaker_cfg_match:
+        if not force_rerender and soundfont_matches and speaker_tracks_match and speaker_cfg_match:
             for candidate in [pre_rendered_backing, pre_rendered_insts, pre_rendered_final]:
                 if candidate.exists() and candidate.stat().st_size > 1000:
                     print(f"Serving pre-rendered backing audio instantly for preview: {candidate}")
@@ -1946,7 +1947,13 @@ async def get_midi_orchestrator_preview(
         cache_key = hashlib.md5(cache_raw.encode('utf-8')).hexdigest()
         cached_preview_wav = cache_dir / f"preview_{cache_key}.wav"
         
-        if cached_preview_wav.exists() and cached_preview_wav.stat().st_size > 1000:
+        if force_rerender and cached_preview_wav.exists():
+            try:
+                cached_preview_wav.unlink()
+            except Exception:
+                pass
+                
+        if not force_rerender and cached_preview_wav.exists() and cached_preview_wav.stat().st_size > 1000:
             utils._log(f"Serving cached preview audio instantly (0ms delay): {cached_preview_wav}")
             return FileResponse(str(cached_preview_wav), media_type="audio/wav")
         
@@ -1963,6 +1970,14 @@ async def get_midi_orchestrator_preview(
                 peak_ceiling_db=preview_peak_ceiling_db,
                 is_preview=not full_preview
             )
+            if force_rerender and cached_preview_wav.exists():
+                try:
+                    for target in [pre_rendered_backing, pre_rendered_insts, pre_rendered_final]:
+                        if target.parent.exists():
+                            shutil.copyfile(str(cached_preview_wav), str(target))
+                            utils._log(f"Updated completed job backing file: {target}")
+                except Exception as c_err:
+                    utils._log(f"Notice: Failed to copy updated reverb backing file: {c_err}")
             if actual_sf:
                 midi_orchestrator.status[job_id]["last_built_soundfont"] = actual_sf
                 midi_orchestrator._save_db()

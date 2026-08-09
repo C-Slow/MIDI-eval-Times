@@ -374,7 +374,7 @@ export const midiOrchestratorApi = {
     speakerTracks: number[], 
     vocalMaleTracks: number[] = [], 
     vocalFemaleTracks: number[] = [],
-    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number },
+    audioSettings?: { soundfont?: string; reverb_enabled?: boolean; reverb_room_size?: number; peak_ceiling_db?: number; force_rerender?: boolean },
     fullPreview: boolean = false
   ) => {
     const token = getToken();
@@ -387,6 +387,7 @@ export const midiOrchestratorApi = {
     if (audioSettings?.reverb_enabled !== undefined) url += `&reverb_enabled=${audioSettings.reverb_enabled}`;
     if (audioSettings?.reverb_room_size !== undefined) url += `&reverb_room_size=${audioSettings.reverb_room_size}`;
     if (audioSettings?.peak_ceiling_db !== undefined) url += `&peak_ceiling_db=${audioSettings.peak_ceiling_db}`;
+    if (audioSettings?.force_rerender) url += `&force_rerender=true`;
     if (fullPreview) url += `&full_preview=true`;
     return url;
   },
