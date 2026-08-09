@@ -650,6 +650,7 @@ def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: O
     bdt_dll = r"C:\Program Files\Common Files\VST3\British Drama Toolkit.vst3"
     aperture_dll = r"C:\Program Files\Common Files\VST3\Aperture - The Stack.vst3"
     kontakt_dll = r"C:\Program Files\Common Files\VST3\Kontakt 8.vst3"
+    air_reverb_dll = r"C:\Program Files\Common Files\VST3\AIR Studios Reverb Essentials.vst3"
 
     def _resolve_binary_file(path_str: Optional[str]) -> Optional[str]:
         if not path_str or not os.path.exists(path_str):
@@ -671,6 +672,9 @@ def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: O
 
     if preset_path:
         p_lower = preset_path.lower()
+        if any(k in p_lower for k in ["air studios", "air reverb", "reverb essentials"]):
+            res = _resolve_binary_file(air_reverb_dll)
+            if res: return res
         if any(k in p_lower for k in ["epic choir", "cinematic percussion", "splice"]):
             if os.path.exists(splice_dll):
                 return splice_dll
@@ -974,6 +978,7 @@ def render_orchestrator_tracks(
     out_wav_path: str,
     reverb_enabled: bool = True,
     reverb_room_size: float = 0.55,
+    reverb_preset: Optional[str] = None,
     peak_ceiling_db: float = -6.0,
     time_shift: float = 0.0,
     is_preview: bool = False,
@@ -1236,6 +1241,23 @@ def render_orchestrator_tracks(
                     combined_audio = combined_audio + data_padded
 
         if combined_audio is not None:
+            # Apply Master VST3 Reverb (AIR Studios Reverb Essentials) if enabled
+            if (reverb_enabled is None or reverb_enabled) and reverb_preset:
+                try:
+                    rev_plugin_path = get_vst3_plugin_path(reverb_preset)
+                    rev_preset_file = os.path.join(PROJECT_ROOT, "storage", "vst_presets", reverb_preset)
+                    if os.path.exists(rev_plugin_path) and os.path.exists(rev_preset_file):
+                        from pedalboard import Pedalboard, load_plugin
+                        rev_plug = load_plugin(rev_plugin_path)
+                        rev_plug.raw_state = open(rev_preset_file, "rb").read()
+                        board = Pedalboard([rev_plug])
+                        rev_in = combined_audio.T.astype(np.float32)
+                        rev_out = board(rev_in, sample_rate=float(sample_rate))
+                        combined_audio = rev_out.T
+                        _log(f"Applied Master VST3 Reverb preset '{reverb_preset}' via {os.path.basename(rev_plugin_path)}")
+                except Exception as rev_err:
+                    _log(f"Warning: Failed to apply master VST3 reverb ({rev_err})")
+
             max_val = np.max(np.abs(combined_audio))
             if max_val > 0:
                 combined_audio = (combined_audio / max_val) * 0.9

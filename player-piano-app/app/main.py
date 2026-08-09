@@ -1934,6 +1934,7 @@ async def get_midi_orchestrator_preview(
         job_tracks_cfg = job_info.get("tracks_config", {})
         preview_reverb_enabled = reverb_enabled if reverb_enabled is not None else job_info.get("reverb_enabled")
         preview_reverb_room_size = reverb_room_size if reverb_room_size is not None else job_info.get("reverb_room_size")
+        preview_reverb_preset = job_info.get("reverb_preset")
         preview_peak_ceiling_db = peak_ceiling_db if peak_ceiling_db is not None else job_info.get("peak_ceiling_db", -6.0)
         
         # Smart MD5 Preview Caching: Check if preview audio with exact same settings exists
@@ -1941,7 +1942,7 @@ async def get_midi_orchestrator_preview(
         cache_dir = Path(utils.PROJECT_ROOT) / "storage" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_peak_ceiling_db}_{full_preview}_{job_tracks_cfg}"
+        cache_raw = f"{job_id}_{p_tracks}_{s_tracks}_{vm_tracks}_{vf_tracks}_{sf_name}_{preview_reverb_enabled}_{preview_reverb_room_size}_{preview_reverb_preset}_{preview_peak_ceiling_db}_{full_preview}_{job_tracks_cfg}"
         cache_key = hashlib.md5(cache_raw.encode('utf-8')).hexdigest()
         cached_preview_wav = cache_dir / f"preview_{cache_key}.wav"
         
@@ -1958,6 +1959,7 @@ async def get_midi_orchestrator_preview(
                 str(cached_preview_wav),
                 reverb_enabled=preview_reverb_enabled,
                 reverb_room_size=preview_reverb_room_size,
+                reverb_preset=preview_reverb_preset,
                 peak_ceiling_db=preview_peak_ceiling_db,
                 is_preview=not full_preview
             )
