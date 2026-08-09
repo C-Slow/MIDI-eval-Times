@@ -277,6 +277,8 @@ def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]
         return "toys"
     if "triangle" in text:
         return "triangle"
+    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        return "snare_1"
 
     # String Articulations
     if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
@@ -390,12 +392,6 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if any(k in combined_text for k in ["brass combi", "brass ensemble", "brass section"]) or program == 61:
         for f in files:
             if "brass combis" in f.lower():
-                return os.path.join(preset_dir, f)
-
-    # Priority -1: Untuned Percussion preset match
-    if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "percussion"]) or program in (47, 114, 115, 116, 117, 118, 119, 127):
-        for f in files:
-            if "untuned percussion" in f.lower():
                 return os.path.join(preset_dir, f)
 
     # Priority 0: Exact match with articulation in filename if specified
@@ -547,6 +543,12 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if "crotales" in combined_text:
         for f, clean in preset_map.items():
             if "crotales" in clean:
+                return os.path.join(preset_dir, f)
+
+    # Priority 18: Untuned Percussion preset match (Fallback after all tuned percussion)
+    if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        for f in files:
+            if "untuned percussion" in f.lower():
                 return os.path.join(preset_dir, f)
 
     return None
