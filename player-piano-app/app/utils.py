@@ -314,13 +314,27 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     articulation = articulation or detect_articulation(track_name, program)
     combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
 
+    # Priority -10: Direct exact filename or patch ID match
+    if track_patch and track_patch != "auto":
+        clean_req = track_patch.lower().strip()
+        for f in files:
+            f_clean = f.lower()
+            if f_clean == clean_req or f_clean == f"{clean_req}.vstpreset" or f_clean.replace(".vstpreset", "") == clean_req:
+                return os.path.join(preset_dir, f)
+            stem = f_clean.replace(".vstpreset", "")
+            parts = stem.split(" ", 1)
+            inst_name = parts[1] if len(parts) == 2 else stem
+            patch_id = inst_name.replace(" ", "_")
+            if patch_id == clean_req or stem.replace(" ", "_") == clean_req:
+                return os.path.join(preset_dir, f)
+
     # Priority -3: Epic Choir presets
-    if any(k in combined_text for k in ["choir", "vocal", "vocals", "voice", "voices", "soprano", "alto", "tenor", "epic choir"]) or program in (52, 53, 54):
+    if any(k in combined_text for k in ["choir", "vocal", "vocals", "voice", "voices", "epic choir"]) or program in (52, 53, 54):
         is_staccato = (articulation == "staccato") or any(k in combined_text for k in ["staccato", "short", "syllable", "syllables"])
-        if any(k in combined_text for k in ["tenor", "bass choir", "men", "male"]):
+        if any(k in combined_text for k in ["tenor choir", "bass choir", "men", "male"]) or "tenor and bass" in combined_text:
             if is_staccato:
                 for f in files:
-                    if "choir tenor and bass short staccato syllables keyswitch" in f.lower():
+                    if "choir tenor and bass short staccato syllables" in f.lower():
                         return os.path.join(preset_dir, f)
             for f in files:
                 if "choir tenor and bass long ahh" in f.lower():
@@ -328,7 +342,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
         else:
             if is_staccato:
                 for f in files:
-                    if "choir soprano and alto short staccato syllables keyswitch" in f.lower():
+                    if "choir soprano and alto short staccato syllables" in f.lower():
                         return os.path.join(preset_dir, f)
             for f in files:
                 if "choir soprano and alto long ahh" in f.lower():
@@ -490,7 +504,15 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
                 return os.path.join(preset_dir, f)
 
     # Priority 12: Trombone
-    if "trombone" in combined_text or program == 57:
+    if "trombone" in combined_text or program in (57, 109):
+        if "bass" in combined_text:
+            for f, clean in preset_map.items():
+                if "bass trombone" in clean or "bass trombones" in clean:
+                    return os.path.join(preset_dir, f)
+        if "tenor" in combined_text or program == 57:
+            for f, clean in preset_map.items():
+                if "tenor trombone" in clean:
+                    return os.path.join(preset_dir, f)
         for f, clean in preset_map.items():
             if "trombone" in clean:
                 return os.path.join(preset_dir, f)
