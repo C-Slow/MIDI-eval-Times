@@ -781,7 +781,7 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  const handleUpdateReverbPreset = async (presetFilename: string, forceRerender: boolean = true) => {
+  const handleUpdateReverbPreset = async (presetFilename: string) => {
     setSelectedReverbPreset(presetFilename);
     if (!selectedJobId) return;
     setIsUpdatingReverb(true);
@@ -790,22 +790,26 @@ export const MidiEditorScreen = () => {
         reverb_enabled: true,
         reverb_preset: presetFilename
       });
-      const previewUrl = midiOrchestratorApi.renderPreview(
+      await midiOrchestratorApi.process(
         selectedJobId,
+        pianoTrackIndices,
         activeTrackIndices,
-        silentTrackIndices,
+        pedalPreset,
+        rhythmFactor,
+        melodyFactor,
         vocalMaleTrackIndices,
         vocalFemaleTrackIndices,
+        importedVocals,
         {
           soundfont: activeSoundfont,
           reverb_enabled: true,
           reverb_room_size: reverbRoomSize,
           peak_ceiling_db: peakCeilingDb,
-          force_rerender: forceRerender
-        },
-        true
+          tracks_config: tracksConfig
+        }
       );
-      await fetch(previewUrl);
+      const jobList = await midiOrchestratorApi.getJobs();
+      setJobs(jobList);
     } catch (err) {
       console.error('Failed to update reverb preset for backing file', err);
     } finally {
