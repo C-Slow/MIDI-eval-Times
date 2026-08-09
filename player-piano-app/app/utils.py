@@ -487,9 +487,6 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             for f in file_subset:
                 if "cor anglais" in f.lower() or "english horn" in f.lower():
                     return os.path.join(preset_dir, f)
-            # Fallback to BBC SO Oboe if British BTK Cor Anglais is excluded in Pass 1
-            for f, clean in preset_map.items():
-                if "oboe" in clean: return os.path.join(preset_dir, f)
         if "oboe" in combined_text or program == 68:
             for f, clean in preset_map.items():
                 if "oboe" in clean: return os.path.join(preset_dir, f)
