@@ -323,7 +323,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if not os.path.exists(preset_dir):
         return None
 
-    files = [f for f in os.listdir(preset_dir) if f.lower().endswith('.vstpreset')]
+    files = [f for f in os.listdir(preset_dir) if f.lower().endswith('.vstpreset') and not any(k in f.lower() for k in ["reverb", "air studios"])]
     if not files:
         return None
 

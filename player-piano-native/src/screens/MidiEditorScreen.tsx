@@ -784,6 +784,14 @@ export const MidiEditorScreen = () => {
   const handleUpdateReverbPreset = async (presetFilename: string) => {
     setSelectedReverbPreset(presetFilename);
     if (!selectedJobId) return;
+
+    const runningJob = jobs.find(j => (j.status === 'processing' || j.status === 'synthesizing' || j.status?.includes('synthesizing')));
+    if (runningJob) {
+      setActiveRunningJob(runningJob);
+      setShowConflictModal(true);
+      return;
+    }
+
     setIsUpdatingReverb(true);
     try {
       const res = await midiOrchestratorApi.applyReverb(selectedJobId, presetFilename, true);
@@ -1886,7 +1894,7 @@ export const MidiEditorScreen = () => {
       return;
     }
 
-    const runningJob = jobs.find(j => (j.status === 'processing' || j.status === 'synthesizing' || j.status?.includes('synthesizing')) && j.job_id !== selectedJobId);
+    const runningJob = jobs.find(j => (j.status === 'processing' || j.status === 'synthesizing' || j.status?.includes('synthesizing')));
     if (runningJob) {
       setActiveRunningJob(runningJob);
       setShowConflictModal(true);
@@ -4529,7 +4537,7 @@ export const MidiEditorScreen = () => {
               Synthesis Job In Progress
             </Text>
             <Text style={{ fontSize: 13, color: themeColors.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 18 }}>
-              Another job ({activeRunningJob?.filename}) is currently rendering. How would you like to handle this request?
+              {activeRunningJob?.job_id === selectedJobId ? 'This job' : `Another job (${activeRunningJob?.filename})`} is currently rendering. How would you like to handle this request?
             </Text>
 
             <View style={{ gap: 10, width: '100%' }}>
