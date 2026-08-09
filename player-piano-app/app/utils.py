@@ -311,7 +311,7 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "harmonics"
     return None
 
-def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None) -> Optional[str]:
+def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None, notes: Optional[List] = None) -> Optional[str]:
     """
     5-Step / 2-Pass VST Preset Resolution Engine:
     - Pass 0: Manual user selection / override (track_patch != 'auto')
@@ -476,13 +476,32 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
         if any(k in combined_text for k in ["violoncello", "violoncelli", "cello", "celli"]) or program == 42:
             for f, clean in preset_map.items():
                 if "celli" in clean or "cello" in clean: return os.path.join(preset_dir, f)
-        if any(k in combined_text for k in ["viola", "viole"]) or program in (41, 49):
+        if any(k in combined_text for k in ["viola", "viole"]) or program == 41:
             for f, clean in preset_map.items():
                 if "viola" in clean: return os.path.join(preset_dir, f)
         if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2", "violini 2", "violini ii"]):
             for f, clean in preset_map.items():
                 if "violin 2" in clean or "violins 2" in clean or "violin2" in clean: return os.path.join(preset_dir, f)
-        if (any(k in combined_text for k in ["violin", "violins", "violini", "violino"]) or program in (40, 48)) and not is_untuned_perc:
+        if (any(k in combined_text for k in ["violin", "violins", "violini", "violino", "string", "strings"]) or program in (40, 48, 49, 50, 51)) and not is_untuned_perc:
+            # Pitch-aware resolution for generic String Ensemble tracks
+            has_specific_section = any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2", "violini 2", "violini ii", "violin 1", "violin1", "1st violin", "violin i", "violini 1", "violini i"])
+            if not has_specific_section and notes and len(notes) > 0:
+                avg_pitch = sum(n.pitch for n in notes) / len(notes)
+                if avg_pitch < 48:
+                    for f, clean in preset_map.items():
+                        if "basses" in clean or "double bass" in clean: return os.path.join(preset_dir, f)
+                elif avg_pitch < 58:
+                    for f, clean in preset_map.items():
+                        if "celli" in clean or "cello" in clean: return os.path.join(preset_dir, f)
+                elif avg_pitch < 67:
+                    for f, clean in preset_map.items():
+                        if "viola" in clean: return os.path.join(preset_dir, f)
+                elif avg_pitch < 74:
+                    for f, clean in preset_map.items():
+                        if "violin 2" in clean or "violins 2" in clean: return os.path.join(preset_dir, f)
+                else:
+                    for f, clean in preset_map.items():
+                        if "violin 1" in clean or "violin1" in clean: return os.path.join(preset_dir, f)
             for f, clean in preset_map.items():
                 if "violin 1" in clean or "violin1" in clean: return os.path.join(preset_dir, f)
 
@@ -1019,7 +1038,7 @@ def render_orchestrator_tracks(
             }
             
             # Resolve VST preset for track (always attempted for all jobs)
-            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
+            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation, notes=new_inst.notes)
             task["vst_preset"] = vst_preset
             
             # Pre-instantiate VST3 plugin if VST preset matched OR user explicitly selected a VST3 soundfont
