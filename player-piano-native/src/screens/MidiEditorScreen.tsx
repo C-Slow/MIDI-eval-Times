@@ -2778,9 +2778,8 @@ export const MidiEditorScreen = () => {
 
                         {/* Synthesis Successful Green Checkmark */}
                         {item.status === 'completed' && (
-                          <View style={[styles.statBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2 }]}>
-                            <Ionicons name="checkmark-circle" size={12} color="#2ecc71" />
-                            <Text style={[styles.statBadgeText, { color: '#2ecc71', fontWeight: 'bold' }]}>Synthesized</Text>
+                          <View style={{ marginLeft: 4, paddingHorizontal: 2, paddingVertical: 2, justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="checkmark-circle" size={15} color="#2ecc71" />
                           </View>
                         )}
                       </View>

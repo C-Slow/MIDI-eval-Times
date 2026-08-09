@@ -991,11 +991,14 @@ def render_orchestrator_tracks(
                 "plugin_obj": None
             }
             
-            # If VST3, pre-instantiate an INDEPENDENT plugin instance per track ON MAIN THREAD
-            if sf_path and ('vst' in sf_path.lower() or sf_path.lower().endswith('.vst3')):
+            # Resolve VST preset for track (always attempted for all jobs)
+            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
+            task["vst_preset"] = vst_preset
+            
+            # Pre-instantiate VST3 plugin if VST preset matched OR user explicitly selected a VST3 soundfont
+            use_vst = (vst_preset is not None) or (sf_path and ('vst' in sf_path.lower() or sf_path.lower().endswith('.vst3')))
+            if use_vst:
                 from pedalboard import load_plugin
-                vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation)
-                task["vst_preset"] = vst_preset
                 dll_path = get_vst3_plugin_path(vst_preset, sf_path)
                 try:
                     # Create a fresh, dedicated plugin instance for this specific track
