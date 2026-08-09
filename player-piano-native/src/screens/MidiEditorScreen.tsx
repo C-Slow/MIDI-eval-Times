@@ -2776,20 +2776,11 @@ export const MidiEditorScreen = () => {
                           </View>
                         )}
 
-                        {/* Soundfont / VST Badge */}
-                        {(() => {
-                          const sfBadge = getSoundfontLabel(item.soundfont, item.last_built_soundfont);
-                          return (
-                            <View style={[styles.statBadge, { backgroundColor: sfBadge.bg }]}>
-                              <Text style={[styles.statBadgeText, { color: sfBadge.color, fontWeight: 'bold' }]}>{sfBadge.text}</Text>
-                            </View>
-                          );
-                        })()}
-
-                        {/* Custom Track Settings Tag [T] */}
-                        {hasCustomTrackSettings(item.tracks_config) && (
-                          <View style={[styles.statBadge, { backgroundColor: 'rgba(155, 89, 182, 0.2)' }]}>
-                            <Text style={[styles.statBadgeText, { color: '#9b59b6', fontWeight: 'bold' }]}>[T]</Text>
+                        {/* Synthesis Successful Green Checkmark */}
+                        {item.status === 'completed' && (
+                          <View style={[styles.statBadge, { backgroundColor: 'rgba(46, 204, 113, 0.15)', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2 }]}>
+                            <Ionicons name="checkmark-circle" size={12} color="#2ecc71" />
+                            <Text style={[styles.statBadgeText, { color: '#2ecc71', fontWeight: 'bold' }]}>Synthesized</Text>
                           </View>
                         )}
                       </View>
@@ -3511,56 +3502,13 @@ export const MidiEditorScreen = () => {
                   </View>
                 )}
 
-                {/* Symphony SoundFont & DSP Audio Quality Section */}
+                {/* Orchestral DSP & Master Reverb Section */}
                 <View style={{ height: 1, backgroundColor: themeColors.border, marginVertical: 12, opacity: 0.6 }} />
 
                 <View style={[styles.settingItemRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
                   <Text style={[styles.settingItemLabel, { color: themeColors.text, fontWeight: 'bold', marginBottom: 6 }]}>
-                    Symphony SoundFont & Audio Quality
+                    Orchestral DSP & Master Reverb
                   </Text>
-                  <Text style={{ color: themeColors.textMuted, fontSize: 12, marginBottom: 8 }}>
-                    Active SoundFont Engine:
-                  </Text>
-                  {soundfonts.length === 0 ? (
-                    <Text style={{ color: themeColors.textMuted, fontSize: 11, fontStyle: 'italic' }}>
-                      Scanning soundfonts in storage...
-                    </Text>
-                  ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingBottom: 6 }}>
-                      {soundfonts.map((sf: string) => {
-                        const isSelected = activeSoundfont === sf;
-                        return (
-                          <TouchableOpacity
-                            key={sf}
-                            style={[
-                              {
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 6
-                              },
-                              isSelected 
-                                ? { backgroundColor: themeColors.accentLight, borderColor: themeColors.accent } 
-                                : { backgroundColor: themeColors.surface, borderColor: themeColors.border }
-                            ]}
-                            onPress={() => handleSelectSoundfont(sf)}
-                          >
-                            <Ionicons 
-                              name={isSelected ? "disc" : "disc-outline"} 
-                              size={14} 
-                              color={isSelected ? themeColors.accent : themeColors.textMuted} 
-                            />
-                            <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: isSelected ? '600' : '400' }}>
-                              {sf}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  )}
 
                   {/* Reverb Toggle & Room Size */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
@@ -4155,53 +4103,7 @@ export const MidiEditorScreen = () => {
                     />
                   </View>
 
-                  {/* SoundFont Engine Selector */}
-                  <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>Track Synthesizer Engine</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingVertical: 4 }}>
-                      <TouchableOpacity
-                        style={[
-                          styles.presetBadge,
-                          editingTrackIndex !== null && !tracksConfig[String(editingTrackIndex)]?.soundfont ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
-                        ]}
-                        onPress={() => {
-                          if (editingTrackIndex === null) return;
-                          setTracksConfig(prev => {
-                            const updated = { ...prev[String(editingTrackIndex)] };
-                            delete updated.soundfont;
-                            return { ...prev, [String(editingTrackIndex)]: updated };
-                          });
-                        }}
-                      >
-                        <Text style={[styles.presetBadgeText, { color: editingTrackIndex !== null && !tracksConfig[String(editingTrackIndex)]?.soundfont ? '#fff' : themeColors.text }]}>
-                          Default (Job SoundFont)
-                        </Text>
-                      </TouchableOpacity>
-                      {soundfonts.map((sf) => {
-                        const isSel = editingTrackIndex !== null && tracksConfig[String(editingTrackIndex)]?.soundfont === sf;
-                        return (
-                          <TouchableOpacity
-                            key={sf}
-                            style={[
-                              styles.presetBadge,
-                              isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surfaceSecondary }
-                            ]}
-                            onPress={() => {
-                              if (editingTrackIndex === null) return;
-                              setTracksConfig(prev => ({
-                                ...prev,
-                                [String(editingTrackIndex)]: { ...prev[String(editingTrackIndex)], soundfont: sf }
-                              }));
-                            }}
-                          >
-                            <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
-                              {sf}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+
 
                   {/* Categorized Orchestrator Instrument Patch / Performer Selector */}
                   <View style={{ marginBottom: 15 }}>
