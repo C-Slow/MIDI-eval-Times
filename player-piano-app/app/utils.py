@@ -421,63 +421,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             for f in file_subset:
                 if "brass combis" in f.lower(): return os.path.join(preset_dir, f)
 
-        # 2. Strings
-        if any(k in combined_text for k in ["contrabass", "double bass", "doublebass", "upright bass", "basses"]) or program in (43, 110):
-            for f, clean in preset_map.items():
-                if "basses" in clean or "double bass" in clean or "contrabass" in clean: return os.path.join(preset_dir, f)
-            for f, clean in preset_map.items():
-                if "bass" in clean and "trombone" not in clean and "sax" not in clean: return os.path.join(preset_dir, f)
-        if any(k in combined_text for k in ["violoncello", "cello", "celli"]) or program == 42:
-            for f, clean in preset_map.items():
-                if "celli" in clean or "cello" in clean: return os.path.join(preset_dir, f)
-        if "viola" in combined_text or program in (41, 49):
-            for f, clean in preset_map.items():
-                if "viola" in clean: return os.path.join(preset_dir, f)
-        if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2"]):
-            for f, clean in preset_map.items():
-                if "violin 2" in clean or "violins 2" in clean or "violin2" in clean: return os.path.join(preset_dir, f)
-        if any(k in combined_text for k in ["violin", "violins"]) or program in (40, 48):
-            for f, clean in preset_map.items():
-                if "violin 1" in clean or "violin1" in clean: return os.path.join(preset_dir, f)
-
-        # 3. Woodwinds
-        if "piccolo" in combined_text:
-            for f, clean in preset_map.items():
-                if "piccolo" in clean: return os.path.join(preset_dir, f)
-        if "flute" in combined_text or program == 73:
-            for f, clean in preset_map.items():
-                if "flute" in clean: return os.path.join(preset_dir, f)
-        if "oboe" in combined_text or program == 68:
-            for f, clean in preset_map.items():
-                if "oboe" in clean: return os.path.join(preset_dir, f)
-        if "clarinet" in combined_text or program == 71:
-            for f, clean in preset_map.items():
-                if "clarinet" in clean: return os.path.join(preset_dir, f)
-        if "bassoon" in combined_text or program == 70:
-            for f, clean in preset_map.items():
-                if "bassoon" in clean: return os.path.join(preset_dir, f)
-
-        # 4. Brass
-        if any(k in combined_text for k in ["french horn", "horn"]) or program == 60:
-            for f, clean in preset_map.items():
-                if "horn" in clean and "flugelhorn" not in clean: return os.path.join(preset_dir, f)
-        if "trumpet" in combined_text or program == 56:
-            for f, clean in preset_map.items():
-                if "trumpet" in clean: return os.path.join(preset_dir, f)
-        if "trombone" in combined_text or program in (57, 109):
-            if "bass" in combined_text:
-                for f, clean in preset_map.items():
-                    if "bass trombone" in clean or "bass trombones" in clean: return os.path.join(preset_dir, f)
-            if "tenor" in combined_text or program == 57:
-                for f, clean in preset_map.items():
-                    if "tenor trombone" in clean: return os.path.join(preset_dir, f)
-            for f, clean in preset_map.items():
-                if "trombone" in clean: return os.path.join(preset_dir, f)
-        if "tuba" in combined_text or program == 58:
-            for f, clean in preset_map.items():
-                if "tuba" in clean: return os.path.join(preset_dir, f)
-
-        # 5. Specific Tuned Percussion
+        # 2. Specific Tuned Percussion & Untuned Percussion
         if "timpani" in combined_text or program == 47:
             for f, clean in preset_map.items():
                 if "timpani" in clean: return os.path.join(preset_dir, f)
@@ -506,11 +450,75 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             for f, clean in preset_map.items():
                 if "crotales" in clean: return os.path.join(preset_dir, f)
 
-        # 6. Untuned Percussion Keyswitches (Maps to Percussion Untuned Percussion.vstpreset)
-        if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        # Untuned Percussion (Evaluated before string/woodwind/brass program numbers if percussion text or program 114-127 is present)
+        is_untuned_perc = articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127)
+        if is_untuned_perc:
             for f in file_subset:
                 if "untuned percussion" in f.lower():
                     return os.path.join(preset_dir, f)
+
+        # 3. Strings
+        if (any(k in combined_text for k in ["contrabass", "double bass", "doublebass", "upright bass", "basses"]) or program in (43, 110)) and "contrabassoon" not in combined_text:
+            for f, clean in preset_map.items():
+                if "basses" in clean or "double bass" in clean or "contrabass" in clean: return os.path.join(preset_dir, f)
+            for f, clean in preset_map.items():
+                if "bass" in clean and "trombone" not in clean and "sax" not in clean and "bassoon" not in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["violoncello", "cello", "celli"]) or program == 42:
+            for f, clean in preset_map.items():
+                if "celli" in clean or "cello" in clean: return os.path.join(preset_dir, f)
+        if "viola" in combined_text or program in (41, 49):
+            for f, clean in preset_map.items():
+                if "viola" in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2"]):
+            for f, clean in preset_map.items():
+                if "violin 2" in clean or "violins 2" in clean or "violin2" in clean: return os.path.join(preset_dir, f)
+        if (any(k in combined_text for k in ["violin", "violins"]) or program in (40, 48)) and not is_untuned_perc:
+            for f, clean in preset_map.items():
+                if "violin 1" in clean or "violin1" in clean: return os.path.join(preset_dir, f)
+
+        # 4. Woodwinds
+        if "piccolo" in combined_text:
+            for f, clean in preset_map.items():
+                if "piccolo" in clean: return os.path.join(preset_dir, f)
+        if "flute" in combined_text or program == 73:
+            for f, clean in preset_map.items():
+                if "flute" in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["cor anglais", "english horn"]) or program == 69:
+            for f in file_subset:
+                if "cor anglais" in f.lower() or "english horn" in f.lower():
+                    return os.path.join(preset_dir, f)
+            # Fallback to BBC SO Oboe if British BTK Cor Anglais is excluded in Pass 1
+            for f, clean in preset_map.items():
+                if "oboe" in clean: return os.path.join(preset_dir, f)
+        if "oboe" in combined_text or program == 68:
+            for f, clean in preset_map.items():
+                if "oboe" in clean: return os.path.join(preset_dir, f)
+        if "clarinet" in combined_text or program == 71:
+            for f, clean in preset_map.items():
+                if "clarinet" in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["bassoon", "contrabassoon"]) or program == 70:
+            for f, clean in preset_map.items():
+                if "bassoon" in clean: return os.path.join(preset_dir, f)
+
+        # 5. Brass
+        if (any(k in combined_text for k in ["french horn", "horn"]) or program == 60) and "english horn" not in combined_text and "cor anglais" not in combined_text:
+            for f, clean in preset_map.items():
+                if "horn" in clean and "flugelhorn" not in clean: return os.path.join(preset_dir, f)
+        if "trumpet" in combined_text or program == 56:
+            for f, clean in preset_map.items():
+                if "trumpet" in clean: return os.path.join(preset_dir, f)
+        if "trombone" in combined_text or program in (57, 109):
+            if "bass" in combined_text:
+                for f, clean in preset_map.items():
+                    if "bass trombone" in clean or "bass trombones" in clean: return os.path.join(preset_dir, f)
+            if "tenor" in combined_text or program == 57:
+                for f, clean in preset_map.items():
+                    if "tenor trombone" in clean: return os.path.join(preset_dir, f)
+            for f, clean in preset_map.items():
+                if "trombone" in clean: return os.path.join(preset_dir, f)
+        if "tuba" in combined_text or program == 58:
+            for f, clean in preset_map.items():
+                if "tuba" in clean: return os.path.join(preset_dir, f)
 
         return None
 
