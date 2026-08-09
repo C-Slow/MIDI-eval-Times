@@ -255,9 +255,9 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "anvil"
     if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
         return "bass_drum_2"
-    if any(k in text for k in ["bass drum", "bd", "kick"]):
+    if any(k in text for k in ["bass drum", "bd", "kick", "grancassa"]):
         return "bass_drum_1"
-    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals"]):
+    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals", "cinelli"]):
         return "piatti"
     if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat"]):
         return "cymbal"
@@ -265,7 +265,7 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "military_drum"
     if any(k in text for k in ["snare 2", "sd 2"]):
         return "snare_2"
-    if any(k in text for k in ["snare 1", "snare", "sd"]):
+    if any(k in text for k in ["snare 1", "snare", "sd", "tamburo", "rullante"]):
         return "snare_1"
     if any(k in text for k in ["tam tam", "tamtam", "gong"]):
         return "tam_tam"
