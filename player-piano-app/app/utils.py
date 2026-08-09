@@ -277,7 +277,7 @@ def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]
         return "toys"
     if "triangle" in text:
         return "triangle"
-    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127):
         return "snare_1"
 
     # String Articulations
@@ -507,7 +507,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
                 if "crotales" in clean: return os.path.join(preset_dir, f)
 
         # 6. Untuned Percussion Keyswitches (Maps to Percussion Untuned Percussion.vstpreset)
-        if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127):
             for f in file_subset:
                 if "untuned percussion" in f.lower():
                     return os.path.join(preset_dir, f)
@@ -526,7 +526,37 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if pass2_res:
         return pass2_res
 
-    return None
+    # PASS 3: Category-Aware Smart Fallback System
+    # If no specific preset matched, infer instrument category from text and GM program
+    if any(k in combined_text for k in ["percussion", "perc", "drum", "drums", "tom", "toms", "strike", "hit", "beat", "cymbal"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        for f in files:
+            if "untuned percussion" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["brass", "horn", "trumpet", "trombone", "tuba", "cornet"]) or (56 <= program <= 63):
+        for f in files:
+            if "brass horn" in f.lower() or "horn" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["woodwind", "flute", "wind", "pipe", "reed"]) or (68 <= program <= 79):
+        for f in files:
+            if "woodwind flute" in f.lower() or "flute" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["string", "strings", "violin", "viola", "cello", "bass", "bowed", "fiddle"]) or (40 <= program <= 45 or 48 <= program <= 51):
+        for f in files:
+            if "strings violin 1" in f.lower() or "violin 1" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    if any(k in combined_text for k in ["choir", "voice", "vocal", "sing"]) or (52 <= program <= 54):
+        for f in files:
+            if "choir soprano and alto long ahh" in f.lower():
+                return os.path.join(preset_dir, f)
+
+    # Ultimate fallback: Default to Violin 1 if zero category keywords matched
+    for f in files:
+        if "strings violin 1" in f.lower() or "violin 1" in f.lower():
+            return os.path.join(preset_dir, f)
 
 
 def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: Optional[str] = None) -> str:
