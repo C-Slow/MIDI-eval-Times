@@ -302,7 +302,13 @@ def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]
     return None
 
 def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None) -> Optional[str]:
-    """Find the exact matching .vstpreset file in C:\\app\\storage\\vst_presets for an instrument patch, GM program, track name, or articulation."""
+    """
+    5-Step / 2-Pass VST Preset Resolution Engine:
+    - Pass 0: Manual user selection / override (track_patch != 'auto')
+    - Pass 1: Search matching BBC SO presets & Untuned Percussion keyswitches (ignoring Non-BBC presets)
+    - Pass 2: Search matching Non-BBC SO presets (Epic Choir, Cinematic Percussion, British BTK)
+    - Fallback: Returns None if no preset matches (triggering explicit fallback logging).
+    """
     preset_dir = os.path.join(PROJECT_ROOT, 'storage', 'vst_presets')
     if not os.path.exists(preset_dir):
         return None
@@ -314,7 +320,7 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     articulation = articulation or detect_articulation(track_name, program)
     combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
 
-    # Priority -10: Direct exact filename or patch ID match
+    # Pass 0: Direct exact filename or patch ID match (Manual User Selection)
     if track_patch and track_patch != "auto":
         clean_req = track_patch.lower().strip()
         for f in files:
@@ -327,251 +333,198 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             patch_id = inst_name.replace(" ", "_")
             if patch_id == clean_req or stem.replace(" ", "_") == clean_req:
                 return os.path.join(preset_dir, f)
+        # Check if manual patch is an untuned percussion technique
+        if clean_req in PERCUSSION_TECHNIQUE_KEYS or any(k in clean_req for k in ["snare", "drum", "piatti", "cymbal", "anvil", "tam_tam", "tambourine"]):
+            for f in files:
+                if "untuned percussion" in f.lower():
+                    return os.path.join(preset_dir, f)
 
-    # Priority -3: Epic Choir presets
-    if any(k in combined_text for k in ["choir", "vocal", "vocals", "voice", "voices", "epic choir"]) or program in (52, 53, 54):
-        is_staccato = (articulation == "staccato") or any(k in combined_text for k in ["staccato", "short", "syllable", "syllables"])
-        if any(k in combined_text for k in ["tenor choir", "bass choir", "men", "male"]) or "tenor and bass" in combined_text:
-            if is_staccato:
-                for f in files:
-                    if "choir tenor and bass short staccato syllables" in f.lower():
+    # Preset categorization helper: returns True if preset is Non-BBC SO
+    def _is_non_bbc(filename: str) -> bool:
+        f_lower = filename.lower()
+        return any(f_lower.endswith(s.lower()) for s in [
+            " - epic choir.vstpreset",
+            " - cinematic percussion.vstpreset",
+            " - british tool kit.vstpreset"
+        ]) or any(k in f_lower for k in ["epic choir", "cinematic percussion", "british tool kit"])
+
+    # Core instrument matching logic for a given preset file subset
+    def _match_in_files(file_subset: List[str]) -> Optional[str]:
+        # Category map for stripped filenames (e.g. "Strings celli.vstpreset" -> "celli.vstpreset")
+        preset_map = {}
+        for f in file_subset:
+            clean_f = f.lower()
+            for prefix in ["strings ", "woodwind ", "woodwinds ", "brass ", "percussion ", "saxophones ", "recorders "]:
+                if clean_f.startswith(prefix):
+                    clean_f = clean_f[len(prefix):]
+            preset_map[f] = clean_f
+
+        # 1. Non-BBC Collections (Epic Choir, Cinematic Percussion, British BTK)
+        if any(k in combined_text for k in ["choir", "vocal", "vocals", "voice", "voices", "epic choir"]) or program in (52, 53, 54):
+            is_staccato = (articulation == "staccato") or any(k in combined_text for k in ["staccato", "short", "syllable", "syllables"])
+            if any(k in combined_text for k in ["tenor choir", "bass choir", "men", "male"]) or "tenor and bass" in combined_text:
+                if is_staccato:
+                    for f in file_subset:
+                        if "choir tenor and bass short staccato syllables" in f.lower():
+                            return os.path.join(preset_dir, f)
+                for f in file_subset:
+                    if "choir tenor and bass long ahh" in f.lower():
                         return os.path.join(preset_dir, f)
-            for f in files:
-                if "choir tenor and bass long ahh" in f.lower():
-                    return os.path.join(preset_dir, f)
-        else:
-            if is_staccato:
-                for f in files:
-                    if "choir soprano and alto short staccato syllables" in f.lower():
+            else:
+                if is_staccato:
+                    for f in file_subset:
+                        if "choir soprano and alto short staccato syllables" in f.lower():
+                            return os.path.join(preset_dir, f)
+                for f in file_subset:
+                    if "choir soprano and alto long ahh" in f.lower():
                         return os.path.join(preset_dir, f)
-            for f in files:
-                if "choir soprano and alto long ahh" in f.lower():
-                    return os.path.join(preset_dir, f)
 
-    # Priority -2.5: Cinematic Percussion presets
-    if any(k in combined_text for k in ["earthquake", "sub hit", "impact", "cinematic bass"]):
-        for f in files:
-            if "earthquake hits" in f.lower():
-                return os.path.join(preset_dir, f)
-    if any(k in combined_text for k in ["metal hit", "metallic hit"]):
-        for f in files:
-            if "metal hits" in f.lower():
-                return os.path.join(preset_dir, f)
-    if any(k in combined_text for k in ["percussion high", "hi hit"]):
-        for f in files:
-            if "percussions hits - high" in f.lower():
-                return os.path.join(preset_dir, f)
-    if any(k in combined_text for k in ["percussion low", "low hit"]):
-        for f in files:
-            if "percussions hits - low" in f.lower():
-                return os.path.join(preset_dir, f)
-    if any(k in combined_text for k in ["swell", "crescendo", "roll"]):
-        for f in files:
-            if "swells" in f.lower():
-                return os.path.join(preset_dir, f)
-    if any(k in combined_text for k in ["tams", "gong"]):
-        for f in files:
-            if "tams and gongs" in f.lower():
-                return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["earthquake", "sub hit", "impact", "cinematic bass"]):
+            for f in file_subset:
+                if "earthquake hits" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["metal hit", "metallic hit"]):
+            for f in file_subset:
+                if "metal hits" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["percussion high", "hi hit"]):
+            for f in file_subset:
+                if "percussions hits - high" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["percussion low", "low hit"]):
+            for f in file_subset:
+                if "percussions hits - low" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["swell", "crescendo", "roll"]):
+            for f in file_subset:
+                if "swells" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["tams", "gong"]):
+            for f in file_subset:
+                if "tams and gongs" in f.lower(): return os.path.join(preset_dir, f)
 
-    # Priority -2: Specific British Tool Kit instruments (Saxophones, Flugelhorn, Recorder, Cor Anglais, Brass Combis)
-    if any(k in combined_text for k in ["alto sax", "bass sax", "saxophone", "sax"]) or program in (64, 65, 66, 67):
-        if "bass sax" in combined_text or program == 67:
-            for f in files:
-                if "bass sax" in f.lower():
-                    return os.path.join(preset_dir, f)
-        elif "alto sax" in combined_text or program == 65:
-            for f in files:
-                if "alto sax" in f.lower():
-                    return os.path.join(preset_dir, f)
-        for f in files:
-            if "saxophone ensemble" in f.lower() or "sax" in f.lower():
-                return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["alto sax", "bass sax", "saxophone", "sax"]) or program in (64, 65, 66, 67):
+            if "bass sax" in combined_text or program == 67:
+                for f in file_subset:
+                    if "bass sax" in f.lower(): return os.path.join(preset_dir, f)
+            elif "alto sax" in combined_text or program == 65:
+                for f in file_subset:
+                    if "alto sax" in f.lower(): return os.path.join(preset_dir, f)
+            for f in file_subset:
+                if "saxophone ensemble" in f.lower() or "sax" in f.lower(): return os.path.join(preset_dir, f)
 
-    if "flugelhorn" in combined_text:
-        for f in files:
-            if "flugelhorn" in f.lower():
-                return os.path.join(preset_dir, f)
+        if "flugelhorn" in combined_text:
+            for f in file_subset:
+                if "flugelhorn" in f.lower(): return os.path.join(preset_dir, f)
+        if "recorder" in combined_text or program == 74:
+            for f in file_subset:
+                if "recorder" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["cor anglais", "english horn"]) or program == 69:
+            for f in file_subset:
+                if "cor anglais" in f.lower() or "english horn" in f.lower(): return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["brass combi", "brass ensemble", "brass section"]) or program == 61:
+            for f in file_subset:
+                if "brass combis" in f.lower(): return os.path.join(preset_dir, f)
 
-    if "recorder" in combined_text or program == 74:
-        for f in files:
-            if "recorder" in f.lower():
-                return os.path.join(preset_dir, f)
-
-    if any(k in combined_text for k in ["cor anglais", "english horn"]) or program == 69:
-        for f in files:
-            if "cor anglais" in f.lower() or "english horn" in f.lower():
-                return os.path.join(preset_dir, f)
-
-    if any(k in combined_text for k in ["brass combi", "brass ensemble", "brass section"]) or program == 61:
-        for f in files:
-            if "brass combis" in f.lower():
-                return os.path.join(preset_dir, f)
-
-    # Priority 0: Exact match with articulation in filename if specified
-    if articulation and articulation != "auto":
-        clean_art = articulation.replace("_", " ")
-        for f in files:
-            if clean_art in f.lower():
-                inst_match = False
-                for inst_k in ["celli", "cello", "violin 1", "violin 2", "violin", "viola", "basses", "bass"]:
-                    if inst_k in combined_text and inst_k in f.lower():
-                        inst_match = True
-                        break
-                if inst_match:
-                    return os.path.join(preset_dir, f)
-
-    # Map file basenames stripped of category prefixes (e.g. "Strings celli.vstpreset" -> "celli.vstpreset")
-    preset_map = {}
-    for f in files:
-        clean_f = f.lower()
-        for prefix in ["strings ", "woodwind ", "woodwinds ", "brass ", "percussion ", "saxophones ", "recorders "]:
-            if clean_f.startswith(prefix):
-                clean_f = clean_f[len(prefix):]
-        preset_map[f] = clean_f
-
-    # Priority 1: Contrabass / Double Bass / Basses
-    if any(k in combined_text for k in ["contrabass", "double bass", "doublebass", "upright bass", "basses"]) or program in (43, 110):
-        for f, clean in preset_map.items():
-            if "basses" in clean or "double bass" in clean or "contrabass" in clean:
-                return os.path.join(preset_dir, f)
-        for f, clean in preset_map.items():
-            if "bass" in clean and "trombone" not in clean and "sax" not in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 2: Violoncello / Celli / Cello
-    if any(k in combined_text for k in ["violoncello", "cello", "celli"]) or program == 42:
-        for f, clean in preset_map.items():
-            if "celli" in clean or "cello" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 3: Viola / Violas
-    if "viola" in combined_text or program in (41, 49):
-        for f, clean in preset_map.items():
-            if "viola" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 4: Violin 2 / 2nd Violin / Violin II
-    if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2"]):
-        for f, clean in preset_map.items():
-            if "violin 2" in clean or "violins 2" in clean or "violin2" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 5: Violin 1 / 1st Violin / Violin I / General Violin
-    if any(k in combined_text for k in ["violin", "violins"]) or program in (40, 48):
-        for f, clean in preset_map.items():
-            if "violin 1" in clean or "violin1" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 6: Flute / Piccolo
-    if "piccolo" in combined_text:
-        for f, clean in preset_map.items():
-            if "piccolo" in clean:
-                return os.path.join(preset_dir, f)
-    if "flute" in combined_text or program == 73:
-        for f, clean in preset_map.items():
-            if "flute" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 7: Oboe / English Horn
-    if "oboe" in combined_text or program == 68:
-        for f, clean in preset_map.items():
-            if "oboe" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 8: Clarinet
-    if "clarinet" in combined_text or program == 71:
-        for f, clean in preset_map.items():
-            if "clarinet" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 9: Bassoon
-    if "bassoon" in combined_text or program == 70:
-        for f, clean in preset_map.items():
-            if "bassoon" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 10: French Horn / Horns
-    if any(k in combined_text for k in ["french horn", "horn"]) or program == 60:
-        for f, clean in preset_map.items():
-            if "horn" in clean and "flugelhorn" not in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 11: Trumpet
-    if "trumpet" in combined_text or program == 56:
-        for f, clean in preset_map.items():
-            if "trumpet" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 12: Trombone
-    if "trombone" in combined_text or program in (57, 109):
-        if "bass" in combined_text:
+        # 2. Strings
+        if any(k in combined_text for k in ["contrabass", "double bass", "doublebass", "upright bass", "basses"]) or program in (43, 110):
             for f, clean in preset_map.items():
-                if "bass trombone" in clean or "bass trombones" in clean:
-                    return os.path.join(preset_dir, f)
-        if "tenor" in combined_text or program == 57:
+                if "basses" in clean or "double bass" in clean or "contrabass" in clean: return os.path.join(preset_dir, f)
             for f, clean in preset_map.items():
-                if "tenor trombone" in clean:
+                if "bass" in clean and "trombone" not in clean and "sax" not in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["violoncello", "cello", "celli"]) or program == 42:
+            for f, clean in preset_map.items():
+                if "celli" in clean or "cello" in clean: return os.path.join(preset_dir, f)
+        if "viola" in combined_text or program in (41, 49):
+            for f, clean in preset_map.items():
+                if "viola" in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["violin 2", "violin2", "2nd violin", "violin ii", "violins 2"]):
+            for f, clean in preset_map.items():
+                if "violin 2" in clean or "violins 2" in clean or "violin2" in clean: return os.path.join(preset_dir, f)
+        if any(k in combined_text for k in ["violin", "violins"]) or program in (40, 48):
+            for f, clean in preset_map.items():
+                if "violin 1" in clean or "violin1" in clean: return os.path.join(preset_dir, f)
+
+        # 3. Woodwinds
+        if "piccolo" in combined_text:
+            for f, clean in preset_map.items():
+                if "piccolo" in clean: return os.path.join(preset_dir, f)
+        if "flute" in combined_text or program == 73:
+            for f, clean in preset_map.items():
+                if "flute" in clean: return os.path.join(preset_dir, f)
+        if "oboe" in combined_text or program == 68:
+            for f, clean in preset_map.items():
+                if "oboe" in clean: return os.path.join(preset_dir, f)
+        if "clarinet" in combined_text or program == 71:
+            for f, clean in preset_map.items():
+                if "clarinet" in clean: return os.path.join(preset_dir, f)
+        if "bassoon" in combined_text or program == 70:
+            for f, clean in preset_map.items():
+                if "bassoon" in clean: return os.path.join(preset_dir, f)
+
+        # 4. Brass
+        if any(k in combined_text for k in ["french horn", "horn"]) or program == 60:
+            for f, clean in preset_map.items():
+                if "horn" in clean and "flugelhorn" not in clean: return os.path.join(preset_dir, f)
+        if "trumpet" in combined_text or program == 56:
+            for f, clean in preset_map.items():
+                if "trumpet" in clean: return os.path.join(preset_dir, f)
+        if "trombone" in combined_text or program in (57, 109):
+            if "bass" in combined_text:
+                for f, clean in preset_map.items():
+                    if "bass trombone" in clean or "bass trombones" in clean: return os.path.join(preset_dir, f)
+            if "tenor" in combined_text or program == 57:
+                for f, clean in preset_map.items():
+                    if "tenor trombone" in clean: return os.path.join(preset_dir, f)
+            for f, clean in preset_map.items():
+                if "trombone" in clean: return os.path.join(preset_dir, f)
+        if "tuba" in combined_text or program == 58:
+            for f, clean in preset_map.items():
+                if "tuba" in clean: return os.path.join(preset_dir, f)
+
+        # 5. Specific Tuned Percussion
+        if "timpani" in combined_text or program == 47:
+            for f, clean in preset_map.items():
+                if "timpani" in clean: return os.path.join(preset_dir, f)
+        if "harp" in combined_text or program == 46:
+            for f, clean in preset_map.items():
+                if "harp" in clean: return os.path.join(preset_dir, f)
+        if "celeste" in combined_text or "celesta" in combined_text or program == 8:
+            for f, clean in preset_map.items():
+                if "celeste" in clean: return os.path.join(preset_dir, f)
+        if "marimba" in combined_text or program == 12:
+            for f, clean in preset_map.items():
+                if "marimba" in clean: return os.path.join(preset_dir, f)
+        if "xylophone" in combined_text or program == 13:
+            for f, clean in preset_map.items():
+                if "xylophone" in clean: return os.path.join(preset_dir, f)
+        if "vibraphone" in combined_text or program == 11:
+            for f, clean in preset_map.items():
+                if "vibraphone" in clean: return os.path.join(preset_dir, f)
+        if "glockenspiel" in combined_text or program == 9:
+            for f, clean in preset_map.items():
+                if "glockenspiel" in clean: return os.path.join(preset_dir, f)
+        if "tubular" in combined_text or "bells" in combined_text or program == 14:
+            for f, clean in preset_map.items():
+                if "tubular" in clean or "bells" in clean: return os.path.join(preset_dir, f)
+        if "crotales" in combined_text:
+            for f, clean in preset_map.items():
+                if "crotales" in clean: return os.path.join(preset_dir, f)
+
+        # 6. Untuned Percussion Keyswitches (Maps to Percussion Untuned Percussion.vstpreset)
+        if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+            for f in file_subset:
+                if "untuned percussion" in f.lower():
                     return os.path.join(preset_dir, f)
-        for f, clean in preset_map.items():
-            if "trombone" in clean:
-                return os.path.join(preset_dir, f)
 
-    # Priority 13: Tuba
-    if "tuba" in combined_text or program == 58:
-        for f, clean in preset_map.items():
-            if "tuba" in clean:
-                return os.path.join(preset_dir, f)
+        return None
 
-    # Priority 14: Timpani
-    if "timpani" in combined_text or program == 47:
-        for f, clean in preset_map.items():
-            if "timpani" in clean:
-                return os.path.join(preset_dir, f)
+    # PASS 1: Search ONLY BBC SO Presets (exclude Non-BBC collections)
+    bbc_files = [f for f in files if not _is_non_bbc(f)]
+    pass1_res = _match_in_files(bbc_files)
+    if pass1_res:
+        return pass1_res
 
-    # Priority 15: Harp
-    if "harp" in combined_text or program == 46:
-        for f, clean in preset_map.items():
-            if "harp" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 16: Celeste
-    if "celeste" in combined_text or "celesta" in combined_text or program == 8:
-        for f, clean in preset_map.items():
-            if "celeste" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 17: Marimba / Xylophone / Vibraphone / Glockenspiel / Tubular Bells / Crotales
-    if "marimba" in combined_text or program == 12:
-        for f, clean in preset_map.items():
-            if "marimba" in clean:
-                return os.path.join(preset_dir, f)
-    if "xylophone" in combined_text or program == 13:
-        for f, clean in preset_map.items():
-            if "xylophone" in clean:
-                return os.path.join(preset_dir, f)
-    if "vibraphone" in combined_text or program == 11:
-        for f, clean in preset_map.items():
-            if "vibraphone" in clean:
-                return os.path.join(preset_dir, f)
-    if "glockenspiel" in combined_text or program == 9:
-        for f, clean in preset_map.items():
-            if "glockenspiel" in clean:
-                return os.path.join(preset_dir, f)
-    if "tubular" in combined_text or "bells" in combined_text or program == 14:
-        for f, clean in preset_map.items():
-            if "tubular" in clean or "bells" in clean:
-                return os.path.join(preset_dir, f)
-    if "crotales" in combined_text:
-        for f, clean in preset_map.items():
-            if "crotales" in clean:
-                return os.path.join(preset_dir, f)
-
-    # Priority 18: Untuned Percussion preset match (Fallback after all tuned percussion)
-    if articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "snare", "military drum", "tam tam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
-        for f in files:
-            if "untuned percussion" in f.lower():
-                return os.path.join(preset_dir, f)
+    # PASS 2: Search Non-BBC SO Presets (Epic Choir, Cinematic Percussion, British BTK)
+    non_bbc_files = [f for f in files if _is_non_bbc(f)]
+    pass2_res = _match_in_files(non_bbc_files)
+    if pass2_res:
+        return pass2_res
 
     return None
 
@@ -1009,6 +962,8 @@ def render_orchestrator_tracks(
                         except Exception as p_err:
                             plugin_obj.raw_state = open(vst_preset, 'rb').read()
                             _log(f"Track {idx}: Dedicated VST3 instance ({os.path.basename(dll_path)}) raw-state preset {os.path.basename(vst_preset)}")
+                    else:
+                        _log(f"Track {idx} ('{orig_inst.name}'): No matching VST preset found. Defaulting to BBC SO plugin default (Violin 1).")
                     task["plugin_obj"] = plugin_obj
                 except Exception as init_err:
                     _log(f"Track {idx}: VST3 pre-init notice ({dll_path}): {init_err}")
