@@ -731,6 +731,7 @@ class MidiOrchestrator:
                 job_reverb_enabled = job_info.get("reverb_enabled")
                 job_reverb_room_size = job_info.get("reverb_room_size")
                 job_reverb_preset = job_info.get("reverb_preset")
+                job_peak_ceiling_db = job_info.get("peak_ceiling_db", -6.0)
                 
                 def _update_progress(pct):
                     if job_id in self.status:
@@ -753,6 +754,11 @@ class MidiOrchestrator:
                 )
                 if actual_sf:
                     self.status[job_id]["last_built_soundfont"] = actual_sf
+                if backing_insts_wav_path.exists():
+                    try:
+                        shutil.copyfile(str(backing_insts_wav_path), str(job_dir / "backing_dry.wav"))
+                    except Exception as e:
+                        print(f"Notice: Failed to save backing_dry.wav ({e})")
             
             self.status[job_id]["progress"] = 70
             self.status[job_id]["status"] = "mixing audio"

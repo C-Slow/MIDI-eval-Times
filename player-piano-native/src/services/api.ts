@@ -453,6 +453,13 @@ export const midiOrchestratorApi = {
     const res = await api.get('/midi-orchestrator/reverb-presets');
     return res.data;
   },
+  applyReverb: async (jobId: string, reverbPreset?: string, reverbEnabled?: boolean) => {
+    const res = await api.post(`/midi-orchestrator/apply-reverb/${jobId}`, {
+      reverb_preset: reverbPreset,
+      reverb_enabled: reverbEnabled
+    });
+    return res.data;
+  },
   rename: async (jobId: string, newFilename: string) => {
     const res = await api.post(`/midi-orchestrator/rename/${jobId}`, { new_filename: newFilename });
     return res.data;

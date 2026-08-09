@@ -1750,6 +1750,93 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     midi_orchestrator._save_db()
     return {"status": "success", "metadata": midi_orchestrator.status[job_id]}
 
+class ApplyReverbRequest(BaseModel):
+    reverb_preset: Optional[str] = None
+    reverb_enabled: Optional[bool] = None
+
+@app.post("/midi-orchestrator/apply-reverb/{job_id}", dependencies=[Depends(verify_auth)])
+async def apply_reverb_midi_orchestrator(job_id: str, req: ApplyReverbRequest):
+    if job_id not in midi_orchestrator.status:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    job_info = midi_orchestrator.status[job_id]
+    job_dir = midi_orchestrator.jobs_dir / job_id
+    
+    preset = req.reverb_preset or job_info.get("reverb_preset") or "AIR Studios Reverb Essentials - Intimate Close.vstpreset"
+    enabled = req.reverb_enabled if req.reverb_enabled is not None else job_info.get("reverb_enabled", True)
+    peak_ceiling_db = job_info.get("peak_ceiling_db", -6.0)
+
+    # Save to metadata
+    job_info["reverb_preset"] = preset
+    job_info["reverb_enabled"] = enabled
+    midi_orchestrator._save_db()
+
+    # Source dry audio file (fallback to backing.wav if backing_dry.wav missing)
+    dry_wav = job_dir / "backing_dry.wav"
+    if not dry_wav.exists():
+        dry_wav = job_dir / "backing.wav"
+        if dry_wav.exists():
+            try:
+                shutil.copyfile(str(dry_wav), str(job_dir / "backing_dry.wav"))
+                dry_wav = job_dir / "backing_dry.wav"
+            except Exception:
+                pass
+                
+    if not dry_wav.exists():
+        raise HTTPException(status_code=404, detail="No audio file found for reverb processing")
+
+    out_backing_wav = job_dir / "backing.wav"
+    t0 = time.time()
+
+    try:
+        if not enabled:
+            shutil.copyfile(str(dry_wav), str(out_backing_wav))
+            log_msg = f"Disabled Master VST3 Reverb; copied dry backing audio ({round(time.time() - t0, 2)}s)"
+        else:
+            rev_plugin_path = utils.get_vst3_plugin_path(preset)
+            rev_preset_file = os.path.join(utils.PROJECT_ROOT, "storage", "vst_presets", preset)
+            if not os.path.exists(rev_plugin_path) or not os.path.exists(rev_preset_file):
+                raise HTTPException(status_code=404, detail=f"Reverb preset or VST3 plugin not found ({preset})")
+                
+            import soundfile as sf, numpy as np
+            from pedalboard import Pedalboard, load_plugin
+            
+            audio_data, sr = sf.read(str(dry_wav), dtype='float32')
+            rev_plug = load_plugin(rev_plugin_path)
+            rev_plug.raw_state = open(rev_preset_file, "rb").read()
+            board = Pedalboard([rev_plug])
+            
+            if audio_data.ndim == 1:
+                audio_in = np.vstack([audio_data, audio_data])
+            else:
+                audio_in = audio_data.T
+                
+            audio_out = board(audio_in, sample_rate=float(sr)).T
+            max_val = np.max(np.abs(audio_out))
+            if max_val > 0:
+                audio_out = (audio_out / max_val) * 0.9
+            sf.write(str(out_backing_wav), audio_out, int(sr), subtype='PCM_24')
+            utils.normalize_wav_file(str(out_backing_wav), target_peak_db=peak_ceiling_db)
+            
+            elapsed = round(time.time() - t0, 2)
+            log_msg = f"Applied Master VST3 Reverb preset '{preset}' to backing audio in {elapsed}s"
+
+        utils._log(log_msg)
+        
+        worker_log = job_dir / "worker.log"
+        if worker_log.exists():
+            try:
+                with open(worker_log, "a", encoding="utf-8") as f:
+                    f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] LOG: {log_msg}\n")
+            except Exception:
+                pass
+                
+        return {"status": "success", "message": log_msg, "reverb_preset": preset}
+
+    except Exception as e:
+        utils._log(f"Error applying reverb preset to backing audio: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class MidiOrchestratorRenameRequest(BaseModel):
     new_filename: str
 

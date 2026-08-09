@@ -786,28 +786,8 @@ export const MidiEditorScreen = () => {
     if (!selectedJobId) return;
     setIsUpdatingReverb(true);
     try {
-      await midiOrchestratorApi.updateMetadata(selectedJobId, {
-        reverb_enabled: true,
-        reverb_preset: presetFilename
-      });
-      await midiOrchestratorApi.process(
-        selectedJobId,
-        pianoTrackIndices,
-        activeTrackIndices,
-        pedalPreset,
-        rhythmFactor,
-        melodyFactor,
-        vocalMaleTrackIndices,
-        vocalFemaleTrackIndices,
-        importedVocals,
-        {
-          soundfont: activeSoundfont,
-          reverb_enabled: true,
-          reverb_room_size: reverbRoomSize,
-          peak_ceiling_db: peakCeilingDb,
-          tracks_config: tracksConfig
-        }
-      );
+      const res = await midiOrchestratorApi.applyReverb(selectedJobId, presetFilename, true);
+      console.log('Applied reverb preset to backing file:', res);
       const jobList = await midiOrchestratorApi.getJobs();
       setJobs(jobList);
     } catch (err) {
