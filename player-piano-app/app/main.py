@@ -1696,6 +1696,7 @@ class MidiOrchestratorMetadataUpdate(BaseModel):
     soundfont: Optional[str] = None
     reverb_enabled: Optional[bool] = None
     reverb_room_size: Optional[float] = None
+    reverb_preset: Optional[str] = None
     peak_ceiling_db: Optional[float] = None
     tracks_config: Optional[Dict[str, Any]] = None
 
@@ -1718,6 +1719,7 @@ async def get_midi_orchestrator_metadata(job_id: str):
         "soundfont": job.get("soundfont"),
         "reverb_enabled": job.get("reverb_enabled"),
         "reverb_room_size": job.get("reverb_room_size"),
+        "reverb_preset": job.get("reverb_preset"),
         "peak_ceiling_db": job.get("peak_ceiling_db"),
         "tracks_config": job.get("tracks_config", {})
     }
@@ -1740,6 +1742,7 @@ async def update_midi_orchestrator_metadata(job_id: str, req: MidiOrchestratorMe
     if req.soundfont is not None: updates["soundfont"] = req.soundfont
     if req.reverb_enabled is not None: updates["reverb_enabled"] = req.reverb_enabled
     if req.reverb_room_size is not None: updates["reverb_room_size"] = req.reverb_room_size
+    if req.reverb_preset is not None: updates["reverb_preset"] = req.reverb_preset
     if req.peak_ceiling_db is not None: updates["peak_ceiling_db"] = req.peak_ceiling_db
     if req.tracks_config is not None: updates["tracks_config"] = req.tracks_config
     
@@ -2041,6 +2044,35 @@ async def get_vst_presets():
             })
             
     return {"categories": categories}
+
+
+@app.get("/midi-orchestrator/reverb-presets", dependencies=[Depends(verify_auth)])
+async def get_reverb_presets():
+    """Scan storage/vst_presets for reverb presets and return clean title list."""
+    preset_dir = Path(utils.PROJECT_ROOT) / "storage" / "vst_presets"
+    presets = []
+    if preset_dir.exists():
+        for file in sorted(preset_dir.glob("*.vstpreset")):
+            fname = file.name
+            if "reverb" in fname.lower() or "air studios" in fname.lower():
+                stem = file.stem
+                title = stem
+                for prefix in [
+                    "AIR Studios Reverb Essentials - ",
+                    "AIR Studios Reverb - ",
+                    "AIR Reverb - ",
+                    "Reverb - ",
+                    "Reverb Essentials - "
+                ]:
+                    if title.startswith(prefix):
+                        title = title[len(prefix):]
+                        break
+                presets.append({
+                    "id": fname,
+                    "filename": fname,
+                    "title": title
+                })
+    return {"presets": presets}
 
 
 class ConnectDeviceRequest(BaseModel):

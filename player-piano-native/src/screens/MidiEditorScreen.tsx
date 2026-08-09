@@ -659,6 +659,9 @@ export const MidiEditorScreen = () => {
   const [activeSoundfont, setActiveSoundfont] = useState<string>('SGM-V2.01.sf2');
   const [reverbEnabled, setReverbEnabled] = useState<boolean>(true);
   const [reverbRoomSize, setReverbRoomSize] = useState<number>(0.75);
+  const [reverbPresets, setReverbPresets] = useState<{ id: string; filename: string; title: string }[]>([]);
+  const [selectedReverbPreset, setSelectedReverbPreset] = useState<string>('AIR Studios Reverb Essentials - Intimate Close.vstpreset');
+  const [isUpdatingReverb, setIsUpdatingReverb] = useState<boolean>(false);
 
   const [peakCeilingDb, setPeakCeilingDb] = useState<number>(-6.0);
   const [fullPreviewMode, setFullPreviewMode] = useState<boolean>(false);
@@ -707,12 +710,19 @@ export const MidiEditorScreen = () => {
     initSettings();
   }, [setBackendAudioEnabled, setBackendAudioVolume]);
 
-  // Fetch devices and soundfonts when settings panel is opened
+  // Fetch devices, soundfonts and reverb presets when settings panel is opened
   useEffect(() => {
     if (editingTrackIndex !== null || showSettings) {
       midiOrchestratorApi.getVstPresets()
         .then(res => setVstCategories(res.categories || {}))
         .catch(e => console.log('Failed to fetch VST presets', e));
+      midiOrchestratorApi.getReverbPresets()
+        .then(res => {
+          if (res && res.presets) {
+            setReverbPresets(res.presets);
+          }
+        })
+        .catch(e => console.log('Failed to fetch Reverb presets', e));
     }
   }, [editingTrackIndex, showSettings]);
 
@@ -768,6 +778,35 @@ export const MidiEditorScreen = () => {
       });
     } catch (err) {
       console.error('Failed to save reverb setting', err);
+    }
+  };
+
+  const handleUpdateReverbPreset = async (presetFilename: string) => {
+    setSelectedReverbPreset(presetFilename);
+    if (!selectedJobId) return;
+    setIsUpdatingReverb(true);
+    try {
+      await midiOrchestratorApi.updateMetadata(selectedJobId, {
+        reverb_enabled: true,
+        reverb_preset: presetFilename
+      });
+      await midiOrchestratorApi.renderPreview(
+        selectedJobId,
+        activeTrackIndices.join(','),
+        silentTrackIndices.join(','),
+        soloTrackIndices.join(','),
+        softMuteTrackIndices.join(','),
+        activeSoundfont,
+        true,
+        reverbRoomSize,
+        peakCeilingDb,
+        true,
+        tracksConfig
+      );
+    } catch (err) {
+      console.error('Failed to update reverb preset for backing file', err);
+    } finally {
+      setIsUpdatingReverb(false);
     }
   };
 
@@ -1115,6 +1154,9 @@ export const MidiEditorScreen = () => {
       setActiveSoundfont(jobSf);
       setReverbEnabled(job.reverb_enabled ?? globalAudio.reverb_enabled ?? true);
       setReverbRoomSize(job.reverb_room_size ?? globalAudio.reverb_room_size ?? 0.55);
+      if (job.reverb_preset) {
+        setSelectedReverbPreset(job.reverb_preset);
+      }
       setPeakCeilingDb(job.peak_ceiling_db ?? globalAudio.peak_ceiling_db ?? -6.0);
     } catch (err) {
       console.error('Failed to load per-job audio settings:', err);
@@ -3509,12 +3551,12 @@ export const MidiEditorScreen = () => {
                     Orchestral DSP & Master Reverb
                   </Text>
 
-                  {/* Reverb Toggle & Room Size */}
+                  {/* Reverb Toggle & Presets */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
                       <Text style={{ fontSize: 12, color: themeColors.text, fontWeight: '600' }}>
-                        Concert Hall Reverb DSP
+                        AIR Studios Reverb Essentials
                       </Text>
                     </View>
                     <Switch
@@ -3528,29 +3570,26 @@ export const MidiEditorScreen = () => {
                   {reverbEnabled && (
                     <View style={{ marginTop: 8 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 11, color: themeColors.textMuted }}>Hall Room Size:</Text>
-                        <Text style={{ fontSize: 11, color: themeColors.text, fontWeight: 'bold' }}>
-                          {Math.round(reverbRoomSize * 100)}%
-                        </Text>
+                        <Text style={{ fontSize: 11, color: themeColors.textMuted }}>Reverb Preset:</Text>
+                        {isUpdatingReverb && (
+                          <ActivityIndicator size="small" color={themeColors.accent} />
+                        )}
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {[
-                          { label: 'Studio (35%)', val: 0.35 },
-                          { label: 'Concert Hall (55%)', val: 0.55 },
-                          { label: 'Cathedral (80%)', val: 0.80 }
-                        ].map((preset) => {
-                          const isSel = Math.abs(reverbRoomSize - preset.val) < 0.08;
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                        {(reverbPresets.length > 0 ? reverbPresets : [{ id: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', filename: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', title: 'Intimate Close' }]).map((preset) => {
+                          const isSel = selectedReverbPreset === preset.filename;
                           return (
                             <TouchableOpacity
-                              key={preset.label}
+                              key={preset.filename}
+                              disabled={isUpdatingReverb}
                               style={[
                                 styles.presetBadge,
                                 isSel ? { backgroundColor: themeColors.accent, borderColor: themeColors.accent } : { backgroundColor: themeColors.surface }
                               ]}
-                              onPress={() => handleChangeReverbRoomSize(preset.val)}
+                              onPress={() => handleUpdateReverbPreset(preset.filename)}
                             >
                               <Text style={[styles.presetBadgeText, { color: isSel ? '#fff' : themeColors.text }]}>
-                                {preset.label}
+                                {preset.title}
                               </Text>
                             </TouchableOpacity>
                           );
