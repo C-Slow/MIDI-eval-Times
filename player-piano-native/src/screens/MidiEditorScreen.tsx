@@ -3563,7 +3563,10 @@ export const MidiEditorScreen = () => {
                         )}
                       </View>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-                        {(reverbPresets.length > 0 ? reverbPresets : [{ id: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', filename: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', title: 'Intimate Close' }]).map((preset) => {
+                        {(reverbPresets.length > 0 ? reverbPresets : [
+                          { id: 'none', filename: 'none', title: 'Dry (No Reverb)' },
+                          { id: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', filename: 'AIR Studios Reverb Essentials - Intimate Close.vstpreset', title: 'Intimate Close' }
+                        ]).map((preset) => {
                           const isSel = selectedReverbPreset === preset.filename;
                           return (
                             <TouchableOpacity
@@ -3598,7 +3601,7 @@ export const MidiEditorScreen = () => {
                           marginTop: 10,
                           opacity: (isUpdatingReverb || !selectedJobId) ? 0.6 : 1.0
                         }}
-                        onPress={() => handleUpdateReverbPreset(selectedReverbPreset, true)}
+                        onPress={() => handleUpdateReverbPreset(selectedReverbPreset)}
                       >
                         {isUpdatingReverb ? (
                           <ActivityIndicator size="small" color="#fff" />

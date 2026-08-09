@@ -1789,9 +1789,13 @@ async def apply_reverb_midi_orchestrator(job_id: str, req: ApplyReverbRequest):
     t0 = time.time()
 
     try:
-        if not enabled:
+        if not enabled or preset.lower() in ["none", "dry", "off"]:
+            job_info["reverb_enabled"] = False
+            job_info["reverb_preset"] = "none"
+            midi_orchestrator._save_db()
             shutil.copyfile(str(dry_wav), str(out_backing_wav))
-            log_msg = f"Disabled Master VST3 Reverb; copied dry backing audio ({round(time.time() - t0, 2)}s)"
+            elapsed = round(time.time() - t0, 2)
+            log_msg = f"Disabled Master VST3 Reverb; restored dry backing audio ({elapsed}s)"
         else:
             rev_plugin_path = utils.get_vst3_plugin_path(preset)
             rev_preset_file = os.path.join(utils.PROJECT_ROOT, "storage", "vst_presets", preset)
@@ -2154,7 +2158,13 @@ async def get_vst_presets():
 async def get_reverb_presets():
     """Scan storage/vst_presets for reverb presets and return clean title list."""
     preset_dir = Path(utils.PROJECT_ROOT) / "storage" / "vst_presets"
-    presets = []
+    presets = [
+        {
+            "id": "none",
+            "filename": "none",
+            "title": "Dry (No Reverb)"
+        }
+    ]
     if preset_dir.exists():
         for file in sorted(preset_dir.glob("*.vstpreset")):
             fname = file.name
