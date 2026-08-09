@@ -247,10 +247,10 @@ PERCUSSION_TECHNIQUE_KEYS = [
     "tenor_drum", "toys", "triangle"
 ]
 
-def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]:
+def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[List] = None) -> Optional[str]:
     text = (track_name or "").lower()
 
-    # Untuned Percussion Techniques
+    # Untuned Percussion Specific Techniques
     if "anvil" in text:
         return "anvil"
     if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
@@ -271,14 +271,24 @@ def detect_articulation(track_name: str = "", program: int = 0) -> Optional[str]
         return "tam_tam"
     if "tambourine" in text:
         return "tambourine"
-    if "tenor drum" in text:
+    if any(k in text for k in ["tenor drum", "tom", "toms", "tom-tom", "floor tom", "mid tom", "low tom", "high tom"]):
         return "tenor_drum"
     if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets"]):
         return "toys"
     if "triangle" in text:
         return "triangle"
-    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127):
-        return "snare_1"
+
+    # General Drumset / Percussion Smart Keyswitch Resolver (Pitch-aware)
+    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        if notes and len(notes) > 0:
+            avg_pitch = sum(n.pitch for n in notes) / len(notes)
+            if avg_pitch < 45:
+                return "bass_drum_1"
+            elif avg_pitch < 59:
+                return "tenor_drum"
+            else:
+                return "snare_1"
+        return "tenor_drum"
 
     # String Articulations
     if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
@@ -966,7 +976,7 @@ def render_orchestrator_tracks(
             single_pm.write(stem_midi)
             
             user_art = track_cfg.get("articulation", "auto")
-            articulation = user_art if user_art != "auto" else detect_articulation(orig_inst.name, new_inst.program)
+            articulation = user_art if user_art != "auto" else detect_articulation(orig_inst.name, new_inst.program, notes=new_inst.notes)
 
             task = {
                 "idx": idx,
