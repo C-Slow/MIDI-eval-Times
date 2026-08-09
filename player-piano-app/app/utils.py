@@ -355,8 +355,10 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
         return any(f_lower.endswith(s.lower()) for s in [
             " - epic choir.vstpreset",
             " - cinematic percussion.vstpreset",
-            " - british tool kit.vstpreset"
-        ]) or any(k in f_lower for k in ["epic choir", "cinematic percussion", "british tool kit"])
+            " - british tool kit.vstpreset",
+            " - aperture the stack.vstpreset",
+            " - kontakt.vstpreset"
+        ]) or any(k in f_lower for k in ["epic choir", "cinematic percussion", "british tool kit", "aperture", "kontakt"])
 
     # Core instrument matching logic for a given preset file subset
     def _match_in_files(file_subset: List[str]) -> Optional[str]:
@@ -407,6 +409,31 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
         if any(k in combined_text for k in ["tams", "gong"]):
             for f in file_subset:
                 if "tams and gongs" in f.lower(): return os.path.join(preset_dir, f)
+
+        # Aperture & Kontakt Guitar/Synth Presets
+        if any(k in combined_text for k in ["electric guitar", "eguitar", "distorted guitar", "overdriven guitar"]):
+            for f in file_subset:
+                if "electric guitar - aperture the stack" in f.lower(): return os.path.join(preset_dir, f)
+
+        if any(k in combined_text for k in ["synth", "synthesizer", "lead synth", "synth pad", "pad"]) and not any(k in combined_text for k in ["choir", "voice", "string", "strings", "brass"]):
+            for f in file_subset:
+                if "synth - aperture the stack" in f.lower(): return os.path.join(preset_dir, f)
+
+        if "banjo" in combined_text:
+            for f in file_subset:
+                if "guitar solo banjo - kontakt" in f.lower(): return os.path.join(preset_dir, f)
+
+        if any(k in combined_text for k in ["mandolin", "mandolino"]):
+            for f in file_subset:
+                if "guitar solo mandolin - kontakt" in f.lower(): return os.path.join(preset_dir, f)
+
+        if any(k in combined_text for k in ["folk ensemble", "plucked folk", "folk guitar"]):
+            for f in file_subset:
+                if "guitar plucked folk ensemble - kontakt" in f.lower(): return os.path.join(preset_dir, f)
+
+        if any(k in combined_text for k in ["acoustic guitar", "nylon guitar", "steel guitar", "chitarra"]):
+            for f in file_subset:
+                if "guitar solo guitar - kontakt" in f.lower(): return os.path.join(preset_dir, f)
 
         if any(k in combined_text for k in ["alto sax", "bass sax", "saxophone", "sax"]) or program in (64, 65, 66, 67):
             if "bass sax" in combined_text or program == 67:
@@ -617,19 +644,12 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
 
 
 def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: Optional[str] = None) -> str:
-    """Resolve the appropriate VST3 plugin DLL path based on preset name (Splice INSTRUMENT, British Drama Toolkit, or BBC SO)."""
+    """Resolve the appropriate VST3 plugin DLL path based on preset name (Splice INSTRUMENT, British Drama Toolkit, Aperture the Stack, Kontakt 8, or BBC SO)."""
     bbc_dll = r"C:\Program Files\Common Files\VST3\BBC Symphony Orchestra (64 Bit).vst3\Contents\x86_64-win\BBC Symphony Orchestra (64 Bit).vst3"
     splice_dll = r"C:\Program Files\Common Files\VST3\Splice\Splice INSTRUMENT.vst3\Contents\x86_64-win\Splice INSTRUMENT.vst3"
     bdt_dll = r"C:\Program Files\Common Files\VST3\British Drama Toolkit.vst3"
-
-    if preset_path:
-        p_lower = preset_path.lower()
-        if any(k in p_lower for k in ["epic choir", "cinematic percussion", "splice"]):
-            if os.path.exists(splice_dll):
-                return splice_dll
-        if any(k in p_lower for k in ["british tool kit", "british drama"]):
-            if os.path.exists(bdt_dll):
-                return bdt_dll
+    aperture_dll = r"C:\Program Files\Common Files\VST3\Aperture - The Stack.vst3"
+    kontakt_dll = r"C:\Program Files\Common Files\VST3\Kontakt 8.vst3"
 
     def _resolve_binary_file(path_str: Optional[str]) -> Optional[str]:
         if not path_str or not os.path.exists(path_str):
@@ -648,6 +668,21 @@ def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: O
                 if f.lower().endswith(".vst3"):
                     return os.path.join(win_dir, f)
         return None
+
+    if preset_path:
+        p_lower = preset_path.lower()
+        if any(k in p_lower for k in ["epic choir", "cinematic percussion", "splice"]):
+            if os.path.exists(splice_dll):
+                return splice_dll
+        if any(k in p_lower for k in ["british tool kit", "british drama"]):
+            if os.path.exists(bdt_dll):
+                return bdt_dll
+        if any(k in p_lower for k in ["aperture", "the stack"]):
+            res = _resolve_binary_file(aperture_dll)
+            if res: return res
+        if any(k in p_lower for k in ["kontakt"]):
+            res = _resolve_binary_file(kontakt_dll)
+            if res: return res
 
     resolved_default = _resolve_binary_file(default_vst3_path)
     if resolved_default:
@@ -1086,7 +1121,7 @@ def render_orchestrator_tracks(
                     
                     messages = []
                     # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active (BBC SO only)
-                    is_non_bbc_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice", "british tool kit", "british drama"])
+                    is_non_bbc_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice", "british tool kit", "british drama", "aperture", "kontakt"])
                     if not is_non_bbc_inst and articulation and articulation in SPITFIRE_KEYSWITCHES:
                         ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
                         messages.append(mido.Message('note_on', note=ks_pitch, velocity=127, time=0.0, channel=0))

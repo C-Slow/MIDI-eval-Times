@@ -2007,7 +2007,7 @@ async def get_vst_presets():
             
             if len(parts) == 2:
                 raw_cat = parts[0].strip()
-                inst_name = parts[1].strip()
+                inst_name = parts[1].lstrip("-").strip()
             else:
                 raw_cat = "General"
                 inst_name = stem
@@ -2022,6 +2022,10 @@ async def get_vst_presets():
                 cat_normalized = "Strings"
             elif cat_normalized.lower().startswith("brass"):
                 cat_normalized = "Brass"
+            elif cat_normalized.lower().startswith("guitar") or cat_normalized.lower().startswith("electric"):
+                cat_normalized = "Guitar"
+            elif cat_normalized.lower().startswith("synth"):
+                cat_normalized = "Synth"
                 
             if cat_normalized not in categories:
                 categories[cat_normalized] = []
