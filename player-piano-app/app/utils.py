@@ -1037,8 +1037,8 @@ def render_orchestrator_tracks(
                     
                     messages = []
                     # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active (BBC SO only)
-                    is_splice_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice"])
-                    if not is_splice_inst and articulation and articulation in SPITFIRE_KEYSWITCHES:
+                    is_non_bbc_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice", "british tool kit", "british drama"])
+                    if not is_non_bbc_inst and articulation and articulation in SPITFIRE_KEYSWITCHES:
                         ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
                         messages.append(mido.Message('note_on', note=ks_pitch, velocity=127, time=0.0, channel=0))
                         messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.04, channel=0))
@@ -1050,7 +1050,7 @@ def render_orchestrator_tracks(
                         _log(f"Track {idx}: Injected Spitfire Keyswitch (Pitch {ks_pitch}) + UACC CC32 ({SPITFIRE_UACC.get(articulation, 'N/A')}) for {articulation.upper()} at t=0s")
 
                     # Apply 50ms lead offset so keyswitch takes effect before musical notes sound
-                    lead_offset = 0.05 if (not is_splice_inst and articulation and articulation in SPITFIRE_KEYSWITCHES) else 0.0
+                    lead_offset = 0.05 if (not is_non_bbc_inst and articulation and articulation in SPITFIRE_KEYSWITCHES) else 0.0
                     for inst in pm_task.instruments:
                         for n in inst.notes:
                             start_t = n.start + lead_offset
