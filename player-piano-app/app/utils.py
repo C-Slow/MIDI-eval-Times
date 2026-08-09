@@ -593,7 +593,9 @@ def get_vst3_plugin_path(preset_path: Optional[str] = None, default_vst3_path: O
         if not path_str or not os.path.exists(path_str):
             return None
         if os.path.isfile(path_str):
-            return path_str
+            if path_str.lower().endswith(".vst3") or "vst" in path_str.lower():
+                return path_str
+            return None
         base = os.path.basename(path_str)
         inner = os.path.join(path_str, "Contents", "x86_64-win", base)
         if os.path.isfile(inner):
@@ -945,7 +947,9 @@ def render_orchestrator_tracks(
             track_cfg = tracks_config.get(str(idx), {}) or tracks_config.get(idx, {})
             
             track_sf = track_cfg.get("soundfont") or job_sf_name
-            sf_path = resolve_soundfont_path(track_sf)
+            if track_sf and (track_sf.lower().endswith(".sf2") or "sf2" in track_sf.lower()):
+                track_sf = None
+            sf_path = resolve_soundfont_path(track_sf) if track_sf else None
             
             track_gain = float(track_cfg.get("gain", 1.0))
             track_transpose = int(track_cfg.get("transpose", 0))

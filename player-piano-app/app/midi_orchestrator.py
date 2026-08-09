@@ -723,8 +723,9 @@ class MidiOrchestrator:
                 self.status[job_id]["status"] = "synthesizing backing tracks"
                 self._save_db()
                 
-                job_info = self.status.get(job_id, {})
                 job_sf_name = job_info.get("soundfont")
+                if job_sf_name and (job_sf_name.lower().endswith(".sf2") or "sf2" in job_sf_name.lower()):
+                    job_sf_name = None
                 job_tracks_cfg = job_info.get("tracks_config", {})
                 job_reverb_enabled = job_info.get("reverb_enabled")
                 job_reverb_room_size = job_info.get("reverb_room_size")

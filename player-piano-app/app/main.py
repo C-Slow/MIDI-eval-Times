@@ -2000,6 +2000,8 @@ async def get_vst_presets():
     if preset_dir.exists():
         for file in sorted(preset_dir.glob("*.vstpreset")):
             fname = file.name
+            if "reverb" in fname.lower() or "air studios" in fname.lower():
+                continue
             stem = file.stem
             parts = stem.split(" ", 1)
             
