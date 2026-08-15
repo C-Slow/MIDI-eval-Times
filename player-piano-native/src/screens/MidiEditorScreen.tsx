@@ -556,6 +556,8 @@ export const MidiEditorScreen = () => {
   const globalOffset = useStore(state => state.midiOrchestrateOffset);
   const setGlobalOffset = useStore(state => state.setMidiOrchestrateOffset);
   const setSystemBusy = useStore(state => state.setSystemBusy);
+  const playlists = useStore(state => state.playlists);
+  const setPlaylists = useStore(state => state.setPlaylists);
 
   // Screen Stages: 'list' | 'visualizer'
   const [stage, setStage] = useState<'list' | 'visualizer'>('list');
@@ -921,6 +923,7 @@ export const MidiEditorScreen = () => {
   const [isFetchingWorkerLog, setIsFetchingWorkerLog] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [activeRunningJob, setActiveRunningJob] = useState<any>(null);
+  const [playlistModal, setPlaylistModal] = useState<{ visible: boolean; newPlaylistName: string }>({ visible: false, newPlaylistName: '' });
 
   useEffect(() => {
     if (!showWorkerLogModal || !selectedJobId) return;
@@ -954,6 +957,46 @@ export const MidiEditorScreen = () => {
   };
 
   const clearSelection = () => setSelectedJobs(new Set());
+
+  const handleAddToPlaylist = async (plName: string) => {
+    if (selectedJobs.size === 0) return;
+    const selectedList = jobs.filter(j => selectedJobs.has(j.job_id));
+    const toAddFilenames: string[] = [];
+    
+    for (const job of selectedList) {
+      const key = job.filename || `hybrid:${job.job_id}`;
+      toAddFilenames.push(key);
+      if (job.filename && !toAddFilenames.includes(`hybrid:${job.job_id}`)) {
+        toAddFilenames.push(`hybrid:${job.job_id}`);
+      }
+      
+      const existingPl = new Set<string>(job.playlists || []);
+      existingPl.add(plName);
+      await midiOrchestratorApi.updateMetadata(job.job_id, { playlists: Array.from(existingPl) }).catch(() => {});
+    }
+
+    try {
+      await playlistApi.addBulk(plName, toAddFilenames);
+    } catch (e) {
+      console.error('Failed to add jobs to playlist', e);
+    }
+
+    setPlaylistModal({ visible: false, newPlaylistName: '' });
+    clearSelection();
+    await fetchJobs();
+  };
+
+  const handleCreateAndAddPlaylist = async () => {
+    const name = playlistModal.newPlaylistName.trim();
+    if (!name) return;
+    try {
+      await playlistApi.createPlaylist(name);
+      await handleAddToPlaylist(name);
+    } catch (e) {
+      console.error('Failed to create and add playlist', e);
+      Alert.alert('Error', 'Failed to create playlist');
+    }
+  };
 
   const getCleanTitle = (filename: string) => {
     if (!filename) return '';
@@ -2654,6 +2697,11 @@ export const MidiEditorScreen = () => {
                     </TouchableOpacity>
                   </>
                 )}
+
+                <TouchableOpacity style={styles.barBtn} onPress={() => setPlaylistModal({ visible: true, newPlaylistName: '' })}>
+                  <Ionicons name="list-outline" size={20} color="#fff" />
+                  <Text style={styles.barBtnText}>List</Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity style={styles.barBtn} onPress={handleBulkDelete}>
                   <Ionicons name="trash-outline" size={20} color="#fff" />
@@ -4571,6 +4619,54 @@ export const MidiEditorScreen = () => {
                 <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 13 }}>Dismiss</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Playlist Select Modal */}
+      <Modal visible={playlistModal.visible} transparent animationType="slide" onRequestClose={() => setPlaylistModal(p => ({ ...p, visible: false }))}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.surface, width: '88%', padding: 20, borderRadius: 16 }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text, fontSize: 18, marginBottom: 15 }]}>Add to Playlist</Text>
+            
+            <TextInput 
+              style={[styles.modalInput, { marginBottom: 10, borderColor: themeColors.border, backgroundColor: themeColors.background, color: themeColors.text }]} 
+              placeholder="New Playlist Name" 
+              placeholderTextColor={themeColors.textMuted} 
+              value={playlistModal.newPlaylistName} 
+              onChangeText={(v) => setPlaylistModal(p => ({ ...p, newPlaylistName: v }))} 
+            />
+            <TouchableOpacity 
+              style={[styles.modalBtn, { backgroundColor: themeColors.accent, marginBottom: 20, padding: 12, borderRadius: 8, alignItems: 'center', opacity: playlistModal.newPlaylistName.trim() ? 1.0 : 0.6 }]} 
+              onPress={handleCreateAndAddPlaylist} 
+              disabled={!playlistModal.newPlaylistName.trim()}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>Create & Add</Text>
+            </TouchableOpacity>
+
+            <ScrollView style={{ maxHeight: 220, marginBottom: 10 }}>
+              {Object.keys(playlists || {}).length === 0 ? (
+                <Text style={{ color: themeColors.textMuted, textAlign: 'center', padding: 15 }}>No existing playlists found.</Text>
+              ) : (
+                Object.keys(playlists).map(name => (
+                  <TouchableOpacity 
+                    key={name} 
+                    style={{ paddingVertical: 12, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: themeColors.border, flexDirection: 'row', alignItems: 'center' }} 
+                    onPress={() => handleAddToPlaylist(name)}
+                  >
+                    <View style={{ backgroundColor: getPlaylistColor(name), marginRight: 10, width: 8, height: 16, borderRadius: 3 }} />
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: themeColors.text }}>{name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={{ padding: 12, borderRadius: 8, backgroundColor: themeColors.surfaceSecondary, marginTop: 10, alignItems: 'center' }} 
+              onPress={() => setPlaylistModal(p => ({ ...p, visible: false }))}
+            >
+              <Text style={{ color: themeColors.text, fontWeight: '600' }}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
