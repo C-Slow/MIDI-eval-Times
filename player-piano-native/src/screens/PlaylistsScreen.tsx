@@ -58,10 +58,17 @@ export const PlaylistsScreen = () => {
   const theme = useStore(state => state.theme);
   const isPianoConnected = useStore(state => state.isPianoConnected);
   const themeColors = Colors[theme];
+  const globalOffset = useStore(state => state.midiOrchestrateOffset);
+  const setGlobalOffset = useStore(state => state.setMidiOrchestrateOffset);
   const [loading, setLoading] = useState(true); // Optimize tab transition: render loader first
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const { play } = useAudioPlayer();
+
+  const updateGlobalOffset = (newOffset: number) => {
+    setGlobalOffset(newOffset);
+    pianoApi.saveSettings({ sync_offset: newOffset, midiOrchestrateOffset: newOffset }).catch(() => {});
+  };
 
   const [selectedTracks, setSelectedFiles] = useState<Set<string>>(new Set());
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -501,40 +508,77 @@ export const PlaylistsScreen = () => {
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, alignItems: 'center' }}>
-              {Object.values(smartRules).length > 0 && (
+            <View style={{ flexDirection: 'column', gap: 10, marginBottom: 15 }}>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                {Object.values(smartRules).length > 0 && (
+                  <TouchableOpacity 
+                    style={[styles.refreshAllBtn, { borderColor: themeColors.accent, flex: 1, marginBottom: 0 }]} 
+                    onPress={handleRefreshAllSmart}
+                  >
+                    <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
+                    <Text style={[styles.refreshAllText, { color: themeColors.accent }]}>Refresh Smart</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity 
-                  style={[styles.refreshAllBtn, { borderColor: themeColors.accent, flex: 1, marginBottom: 0 }]} 
-                  onPress={handleRefreshAllSmart}
+                  style={[
+                    { 
+                      borderColor: repeat ? themeColors.accent : themeColors.border, 
+                      borderWidth: 1,
+                      backgroundColor: repeat ? themeColors.accentLight : themeColors.surfaceSecondary,
+                      paddingHorizontal: 15,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      minHeight: 44
+                    },
+                    !Object.values(smartRules).length && { flex: 1 }
+                  ]} 
+                  onPress={() => setRepeat(!repeat)}
                 >
-                  <Ionicons name="sparkles-outline" size={16} color={themeColors.accent} />
-                  <Text style={[styles.refreshAllText, { color: themeColors.accent }]}>Refresh Smart</Text>
+                  <Ionicons name="repeat-outline" size={18} color={repeat ? themeColors.accent : themeColors.text} />
+                  <Text style={{ color: repeat ? themeColors.accent : themeColors.text, fontWeight: '600', fontSize: 13 }}>
+                    Repeat: {repeat ? "ON" : "OFF"}
+                  </Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity 
-                style={[
-                  { 
-                    borderColor: repeat ? themeColors.accent : themeColors.border, 
-                    borderWidth: 1,
-                    backgroundColor: repeat ? themeColors.accentLight : themeColors.surfaceSecondary,
-                    paddingHorizontal: 15,
-                    paddingVertical: 10,
-                    borderRadius: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    minHeight: 44
-                  },
-                  !Object.values(smartRules).length && { flex: 1 }
-                ]} 
-                onPress={() => setRepeat(!repeat)}
-              >
-                <Ionicons name="repeat-outline" size={18} color={repeat ? themeColors.accent : themeColors.text} />
-                <Text style={{ color: repeat ? themeColors.accent : themeColors.text, fontWeight: '600', fontSize: 13 }}>
-                  Repeat: {repeat ? "ON" : "OFF"}
-                </Text>
-              </TouchableOpacity>
+              </View>
+
+              {/* Single Global Speaker Sync Adjustment Bar */}
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                backgroundColor: themeColors.surfaceSecondary,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.border
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="volume-medium-outline" size={18} color={themeColors.accent} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: themeColors.text }}>Speaker Sync</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity 
+                    style={{ backgroundColor: themeColors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                    onPress={() => updateGlobalOffset(globalOffset - 10)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }}>-10ms</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: themeColors.accent, minWidth: 50, textAlign: 'center' }}>
+                    {globalOffset >= 0 ? `+${globalOffset}` : globalOffset}ms
+                  </Text>
+                  <TouchableOpacity 
+                    style={{ backgroundColor: themeColors.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: themeColors.border }}
+                    onPress={() => updateGlobalOffset(globalOffset + 10)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: themeColors.text }}>+10ms</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           }
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 15, paddingTop: 10 }}

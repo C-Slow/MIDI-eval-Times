@@ -143,7 +143,6 @@ class PlaylistManager:
                         fn = self.active_tracks[i]
                         
                         audio_path = None
-                        global_offset_ms = 0.0
                         
                         if fn.startswith("hybrid:"):
                             job_id = fn.split(":", 1)[1]
@@ -153,11 +152,12 @@ class PlaylistManager:
                                 continue
                             path = job.get("midi")
                             audio_path = job.get("vocals")
-                            job_vocals = job.get("imported_vocals") or {}
-                            per_job_delay = job_vocals.get("delay_ms", 0) if isinstance(job_vocals, dict) else 0
-                            global_offset_ms = job.get("sync_offset", per_job_delay)
                         else:
                             path = self._resolve_path(fn)
+
+                        # Single Global Speaker Sync Offset for all playlist tracks
+                        settings = utils.load_settings()
+                        global_offset_ms = float(settings.get("sync_offset", settings.get("midiOrchestrateOffset", 0.0)))
                             
                         print(f"DEBUG: Worker processing track {i}: {fn} (Path: {path}, Audio: {audio_path}, Offset: {global_offset_ms}ms)")
                         if not path or not os.path.exists(path):
