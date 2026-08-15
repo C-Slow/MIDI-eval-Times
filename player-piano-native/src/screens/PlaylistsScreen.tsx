@@ -158,50 +158,63 @@ export const PlaylistsScreen = () => {
   }, [playlists, expanded]);
 
   const handleBulkRemove = (playlistName: string) => {
-    if (selectedFiles.size === 0) return;
-    Alert.alert(
-      'Remove Tracks',
-      `Remove ${selectedFiles.size} tracks from "${playlistName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await playlistApi.removeBulk(playlistName, Array.from(selectedFiles));
-              clearSelection();
-              await fetchPlaylists();
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
+    if (selectedTracks.size === 0) return;
+    const count = selectedTracks.size;
+    const executeRemove = async () => {
+      setLoading(true);
+      try {
+        await playlistApi.removeBulk(playlistName, Array.from(selectedTracks));
+        clearSelection();
+        await fetchPlaylists();
+      } catch (e: any) {
+        console.error('Failed to remove tracks', e);
+        Alert.alert('Error', 'Failed to remove tracks from playlist');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Remove ${count} track(s) from "${playlistName}"?`)) {
+        executeRemove();
+      }
+    } else {
+      Alert.alert(
+        'Remove Tracks',
+        `Remove ${count} track(s) from "${playlistName}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: executeRemove }
+        ]
+      );
+    }
   };
 
   const handleDeletePlaylist = (name: string) => {
-    Alert.alert(
-      'Delete Playlist',
-      `Permanently delete "${name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await playlistApi.deletePlaylist(name);
-              await fetchPlaylists();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete playlist');
-            }
-          }
-        }
-      ]
-    );
+    const executeDelete = async () => {
+      try {
+        await playlistApi.deletePlaylist(name);
+        await fetchPlaylists();
+      } catch (e) {
+        console.error('Failed to delete playlist', e);
+        Alert.alert('Error', 'Failed to delete playlist');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Permanently delete "${name}"? This cannot be undone.`)) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Playlist',
+        `Permanently delete "${name}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: executeDelete }
+        ]
+      );
+    }
   };
 
   const handleCreatePlaylist = async () => {
@@ -486,7 +499,6 @@ export const PlaylistsScreen = () => {
           data={flattenedData}
           keyExtractor={(item) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}`}
           renderItem={renderItem}
-          getItemLayout={getItemLayout}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15, alignItems: 'center' }}>
@@ -526,9 +538,8 @@ export const PlaylistsScreen = () => {
             </View>
           }
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 15, paddingTop: 10 }}
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={5}
-          windowSize={5}
+          maxToRenderPerBatch={10}
+          windowSize={11}
           initialNumToRender={10}
           ListEmptyComponent={
             <Text style={[styles.emptyText, { color: themeColors.textMuted }]}>No playlists found.</Text>
