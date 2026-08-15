@@ -146,7 +146,7 @@ export const PlaylistsScreen = () => {
     const sortedPlaylistNames = Object.keys(playlists).sort((a, b) => a.localeCompare(b));
     sortedPlaylistNames.forEach(name => {
       const t = playlists[name] || [];
-      const tracks = Array.isArray(t) ? [...t].sort((a, b) => a.localeCompare(b)) : [];
+      const tracks = Array.isArray(t) ? [...t] : [];
       result.push({ type: 'header', name, count: tracks.length });
       if (expanded === name) {
         tracks.forEach((track, index) => {
@@ -158,10 +158,10 @@ export const PlaylistsScreen = () => {
   }, [playlists, expanded]);
 
   const handleBulkRemove = (playlistName: string) => {
-    if (selectedTracks.size === 0) return;
+    if (selectedFiles.size === 0) return;
     Alert.alert(
       'Remove Tracks',
-      `Remove ${selectedTracks.size} tracks from "${playlistName}"?`,
+      `Remove ${selectedFiles.size} tracks from "${playlistName}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -170,7 +170,7 @@ export const PlaylistsScreen = () => {
           onPress: async () => {
             setLoading(true);
             try {
-              await playlistApi.removeBulk(playlistName, Array.from(selectedTracks));
+              await playlistApi.removeBulk(playlistName, Array.from(selectedFiles));
               clearSelection();
               await fetchPlaylists();
             } finally {

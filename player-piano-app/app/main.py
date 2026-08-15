@@ -1024,6 +1024,44 @@ def bulk_remove_from_playlist(req: BulkAddRequest, name: str = Query(...)):
     try:
         for fn in req.filenames:
             manager.remove_from_playlist(name, fn)
+            # Remove matching alternate key (filename vs hybrid key) and clean job metadata
+            if fn.startswith("hybrid:"):
+                j_id = fn.split(":", 1)[1]
+                if j_id in midi_orchestrator.status:
+                    f_name = midi_orchestrator.status[j_id].get("filename")
+                    if f_name:
+                        manager.remove_from_playlist(name, f_name)
+                    job = midi_orchestrator.status[j_id]
+                    pl_list = job.get("playlists", [])
+                    if name in pl_list:
+                        job["playlists"] = [p for p in pl_list if p != name]
+                        meta_file = midi_orchestrator.jobs_dir / j_id / "metadata.json"
+                        if meta_file.exists():
+                            try:
+                                with open(meta_file, 'r', encoding='utf-8') as f:
+                                    m_data = json.load(f)
+                                m_data["playlists"] = job["playlists"]
+                                with open(meta_file, 'w', encoding='utf-8') as f:
+                                    json.dump(m_data, f, indent=2)
+                            except Exception:
+                                pass
+            else:
+                for j_id, job in list(midi_orchestrator.status.items()):
+                    if job.get("filename") == fn:
+                        manager.remove_from_playlist(name, f"hybrid:{j_id}")
+                        pl_list = job.get("playlists", [])
+                        if name in pl_list:
+                            job["playlists"] = [p for p in pl_list if p != name]
+                            meta_file = midi_orchestrator.jobs_dir / j_id / "metadata.json"
+                            if meta_file.exists():
+                                try:
+                                    with open(meta_file, 'r', encoding='utf-8') as f:
+                                        m_data = json.load(f)
+                                    m_data["playlists"] = job["playlists"]
+                                    with open(meta_file, 'w', encoding='utf-8') as f:
+                                        json.dump(m_data, f, indent=2)
+                                except Exception:
+                                    pass
     except KeyError:
         raise HTTPException(status_code=404, detail='playlist not found')
     return {'removed': len(req.filenames)}
@@ -1038,6 +1076,22 @@ def delete_playlist(name: str = Query(...)):
             del manager.smart_rules[name]
             print(f"DEBUG: Deleted smart rule for: {name}")
             
+        # Clean up playlist tag from all midi_orchestrator jobs metadata
+        for j_id, job in list(midi_orchestrator.status.items()):
+            pl_list = job.get("playlists", [])
+            if name in pl_list:
+                job["playlists"] = [p for p in pl_list if p != name]
+                meta_file = midi_orchestrator.jobs_dir / j_id / "metadata.json"
+                if meta_file.exists():
+                    try:
+                        with open(meta_file, 'r', encoding='utf-8') as f:
+                            m_data = json.load(f)
+                        m_data["playlists"] = job["playlists"]
+                        with open(meta_file, 'w', encoding='utf-8') as f:
+                            json.dump(m_data, f, indent=2)
+                    except Exception as ex:
+                        print(f"Failed updating metadata for job {j_id}: {ex}")
+
         manager._save()
         return {'status': 'deleted'}
     raise HTTPException(status_code=404, detail='playlist not found')

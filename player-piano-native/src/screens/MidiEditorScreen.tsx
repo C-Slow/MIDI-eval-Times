@@ -688,11 +688,21 @@ const JobCardItem = React.memo(({
       </View>
     </TouchableOpacity>
   );
-}, (prev, next) => (
-  prev.isSelected === next.isSelected &&
-  prev.themeColors === next.themeColors &&
-  prev.item === next.item
-));
+}, (prev, next) => {
+  return (
+    prev.isSelected === next.isSelected &&
+    prev.themeColors === next.themeColors &&
+    prev.item.job_id === next.item.job_id &&
+    prev.item.status === next.item.status &&
+    prev.item.progress === next.item.progress &&
+    prev.item.rating === next.item.rating &&
+    prev.item.validated === next.item.validated &&
+    prev.item.dnu === next.item.dnu &&
+    prev.item.filename === next.item.filename &&
+    prev.item.artist === next.item.artist &&
+    JSON.stringify(prev.item.playlists) === JSON.stringify(next.item.playlists)
+  );
+});
 
 export const MidiEditorScreen = () => {
   const theme = useStore(state => state.theme);
@@ -1106,15 +1116,15 @@ export const MidiEditorScreen = () => {
 
   const handleAddToPlaylist = async (plName: string) => {
     if (selectedJobs.size === 0) return;
-    const selectedList = jobs.filter(j => selectedJobs.has(j.job_id));
+    const selectedIds = Array.from(selectedJobs);
     const toAddFilenames: string[] = [];
     
-    for (const job of selectedList) {
-      const key = job.filename || `hybrid:${job.job_id}`;
+    for (const id of selectedIds) {
+      const job = jobs.find(j => j.job_id === id);
+      if (!job) continue;
+      
+      const key = (job.status === 'completed' && job.validated) ? `hybrid:${job.job_id}` : (job.filename || `hybrid:${job.job_id}`);
       toAddFilenames.push(key);
-      if (job.filename && !toAddFilenames.includes(`hybrid:${job.job_id}`)) {
-        toAddFilenames.push(`hybrid:${job.job_id}`);
-      }
       
       const existingPl = new Set<string>(job.playlists || []);
       existingPl.add(plName);
@@ -1576,7 +1586,7 @@ export const MidiEditorScreen = () => {
       }
       const storePlaylists = pData || useStore.getState().playlists || {};
       const enrichedJobs = data.map((j: any) => {
-        const plSet = new Set<string>(j.playlists || []);
+        const plSet = new Set<string>();
         const hybridKey = `hybrid:${j.job_id}`;
         Object.entries(storePlaylists).forEach(([plName, plValue]: [string, any]) => {
           const tracks = Array.isArray(plValue) ? plValue : plValue?.tracks || [];
@@ -2959,10 +2969,9 @@ export const MidiEditorScreen = () => {
               contentContainerStyle={{ paddingBottom: 100 }}
               extraData={selectedJobs}
               renderItem={renderJobItem}
-              initialNumToRender={10}
-              maxToRenderPerBatch={8}
-              windowSize={5}
-              removeClippedSubviews={Platform.OS === 'android'}
+              initialNumToRender={12}
+              maxToRenderPerBatch={10}
+              windowSize={11}
               ListEmptyComponent={
                 <View style={{ alignItems: 'center', marginTop: 80 }}>
                   <Ionicons name="musical-notes-outline" size={60} color={themeColors.textMuted} style={{ marginBottom: 15 }} />
