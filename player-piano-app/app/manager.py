@@ -153,7 +153,9 @@ class PlaylistManager:
                                 continue
                             path = job.get("midi")
                             audio_path = job.get("vocals")
-                            global_offset_ms = job.get("sync_offset", 0.0)
+                            job_vocals = job.get("imported_vocals") or {}
+                            per_job_delay = job_vocals.get("delay_ms", 0) if isinstance(job_vocals, dict) else 0
+                            global_offset_ms = job.get("sync_offset", per_job_delay)
                         else:
                             path = self._resolve_path(fn)
                             
@@ -227,12 +229,14 @@ class PlaylistManager:
         if 0 <= next_idx < len(self.active_tracks):
             upcoming_fn = self.active_tracks[next_idx]
             next_path = None
+            upcoming_audio_path = None
             if upcoming_fn.startswith("hybrid:"):
                 job_id = upcoming_fn.split(":", 1)[1]
                 from app.main import midi_orchestrator
                 job = midi_orchestrator.status.get(job_id)
                 if job and job.get("status") == "completed":
                     next_path = job.get("midi")
+                    upcoming_audio_path = job.get("vocals")
                     if job.get("validated", False):
                         from app.utils import load_settings, connect_paired_device, _active_bt_device_name
                         settings = load_settings()
@@ -246,6 +250,9 @@ class PlaylistManager:
             if next_path and os.path.exists(next_path):
                 # Pre-cache upcoming MIDI in background to eliminate transition latency
                 threading.Thread(target=utils.get_parsed_midi, args=(next_path,), daemon=True).start()
+            if upcoming_audio_path and os.path.exists(upcoming_audio_path):
+                # Pre-cache upcoming audio file into RAM to eliminate audio load latency
+                threading.Thread(target=utils.precache_audio_file, args=(upcoming_audio_path,), daemon=True).start()
 
     def seek(self, offset: float):
         if not self.play_thread or not self.play_thread.is_alive() or self.current_playlist_name is None:

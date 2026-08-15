@@ -2005,12 +2005,27 @@ def start_idle_monitor():
 start_idle_monitor()
 
 
-def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float, stop_event: Event, device_name: str):
+_audio_cache = {}
+
+def precache_audio_file(audio_path: str):
+    """Pre-cache audio data into RAM memory for instant track transitions."""
+    try:
+        import soundfile as sf
+        if audio_path and os.path.exists(audio_path) and audio_path not in _audio_cache:
+            data, fs = sf.read(audio_path)
+            _audio_cache[audio_path] = (data, fs)
+            print(f"Pre-cached audio file into RAM: {audio_path} ({len(data)} samples)")
+    except Exception as e:
+        print(f"Error pre-caching audio file {audio_path}: {e}")
+
+def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float, stop_event: Event, device_name: str, ready_event: Event = None):
     try:
         import sounddevice as sd
         import soundfile as sf
     except ImportError:
         print("ERROR: sounddevice or soundfile is not installed. Backend audio playback failed.")
+        if ready_event is not None and not ready_event.is_set():
+            ready_event.set()
         return
 
     # Trigger connection to selected Bluetooth device if paired
@@ -2022,14 +2037,23 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
             slept = 0.0
             while slept < delay_seconds:
                 if stop_event.is_set():
+                    if ready_event is not None and not ready_event.is_set():
+                        ready_event.set()
                     return
                 time.sleep(0.02)
                 slept += 0.02
 
         if stop_event.is_set():
+            if ready_event is not None and not ready_event.is_set():
+                ready_event.set()
             return
 
-        data, fs = sf.read(audio_path)
+        global _audio_cache
+        if audio_path in _audio_cache:
+            data, fs = _audio_cache[audio_path]
+        else:
+            data, fs = sf.read(audio_path)
+            _audio_cache[audio_path] = (data, fs)
         
         if seek_offset > 0:
             start_frame = int(seek_offset * fs)
@@ -2145,8 +2169,14 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
 
         if stream is None:
             print("Failed to open any audio output stream.")
+            if ready_event is not None and not ready_event.is_set():
+                ready_event.set()
             return
         
+        # Signal that the hardware audio stream is open, buffer is primed, and playback is starting
+        if ready_event is not None and not ready_event.is_set():
+            ready_event.set()
+
         with stream:
             while stream.active:
                 if stop_event.is_set():
@@ -2155,6 +2185,9 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
 
     except Exception as e:
         print(f"Error in audio playback thread: {e}")
+    finally:
+        if ready_event is not None and not ready_event.is_set():
+            ready_event.set()
 
 
 def _play_internal(path: str, port_name: str = None, stop_event=None, start_offset: float = 0, audio_path: str = None, global_offset_ms: float = 0, request_timestamp: float = None):
@@ -2167,8 +2200,10 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
         mid = get_parsed_midi(path)
         settings = load_settings()
         
+        audio_ready_event = Event() if (settings.get("backend_audio_enabled") and audio_path and os.path.exists(audio_path)) else None
+
         # Start backing audio thread if enabled and audio file exists
-        if settings.get("backend_audio_enabled") and audio_path and os.path.exists(audio_path):
+        if audio_ready_event is not None:
             audio_delay = 0.0
             if global_offset_ms < 0:
                 audio_delay = abs(global_offset_ms) / 1000.0
@@ -2176,11 +2211,16 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
             device_name = settings.get("selected_device")
             t_audio = threading.Thread(
                 target=_play_audio_thread, 
-                args=(audio_path, start_offset, audio_delay, audio_stop_event, device_name),
+                args=(audio_path, start_offset, audio_delay, audio_stop_event, device_name, audio_ready_event),
                 daemon=True
             )
             _current_play['audio_thread'] = t_audio
             t_audio.start()
+
+            # Pre-roll Warmup: Wait for hardware audio stream to open & fill buffer
+            print("Audio Pre-roll: Priming audio hardware stream and buffer...")
+            audio_ready_event.wait(timeout=1.5)
+            print("Audio Pre-roll: Audio hardware stream primed.")
 
         out = _get_out(port_name)
         if not out:
@@ -2197,8 +2237,8 @@ def _play_internal(path: str, port_name: str = None, stop_event=None, start_offs
         accumulated_seconds = 0.0
         current_tempo = 500000
         
-        # Precisely anchor start time to when the play request was received
-        base_time = request_timestamp if request_timestamp is not None else time.time()
+        # Precisely anchor start time to when audio stream was primed
+        base_time = time.time()
         start_anchor = base_time + midi_delay
 
         for msg in mido.merge_tracks(mid.tracks):
