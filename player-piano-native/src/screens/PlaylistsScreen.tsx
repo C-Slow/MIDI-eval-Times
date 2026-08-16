@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, RefreshControl, ScrollView, Platform, Modal, TextInput, Switch, InteractionManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store/useStore';
-import { playlistApi, pianoApi } from '../services/api';
+import { playlistApi, pianoApi, settingsApi } from '../services/api';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { Colors } from '../constants/Colors';
 import { SmartPlaylistModal } from '../components/SmartPlaylistModal';
@@ -67,7 +67,11 @@ export const PlaylistsScreen = () => {
 
   const updateGlobalOffset = (newOffset: number) => {
     setGlobalOffset(newOffset);
-    pianoApi.saveSettings({ sync_offset: newOffset, midiOrchestrateOffset: newOffset }).catch(() => {});
+    try {
+      settingsApi.saveSettings({ sync_offset: newOffset, midiOrchestrateOffset: newOffset }).catch(() => {});
+    } catch (e) {
+      console.error('Failed saving settings:', e);
+    }
   };
 
   const [selectedTracks, setSelectedFiles] = useState<Set<string>>(new Set());
