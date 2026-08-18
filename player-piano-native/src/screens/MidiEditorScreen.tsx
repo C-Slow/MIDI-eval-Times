@@ -1278,8 +1278,9 @@ export const MidiEditorScreen = () => {
     if (selectedVstCategory && selectedVstCategory !== 'Auto') {
       return selectedVstCategory;
     }
-    const prog = tracks[editingTrackIndex]?.program ?? 0;
-    const tName = (tracks[editingTrackIndex]?.name || '').toLowerCase();
+    const trkInfo = currentJob?.tracks?.find((t: any) => t.index === editingTrackIndex);
+    const prog = trkInfo?.program ?? 0;
+    const tName = (trkInfo?.display_name || trkInfo?.name || trkInfo?.instrument_name || '').toLowerCase();
     if (tName.includes('sax')) return 'Saxophones';
     if (tName.includes('recorder')) return 'Recorders';
     if (tName.includes('choir') || tName.includes('voice') || tName.includes('vocal') || (prog >= 52 && prog <= 54)) return 'Choir';
