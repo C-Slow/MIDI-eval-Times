@@ -172,32 +172,96 @@ def normalize_wav_file(wav_path: str, target_peak_db: float = None):
 
 
 
-SPITFIRE_KEYSWITCHES = {
-    # STRINGS
-    "legato": pretty_midi.note_name_to_number("C-1"),       # Pitch 0
-    "long": pretty_midi.note_name_to_number("C#-1"),       # Pitch 1
-    "con_sordino": pretty_midi.note_name_to_number("D-1"), # Pitch 2
-    "flautando": pretty_midi.note_name_to_number("D#-1"),  # Pitch 3
-    "spiccato": pretty_midi.note_name_to_number("E-1"),    # Pitch 4
-    "staccato": pretty_midi.note_name_to_number("F-1"),    # Pitch 5
-    "pizzicato": pretty_midi.note_name_to_number("F#-1"),  # Pitch 6 (PIZZICATO)
-    "col_legno": pretty_midi.note_name_to_number("G-1"),   # Pitch 7
+# =========================================================================
+# INSTRUMENT-SPECIFIC KEYSWITCH DICTIONARIES (BBC SO & BRITISH DRAMA TOOLKIT)
+# =========================================================================
 
-    # BRASS
-    "legato_extended": pretty_midi.note_name_to_number("C-1"), # Pitch 0
-    "staccatissimo": pretty_midi.note_name_to_number("D-1"),   # Pitch 2
-    "marcato": pretty_midi.note_name_to_number("D#-1"),         # Pitch 3
-    "long_cuivre": pretty_midi.note_name_to_number("E-1"),     # Pitch 4
-    "long_sfz": pretty_midi.note_name_to_number("F-1"),        # Pitch 5
-    "long_flutter": pretty_midi.note_name_to_number("F#-1"),    # Pitch 6
-    "multi_tongue": pretty_midi.note_name_to_number("G-1"),    # Pitch 7
+STRINGS_KEYSWITCHES = {
+    "legato": pretty_midi.note_name_to_number("C-1"),           # Pitch 0: Legato
+    "long": pretty_midi.note_name_to_number("C#-1"),           # Pitch 1: Long (Arco)
+    "con_sordino": pretty_midi.note_name_to_number("D-1"),     # Pitch 2: Long CS (Muted)
+    "flautando": pretty_midi.note_name_to_number("D#-1"),      # Pitch 3: Long Flautando
+    "spiccato": pretty_midi.note_name_to_number("E-1"),        # Pitch 4: Spiccato
+    "staccato": pretty_midi.note_name_to_number("F-1"),        # Pitch 5: Staccato
+    "pizzicato": pretty_midi.note_name_to_number("F#-1"),      # Pitch 6: Pizzicato
+    "col_legno": pretty_midi.note_name_to_number("G-1"),       # Pitch 7: Col Legno
+    "tremolo": pretty_midi.note_name_to_number("G#-1"),        # Pitch 8: Tremolo
+    "trill_maj2": pretty_midi.note_name_to_number("A-1"),      # Pitch 9: Trill Major 2nd
+    "trill_min2": pretty_midi.note_name_to_number("A#-1"),     # Pitch 10: Trill Minor 2nd
+    "sul_tasto": pretty_midi.note_name_to_number("B-1"),       # Pitch 11: Long Sul Tasto
+    "harmonics": pretty_midi.note_name_to_number("C0"),        # Pitch 12: Long Harmonics
+    "short_harmonics": pretty_midi.note_name_to_number("C#0"), # Pitch 13: Short Harmonics
+    "bartok_pizz": pretty_midi.note_name_to_number("D0"),      # Pitch 14: Bartok Pizzicato
+    "marcato_attack": pretty_midi.note_name_to_number("D#0"),  # Pitch 15: Long Marcato Attack
+    "tremolo_sul_pont": pretty_midi.note_name_to_number("E0"), # Pitch 16: Tremolo Sul Pont
+    "tremolo_cs": pretty_midi.note_name_to_number("F0"),       # Pitch 17: Tremolo CS
+    "sul_pont": pretty_midi.note_name_to_number("F#0"),        # Pitch 18: Long Sul Pont
+    "spiccato_cs": pretty_midi.note_name_to_number("G0"),      # Pitch 19: Spiccato CS
+}
 
-    # WOODWINDS
-    "trill_maj2": pretty_midi.note_name_to_number("D-1"),      # Pitch 2
-    "trill_min2": pretty_midi.note_name_to_number("D#-1"),     # Pitch 3
-    "tenuto": pretty_midi.note_name_to_number("F-1"),          # Pitch 5
+BRASS_KEYSWITCHES = {
+    "legato": pretty_midi.note_name_to_number("C-1"),             # Pitch 0: Legato (Extended)
+    "long": pretty_midi.note_name_to_number("C#-1"),             # Pitch 1: Long
+    "staccatissimo": pretty_midi.note_name_to_number("D-1"),     # Pitch 2: Staccatissimo
+    "marcato": pretty_midi.note_name_to_number("D#-1"),           # Pitch 3: Marcato
+    "long_cuivre": pretty_midi.note_name_to_number("E-1"),       # Pitch 4: Long Cuivre (Brassy)
+    "long_sfz": pretty_midi.note_name_to_number("F-1"),          # Pitch 5: Long Sforzando (SFZ)
+    "long_flutter": pretty_midi.note_name_to_number("F#-1"),      # Pitch 6: Long Flutter
+    "multi_tongue": pretty_midi.note_name_to_number("G-1"),      # Pitch 7: Multi-Tongue
+    "trill_maj2": pretty_midi.note_name_to_number("G#-1"),       # Pitch 8: Trill Major 2nd
+    "trill_min2": pretty_midi.note_name_to_number("A-1"),        # Pitch 9: Trill Minor 2nd
+    "con_sordino": pretty_midi.note_name_to_number("A#-1"),      # Pitch 10: Long Muted (CS)
+    "staccatissimo_muted": pretty_midi.note_name_to_number("B-1"),# Pitch 11: Staccatissimo Muted
+    "marcato_muted": pretty_midi.note_name_to_number("C0"),      # Pitch 12: Marcato Muted
+}
 
-    # UNTUNED PERCUSSION
+WOODWIND_KEYSWITCHES = {
+    "legato": pretty_midi.note_name_to_number("C-1"),           # Pitch 0: Legato (Extended)
+    "long": pretty_midi.note_name_to_number("C#-1"),           # Pitch 1: Long
+    "trill_maj2": pretty_midi.note_name_to_number("D-1"),      # Pitch 2: Trill Major 2nd
+    "trill_min2": pretty_midi.note_name_to_number("D#-1"),     # Pitch 3: Trill Minor 2nd
+    "staccatissimo": pretty_midi.note_name_to_number("E-1"),   # Pitch 4: Staccatissimo
+    "staccato": pretty_midi.note_name_to_number("E-1"),        # Pitch 4: Staccato
+    "tenuto": pretty_midi.note_name_to_number("F-1"),          # Pitch 5: Tenuto
+    "marcato": pretty_midi.note_name_to_number("F#-1"),        # Pitch 6: Marcato
+    "long_flutter": pretty_midi.note_name_to_number("G-1"),    # Pitch 7: Long Flutter
+    "multi_tongue": pretty_midi.note_name_to_number("G#-1"),   # Pitch 8: Multi-Tongue
+    "rips": pretty_midi.note_name_to_number("A-1"),            # Pitch 9: Piccolo Rips
+    "falls": pretty_midi.note_name_to_number("A#-1"),          # Pitch 10: Piccolo Falls
+}
+
+TIMPANI_KEYSWITCHES = {
+    "hits": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Hits
+    "rolls": pretty_midi.note_name_to_number("C#-1"),          # Pitch 1: Rolls
+    "hits_soft": pretty_midi.note_name_to_number("D-1"),       # Pitch 2: Hits Soft
+    "rolls_soft": pretty_midi.note_name_to_number("D#-1"),     # Pitch 3: Rolls Soft
+    "hits_hotrods": pretty_midi.note_name_to_number("E-1"),    # Pitch 4: Hits Hotrods
+    "rolls_hotrods": pretty_midi.note_name_to_number("F-1"),   # Pitch 5: Long Rolls Hotrods
+    "hits_damped": pretty_midi.note_name_to_number("F#-1"),    # Pitch 6: Hits Damped
+    "hits_super_damped": pretty_midi.note_name_to_number("G-1"), # Pitch 7: Hits Super Damped
+    "hotrods_hits_damped": pretty_midi.note_name_to_number("G#-1"), # Pitch 8: Hotrods Hits Damped
+    "hits_damped_soft": pretty_midi.note_name_to_number("A-1"), # Pitch 9: Hits Damped Soft
+}
+
+HARP_KEYSWITCHES = {
+    "sustained": pretty_midi.note_name_to_number("C-1"),       # Pitch 0: Sustained
+    "long": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Sustained
+    "damped": pretty_midi.note_name_to_number("C#-1"),         # Pitch 1: Damped
+    "damped_medium": pretty_midi.note_name_to_number("D-1"),   # Pitch 2: Damped Medium
+    "bisbigliando": pretty_midi.note_name_to_number("D#-1"),   # Pitch 3: Bisbigliando Trem
+    "gliss_fx": pretty_midi.note_name_to_number("E-1"),        # Pitch 4: Gliss FX
+}
+
+TUNED_PERCUSSION_KEYSWITCHES = {
+    "hits": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Hits / Sustained
+    "sustained": pretty_midi.note_name_to_number("C-1"),       # Pitch 0: Sustained
+    "rolls": pretty_midi.note_name_to_number("C#-1"),          # Pitch 1: Rolls
+    "damped": pretty_midi.note_name_to_number("C#-1"),         # Pitch 1: Damped
+    "damped_medium": pretty_midi.note_name_to_number("D-1"),   # Pitch 2: Damped Medium
+    "bowed": pretty_midi.note_name_to_number("C#-1"),          # Pitch 1: Hits Bowed (Crotales)
+}
+
+UNTUNED_PERCUSSION_KEYSWITCHES = {
     "anvil": pretty_midi.note_name_to_number("C-1"),           # Pitch 0
     "bass_drum_1": pretty_midi.note_name_to_number("C#-1"),     # Pitch 1
     "bass_drum_2": pretty_midi.note_name_to_number("D-1"),     # Pitch 2
@@ -213,6 +277,48 @@ SPITFIRE_KEYSWITCHES = {
     "triangle": pretty_midi.note_name_to_number("C0")          # Pitch 12
 }
 
+BDT_SAX_ALTO_KEYSWITCHES = {
+    "long": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Long
+    "soft": pretty_midi.note_name_to_number("C#-1"),           # Pitch 1: Soft
+    "growl": pretty_midi.note_name_to_number("D-1"),           # Pitch 2: Growl
+    "chatter": pretty_midi.note_name_to_number("D#-1"),        # Pitch 3: Chatter
+    "layered_chatter": pretty_midi.note_name_to_number("E-1"), # Pitch 4: Layered Chatter
+    "perf": pretty_midi.note_name_to_number("F-1"),            # Pitch 5: Perf
+    "soft_perf": pretty_midi.note_name_to_number("F#-1"),      # Pitch 6: Soft Perf
+    "rounded_short": pretty_midi.note_name_to_number("G-1"),   # Pitch 7: Rounded Short
+}
+
+BDT_SAX_OTHER_KEYSWITCHES = {
+    "long": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Long
+    "soft": pretty_midi.note_name_to_number("C#-1"),           # Pitch 1: Soft
+    "chatter": pretty_midi.note_name_to_number("D-1"),         # Pitch 2: Chatter
+    "layered_chatter": pretty_midi.note_name_to_number("D#-1"),# Pitch 3: Layered Chatter
+    "perf": pretty_midi.note_name_to_number("E-1"),            # Pitch 4: Perf
+    "rounded_short": pretty_midi.note_name_to_number("F-1"),   # Pitch 5: Rounded Short
+}
+
+BDT_RECORDER_KEYSWITCHES = {
+    "long": pretty_midi.note_name_to_number("C-1"),            # Pitch 0: Long
+    "soft": pretty_midi.note_name_to_number("C#-1"),           # Pitch 1: Soft
+    "bend_vib": pretty_midi.note_name_to_number("D-1"),        # Pitch 2: Bend Vib
+    "chiff": pretty_midi.note_name_to_number("D#-1"),          # Pitch 3: Chiff
+    "flutter": pretty_midi.note_name_to_number("E-1"),         # Pitch 4: Flutter
+    "layered_flutter": pretty_midi.note_name_to_number("F-1"), # Pitch 5: Layered Flutter
+    "perf": pretty_midi.note_name_to_number("F#-1"),           # Pitch 6: Perf
+    "rounded_short": pretty_midi.note_name_to_number("G-1"),   # Pitch 7: Rounded Short
+}
+
+# Master Global Keyswitch Table (Backwards Compatibility & Direct Fallback)
+SPITFIRE_KEYSWITCHES = {
+    **STRINGS_KEYSWITCHES,
+    **BRASS_KEYSWITCHES,
+    **WOODWIND_KEYSWITCHES,
+    **TIMPANI_KEYSWITCHES,
+    **HARP_KEYSWITCHES,
+    **TUNED_PERCUSSION_KEYSWITCHES,
+    **UNTUNED_PERCUSSION_KEYSWITCHES,
+}
+
 SPITFIRE_UACC = {
     "long": 1,          # Long (Arco)
     "con_sordino": 7,   # Con Sordino
@@ -221,10 +327,12 @@ SPITFIRE_UACC = {
     "tremolo": 11,      # Tremolo
     "spiccato": 42,     # Spiccato
     "staccato": 42,     # Staccato
+    "staccatissimo": 42,# Staccatissimo
     "pizzicato": 56,    # Pizzicato
     "col_legno": 9,     # Col Legno
     "marcato": 16,      # Marcato
     "harmonics": 15,    # Harmonics
+    "sul_pont": 18,     # Sul Pont
 
     "anvil": 12,
     "bass_drum_1": 13,
@@ -247,10 +355,80 @@ PERCUSSION_TECHNIQUE_KEYS = [
     "tenor_drum", "toys", "triangle"
 ]
 
+
+def get_keyswitch_for_articulation(
+    articulation: Optional[str],
+    vst_preset: Optional[str] = None,
+    track_patch: str = "auto",
+    program: int = 0
+) -> Optional[int]:
+    """Resolve the exact keyswitch MIDI pitch for an articulation in the context of the active instrument/preset."""
+    if not articulation or articulation == "auto":
+        return None
+
+    context = f"{vst_preset or ''} {track_patch or ''}".lower()
+
+    # British Drama Toolkit Recorders
+    if "recorder" in context:
+        if articulation in BDT_RECORDER_KEYSWITCHES:
+            return BDT_RECORDER_KEYSWITCHES[articulation]
+
+    # British Drama Toolkit Saxophones
+    if "alto sax" in context:
+        if articulation in BDT_SAX_ALTO_KEYSWITCHES:
+            return BDT_SAX_ALTO_KEYSWITCHES[articulation]
+    elif "sax" in context:
+        if articulation in BDT_SAX_OTHER_KEYSWITCHES:
+            return BDT_SAX_OTHER_KEYSWITCHES[articulation]
+
+    # BBC SO Timpani
+    if "timpani" in context or program == 47:
+        if articulation in TIMPANI_KEYSWITCHES:
+            return TIMPANI_KEYSWITCHES[articulation]
+
+    # BBC SO Harp
+    if "harp" in context or program == 46:
+        if articulation in HARP_KEYSWITCHES:
+            return HARP_KEYSWITCHES[articulation]
+
+    # BBC SO Tuned Percussion
+    if any(k in context for k in ["celeste", "crotales", "glockenspiel", "marimba", "xylophone", "vibraphone", "tubular", "bells"]) or (program in [8, 9, 10, 11, 12, 13, 14, 15]):
+        if articulation in TUNED_PERCUSSION_KEYSWITCHES:
+            return TUNED_PERCUSSION_KEYSWITCHES[articulation]
+
+    # BBC SO Untuned Percussion
+    if "untuned" in context or articulation in UNTUNED_PERCUSSION_KEYSWITCHES or any(k in context for k in ["drum", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+        if articulation in UNTUNED_PERCUSSION_KEYSWITCHES:
+            return UNTUNED_PERCUSSION_KEYSWITCHES[articulation]
+
+    # BBC SO Woodwinds
+    if any(k in context for k in ["flute", "piccolo", "oboe", "clarinet", "bassoon", "woodwind"]) or (program >= 64 and program <= 79):
+        if "piccolo" in context:
+            if articulation == "rips":
+                return WOODWIND_KEYSWITCHES["rips"]
+            if articulation == "falls":
+                return WOODWIND_KEYSWITCHES["falls"]
+        if articulation in WOODWIND_KEYSWITCHES:
+            return WOODWIND_KEYSWITCHES[articulation]
+
+    # BBC SO Brass
+    if any(k in context for k in ["trumpet", "horn", "trombone", "tuba", "flugelhorn", "brass", "cornet"]) or (program >= 56 and program <= 63):
+        if articulation in BRASS_KEYSWITCHES:
+            return BRASS_KEYSWITCHES[articulation]
+
+    # BBC SO Strings
+    if any(k in context for k in ["violin", "viola", "cello", "celli", "bass", "string"]) or (program >= 40 and program <= 51):
+        if articulation in STRINGS_KEYSWITCHES:
+            return STRINGS_KEYSWITCHES[articulation]
+
+    # Fallback to master keyswitch map
+    return SPITFIRE_KEYSWITCHES.get(articulation)
+
+
 def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[List] = None) -> Optional[str]:
     text = (track_name or "").lower()
 
-    # Untuned Percussion Specific Techniques
+    # 1. Untuned Percussion Specific Techniques
     if "anvil" in text:
         return "anvil"
     if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
@@ -278,7 +456,7 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
     if "triangle" in text:
         return "triangle"
 
-    # General Drumset / Percussion Smart Keyswitch Resolver (Pitch-aware)
+    # 2. General Drumset / Percussion Smart Keyswitch Resolver (Pitch-aware)
     if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
         if notes and len(notes) > 0:
             avg_pitch = sum(n.pitch for n in notes) / len(notes)
@@ -290,25 +468,90 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
                 return "snare_1"
         return "tenor_drum"
 
-    # String Articulations
-    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato"]):
+    # 3. Tuned Percussion / Harp / Timpani Techniques
+    if any(k in text for k in ["timpani roll", "roll", "rolls", "trill"]):
+        return "rolls"
+    if any(k in text for k in ["hotrod", "brush"]):
+        return "hits_hotrods"
+    if any(k in text for k in ["super damped", "choke", "choked"]):
+        return "hits_super_damped"
+    if any(k in text for k in ["damped", "muff", "muted", "etouffe"]):
+        return "hits_damped"
+    if any(k in text for k in ["bisbigliando"]):
+        return "bisbigliando"
+    if any(k in text for k in ["glissando", "gliss"]):
+        return "gliss_fx"
+    if any(k in text for k in ["bowed", "bow"]):
+        return "bowed"
+
+    # 4. British Drama Toolkit Techniques
+    if any(k in text for k in ["growl"]):
+        return "growl"
+    if any(k in text for k in ["chatter", "rhythmic"]):
+        return "chatter"
+    if any(k in text for k in ["chiff"]):
+        return "chiff"
+    if any(k in text for k in ["bend vib", "bend"]):
+        return "bend_vib"
+
+    # 5. Brass Specific Articulations
+    if any(k in text for k in ["cuivre", "brassy"]):
+        return "long_cuivre"
+    if any(k in text for k in ["sforzando", "sfz", "sfp"]):
+        return "long_sfz"
+    if any(k in text for k in ["flutter", "flatter", "flz"]):
+        return "long_flutter"
+    if any(k in text for k in ["multi tongue", "double tongue", "triple tongue"]):
+        return "multi_tongue"
+    if any(k in text for k in ["staccatissimo"]):
+        return "staccatissimo"
+
+    # 6. Woodwind Specific Articulations
+    if any(k in text for k in ["rip", "rips"]):
+        return "rips"
+    if any(k in text for k in ["fall", "falls"]):
+        return "falls"
+    if any(k in text for k in ["tenuto"]):
+        return "tenuto"
+    if any(k in text for k in ["trill maj", "trill 2", "whole trill"]):
+        return "trill_maj2"
+    if any(k in text for k in ["trill min", "trill 1", "half trill"]):
+        return "trill_min2"
+
+    # 7. String Articulations & General Terms
+    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato", "pizz."]):
+        if any(k in text for k in ["bartok", "snap"]):
+            return "bartok_pizz"
         return "pizzicato"
     if any(k in text for k in ["spicc", "spiccato"]):
+        if any(k in text for k in ["sord", "muted"]):
+            return "spiccato_cs"
         return "spiccato"
-    if any(k in text for k in ["stacc", "staccato", "short"]):
+    if any(k in text for k in ["stacc", "staccato", "short", "stacc."]):
         return "staccato"
     if (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo"]):
+        if any(k in text for k in ["pont", "sul pont"]):
+            return "tremolo_sul_pont"
+        if any(k in text for k in ["sord", "muted"]):
+            return "tremolo_cs"
         return "tremolo"
-    if any(k in text for k in ["col legno", "legno"]):
+    if any(k in text for k in ["col legno", "legno", "battuto"]):
         return "col_legno"
-    if any(k in text for k in ["sord", "sordino", "muted"]):
+    if any(k in text for k in ["sul pont", "ponticello"]):
+        return "sul_pont"
+    if any(k in text for k in ["sul tasto", "tasto"]):
+        return "sul_tasto"
+    if any(k in text for k in ["sord", "sordino", "muted", "con sord"]):
         return "con_sordino"
-    if "marcato" in text:
+    if any(k in text for k in ["marcato", "accent"]):
         return "marcato"
     if "flautando" in text or ("flaut" in text and not any(f in text for f in ["flauto", "flauti", "flute"])):
         return "flautando"
-    if "harmonic" in text:
+    if any(k in text for k in ["harmonic", "harmonics", "flageolet"]):
         return "harmonics"
+    if any(k in text for k in ["legato", "smooth"]):
+        return "legato"
+
     return None
 
 def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None, notes: Optional[List] = None) -> Optional[str]:
@@ -1125,10 +1368,9 @@ def render_orchestrator_tracks(
                     duration_sec = min(60.0, full_duration) if (is_preview and full_duration > 60.0) else full_duration
                     
                     messages = []
-                    # Inject Spitfire Keyswitch & UACC (CC32) at t=0s if an articulation is active (BBC SO only)
-                    is_non_bbc_inst = vst_preset and any(k in vst_preset.lower() for k in ["epic choir", "cinematic percussion", "splice", "british tool kit", "british drama", "aperture", "kontakt"])
-                    if not is_non_bbc_inst and articulation and articulation in SPITFIRE_KEYSWITCHES:
-                        ks_pitch = SPITFIRE_KEYSWITCHES[articulation]
+                    # Inject Keyswitch & UACC (CC32) at t=0s if an articulation is active
+                    ks_pitch = get_keyswitch_for_articulation(articulation, vst_preset=vst_preset, track_patch=task.get("track_patch", "auto"), program=task.get("program", 0))
+                    if ks_pitch is not None:
                         messages.append(mido.Message('note_on', note=ks_pitch, velocity=127, time=0.0, channel=0))
                         messages.append(mido.Message('note_off', note=ks_pitch, velocity=0, time=0.04, channel=0))
                         
@@ -1136,10 +1378,10 @@ def render_orchestrator_tracks(
                             uacc_val = SPITFIRE_UACC[articulation]
                             messages.append(mido.Message('control_change', control=32, value=uacc_val, time=0.0, channel=0))
                             
-                        _log(f"Track {idx}: Injected Spitfire Keyswitch (Pitch {ks_pitch}) + UACC CC32 ({SPITFIRE_UACC.get(articulation, 'N/A')}) for {articulation.upper()} at t=0s")
+                        _log(f"Track {idx}: Injected Keyswitch (Pitch {ks_pitch}) + UACC CC32 ({SPITFIRE_UACC.get(articulation, 'N/A')}) for {articulation.upper()} at t=0s")
 
                     # Apply 50ms lead offset so keyswitch takes effect before musical notes sound
-                    lead_offset = 0.05 if (not is_non_bbc_inst and articulation and articulation in SPITFIRE_KEYSWITCHES) else 0.0
+                    lead_offset = 0.05 if (ks_pitch is not None) else 0.0
                     for inst in pm_task.instruments:
                         for n in inst.notes:
                             start_t = n.start + lead_offset

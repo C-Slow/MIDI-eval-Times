@@ -704,6 +704,137 @@ const JobCardItem = React.memo(({
   );
 });
 
+const ARTICULATIONS_BY_CATEGORY: Record<string, Array<{ id: string; label: string }>> = {
+  Strings: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'legato', label: 'Legato (Smooth)' },
+    { id: 'long', label: 'Long (Arco / Bowed)' },
+    { id: 'con_sordino', label: 'Long CS (Muted)' },
+    { id: 'flautando', label: 'Long Flautando (Whispery)' },
+    { id: 'spiccato', label: 'Spiccato (Bouncing)' },
+    { id: 'staccato', label: 'Staccato (Crisp Short)' },
+    { id: 'pizzicato', label: 'Pizzicato (Plucked)' },
+    { id: 'col_legno', label: 'Col Legno (Wood of Bow)' },
+    { id: 'tremolo', label: 'Tremolo (Rapid Bowing)' },
+    { id: 'trill_maj2', label: 'Trill Major 2nd' },
+    { id: 'trill_min2', label: 'Trill Minor 2nd' },
+    { id: 'sul_tasto', label: 'Long Sul Tasto (Soft Fingerboard)' },
+    { id: 'harmonics', label: 'Long Harmonics (Bell-like)' },
+    { id: 'short_harmonics', label: 'Short Harmonics' },
+    { id: 'bartok_pizz', label: 'Bartók Pizz (Snap Pluck)' },
+    { id: 'marcato_attack', label: 'Long Marcato Attack' },
+    { id: 'tremolo_sul_pont', label: 'Tremolo Sul Pont (Near Bridge)' },
+    { id: 'tremolo_cs', label: 'Tremolo CS (Muted Tremolo)' },
+    { id: 'sul_pont', label: 'Long Sul Pont (Metallic Bridge)' },
+    { id: 'spiccato_cs', label: 'Spiccato CS (Muted Spiccato)' },
+  ],
+  Brass: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'legato', label: 'Legato (Extended Smooth)' },
+    { id: 'long', label: 'Long (Sustained)' },
+    { id: 'staccatissimo', label: 'Staccatissimo (Ultra Short)' },
+    { id: 'marcato', label: 'Marcato (Accented)' },
+    { id: 'long_cuivre', label: 'Long Cuivre (Brassy Power)' },
+    { id: 'long_sfz', label: 'Long SFZ (Sforzando)' },
+    { id: 'long_flutter', label: 'Long Flutter (Flutter Tongue)' },
+    { id: 'multi_tongue', label: 'Multi-Tongue (Rapid)' },
+    { id: 'trill_maj2', label: 'Trill Major 2nd' },
+    { id: 'trill_min2', label: 'Trill Minor 2nd' },
+    { id: 'con_sordino', label: 'Long Muted (Con Sordino)' },
+    { id: 'staccatissimo_muted', label: 'Staccatissimo Muted' },
+    { id: 'marcato_muted', label: 'Marcato Muted' },
+  ],
+  Woodwind: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'legato', label: 'Legato (Smooth)' },
+    { id: 'long', label: 'Long (Sustained)' },
+    { id: 'staccatissimo', label: 'Staccatissimo (Short)' },
+    { id: 'staccato', label: 'Staccato (Detached)' },
+    { id: 'tenuto', label: 'Tenuto (Held Length)' },
+    { id: 'marcato', label: 'Marcato (Accented)' },
+    { id: 'trill_maj2', label: 'Trill Major 2nd' },
+    { id: 'trill_min2', label: 'Trill Minor 2nd' },
+    { id: 'long_flutter', label: 'Long Flutter (Flutter Tongue)' },
+    { id: 'multi_tongue', label: 'Multi-Tongue (Rapid)' },
+    { id: 'rips', label: 'Rips (Upward Slide)' },
+    { id: 'falls', label: 'Falls (Downward Drop)' },
+  ],
+  Percussion: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'anvil', label: 'Anvil (Steel Strike)' },
+    { id: 'bass_drum_1', label: 'Bass Drum 1 (Concert Kick)' },
+    { id: 'bass_drum_2', label: 'Bass Drum 2 (Tight Kick)' },
+    { id: 'cymbal', label: 'Cymbal (Crash / Ride / Hi-Hat)' },
+    { id: 'military_drum', label: 'Military Drum (March Snare)' },
+    { id: 'piatti', label: 'Piatti (Crash Cymbals)' },
+    { id: 'snare_1', label: 'Snare 1 (Concert Snare)' },
+    { id: 'snare_2', label: 'Snare 2 (Field Drum)' },
+    { id: 'tam_tam', label: 'Tam Tam (Concert Gong)' },
+    { id: 'tambourine', label: 'Tambourine (Shake & Slap)' },
+    { id: 'tenor_drum', label: 'Tenor Drum (Toms)' },
+    { id: 'toys', label: 'Toys (Castanets / Shaker)' },
+    { id: 'triangle', label: 'Triangle (Chime)' },
+    { id: 'hits', label: 'Hits (Standard Strike)' },
+    { id: 'rolls', label: 'Rolls (Sustained Tremolo)' },
+    { id: 'hits_soft', label: 'Hits Soft (Felt Mallet)' },
+    { id: 'rolls_soft', label: 'Rolls Soft (Swelling Roll)' },
+    { id: 'hits_hotrods', label: 'Hits Hotrods (Birch Dowels)' },
+    { id: 'rolls_hotrods', label: 'Long Rolls Hotrods' },
+    { id: 'hits_damped', label: 'Hits Damped (Muffled)' },
+    { id: 'hits_super_damped', label: 'Hits Super Damped (Choked)' },
+    { id: 'hotrods_hits_damped', label: 'Hotrods Hits Damped' },
+    { id: 'hits_damped_soft', label: 'Hits Damped Soft' },
+    { id: 'sustained', label: 'Harp Sustained (Ring Out)' },
+    { id: 'damped', label: 'Harp Damped (Muted)' },
+    { id: 'damped_medium', label: 'Harp Damped Medium' },
+    { id: 'bisbigliando', label: 'Bisbigliando (Whispering Tremolo)' },
+    { id: 'gliss_fx', label: 'Glissando FX (Sweeping Gliss)' },
+    { id: 'bowed', label: 'Bowed (Ethereal Glassy)' },
+  ],
+  Choir: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'long_ahh', label: 'Long Ahh (Open Vowel)' },
+    { id: 'long_mmm', label: 'Long Mmm (Humming)' },
+    { id: 'long_episodic_1', label: 'Episodic Combo 1' },
+    { id: 'long_episodic_2', label: 'Episodic Combo 2' },
+    { id: 'staccato_syllables', label: 'Staccato Syllables' },
+    { id: 'staccato_syllables_keyswitch', label: 'Staccato Syllables (Keyswitch)' },
+  ],
+  Saxophones: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'long', label: 'Long (Sustained Drama)' },
+    { id: 'soft', label: 'Soft (Gentle Breath)' },
+    { id: 'growl', label: 'Growl (Throaty Rasp)' },
+    { id: 'chatter', label: 'Chatter (Rhythmic Movement)' },
+    { id: 'layered_chatter', label: 'Layered Chatter (Cluster)' },
+    { id: 'perf', label: 'Performance (Dynamic Legato)' },
+    { id: 'soft_perf', label: 'Soft Performance' },
+    { id: 'rounded_short', label: 'Rounded Short (Mellow Staccato)' },
+  ],
+  Recorders: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'long', label: 'Long (Straight Tone)' },
+    { id: 'soft', label: 'Soft (Feathered Air)' },
+    { id: 'bend_vib', label: 'Bend Vibrato (Expressive)' },
+    { id: 'chiff', label: 'Chiff (Short Breathy Attack)' },
+    { id: 'flutter', label: 'Flutter Tongue' },
+    { id: 'layered_flutter', label: 'Layered Flutter' },
+    { id: 'perf', label: 'Performance (Dynamic Legato)' },
+    { id: 'rounded_short', label: 'Rounded Short (Clean Short)' },
+  ],
+  Guitar: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'long', label: 'Sustained (Plucked / Strummed)' },
+    { id: 'staccato', label: 'Muted / Staccato' },
+    { id: 'harmonics', label: 'Harmonics' },
+  ],
+  Synth: [
+    { id: 'auto', label: 'Auto Detect' },
+    { id: 'long', label: 'Sustained Pad / Lead' },
+    { id: 'staccato', label: 'Short Staccato / Pluck' },
+  ]
+};
+
 export const MidiEditorScreen = () => {
   const theme = useStore(state => state.theme);
   const themeColors = Colors[theme];
@@ -1110,6 +1241,171 @@ export const MidiEditorScreen = () => {
       else next.add(jobId);
       return next;
     });
+  };
+
+  const getActiveTrackCategory = (): string => {
+    if (editingTrackIndex === null) return 'Strings';
+    const curPatch = (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto').toLowerCase();
+    if (curPatch !== 'auto') {
+      if (curPatch.includes('violin') || curPatch.includes('viola') || curPatch.includes('cell') || (curPatch.includes('bass') && !curPatch.includes('sax') && !curPatch.includes('drum') && !curPatch.includes('tromb') && !curPatch.includes('woodwind'))) {
+        return curPatch.includes('tromb') ? 'Brass' : 'Strings';
+      }
+      if (curPatch.includes('trumpet') || curPatch.includes('horn') || curPatch.includes('tromb') || curPatch.includes('tuba') || curPatch.includes('flugel')) {
+        return 'Brass';
+      }
+      if (curPatch.includes('flute') || curPatch.includes('piccolo') || curPatch.includes('oboe') || curPatch.includes('clarinet') || curPatch.includes('bassoon') || curPatch.includes('cor_anglais')) {
+        return 'Woodwind';
+      }
+      if (curPatch.includes('alto_sax') || curPatch.includes('bass_sax') || curPatch.includes('sax')) {
+        return 'Saxophones';
+      }
+      if (curPatch.includes('recorder')) {
+        return 'Recorders';
+      }
+      if (curPatch.includes('choir')) {
+        return 'Choir';
+      }
+      if (curPatch.includes('percussion') || curPatch.includes('drum') || curPatch.includes('timpani') || curPatch.includes('harp') || curPatch.includes('marimba') || curPatch.includes('xylophone') || curPatch.includes('glockenspiel') || curPatch.includes('celeste') || curPatch.includes('crotales') || curPatch.includes('bells') || curPatch.includes('tubular') || curPatch.includes('vibraphone') || curPatch.includes('cymbal') || curPatch.includes('snare') || curPatch.includes('piatti') || curPatch.includes('tam_tam') || curPatch.includes('anvil') || curPatch.includes('triangle')) {
+        return 'Percussion';
+      }
+      if (curPatch.includes('guitar') || curPatch.includes('banjo') || curPatch.includes('mandolin')) {
+        return 'Guitar';
+      }
+      if (curPatch.includes('synth')) {
+        return 'Synth';
+      }
+    }
+    if (selectedVstCategory && selectedVstCategory !== 'Auto') {
+      return selectedVstCategory;
+    }
+    const prog = tracks[editingTrackIndex]?.program ?? 0;
+    const tName = (tracks[editingTrackIndex]?.name || '').toLowerCase();
+    if (tName.includes('sax')) return 'Saxophones';
+    if (tName.includes('recorder')) return 'Recorders';
+    if (tName.includes('choir') || tName.includes('voice') || tName.includes('vocal') || (prog >= 52 && prog <= 54)) return 'Choir';
+    if (prog >= 40 && prog <= 51) return 'Strings';
+    if (prog >= 56 && prog <= 63) return 'Brass';
+    if (prog >= 64 && prog <= 79) return 'Woodwind';
+    if ((prog >= 112 && prog <= 119) || prog === 127 || prog === 47 || prog === 46 || (prog >= 8 && prog <= 15)) return 'Percussion';
+    if (prog >= 24 && prog <= 31) return 'Guitar';
+    return 'Strings';
+  };
+
+  const getAvailableArticulations = () => {
+    if (editingTrackIndex === null) return ARTICULATIONS_BY_CATEGORY['Strings'];
+    const curPatch = (tracksConfig[String(editingTrackIndex)]?.instrument_patch || 'auto').toLowerCase();
+
+    // Specific preset overrides:
+    if (curPatch.includes('timpani')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'hits', label: 'Hits (Standard Strike)' },
+        { id: 'rolls', label: 'Rolls (Sustained Roll)' },
+        { id: 'hits_soft', label: 'Hits Soft (Felt Mallet)' },
+        { id: 'rolls_soft', label: 'Rolls Soft (Swelling Roll)' },
+        { id: 'hits_hotrods', label: 'Hits Hotrods (Birch Dowels)' },
+        { id: 'rolls_hotrods', label: 'Long Rolls Hotrods' },
+        { id: 'hits_damped', label: 'Hits Damped (Muffled)' },
+        { id: 'hits_super_damped', label: 'Hits Super Damped (Choked)' },
+        { id: 'hotrods_hits_damped', label: 'Hotrods Hits Damped' },
+        { id: 'hits_damped_soft', label: 'Hits Damped Soft' },
+      ];
+    }
+
+    if (curPatch.includes('harp')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'sustained', label: 'Sustained (Full Ring)' },
+        { id: 'damped', label: 'Damped (Muted Pluck)' },
+        { id: 'damped_medium', label: 'Damped Medium' },
+        { id: 'bisbigliando', label: 'Bisbigliando (Whispering Tremolo)' },
+        { id: 'gliss_fx', label: 'Glissando FX (Sweeping Gliss)' },
+      ];
+    }
+
+    if (curPatch.includes('marimba') || curPatch.includes('xylophone') || curPatch.includes('glockenspiel') || curPatch.includes('celeste') || curPatch.includes('crotales') || curPatch.includes('tubular') || curPatch.includes('bells') || curPatch.includes('vibraphone')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'hits', label: 'Hits (Standard Strike)' },
+        { id: 'rolls', label: 'Rolls (Sustained Roll)' },
+        { id: 'damped', label: 'Damped (Muted Tone)' },
+        { id: 'bowed', label: 'Bowed (Ethereal Glassy)' },
+      ];
+    }
+
+    if (curPatch.includes('piccolo')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'legato', label: 'Legato (Smooth)' },
+        { id: 'long', label: 'Long (Sustained)' },
+        { id: 'staccatissimo', label: 'Staccatissimo (Short)' },
+        { id: 'tenuto', label: 'Tenuto (Held Length)' },
+        { id: 'marcato', label: 'Marcato (Accented)' },
+        { id: 'trill_maj2', label: 'Trill Major 2nd' },
+        { id: 'trill_min2', label: 'Trill Minor 2nd' },
+        { id: 'long_flutter', label: 'Long Flutter (Flutter Tongue)' },
+        { id: 'multi_tongue', label: 'Multi-Tongue (Rapid)' },
+        { id: 'rips', label: 'Rips (Upward Gliss)' },
+        { id: 'falls', label: 'Falls (Downward Drop)' },
+      ];
+    }
+
+    if (curPatch.includes('alto_sax') || curPatch.includes('alto sax')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'long', label: 'Long (Sustained Drama)' },
+        { id: 'soft', label: 'Soft (Gentle Breath)' },
+        { id: 'growl', label: 'Growl (Throaty Rasp)' },
+        { id: 'chatter', label: 'Chatter (Rhythmic Movement)' },
+        { id: 'layered_chatter', label: 'Layered Chatter (Cluster)' },
+        { id: 'perf', label: 'Performance (Dynamic Legato)' },
+        { id: 'soft_perf', label: 'Soft Performance' },
+        { id: 'rounded_short', label: 'Rounded Short (Mellow Staccato)' },
+      ];
+    }
+
+    if (curPatch.includes('bass_sax') || curPatch.includes('bass sax') || curPatch.includes('saxophone_ensemble') || curPatch.includes('sax')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'long', label: 'Long (Sustained Drama)' },
+        { id: 'soft', label: 'Soft (Gentle Breath)' },
+        { id: 'chatter', label: 'Chatter (Rhythmic Movement)' },
+        { id: 'layered_chatter', label: 'Layered Chatter (Cluster)' },
+        { id: 'perf', label: 'Performance (Dynamic Legato)' },
+        { id: 'rounded_short', label: 'Rounded Short (Mellow Staccato)' },
+      ];
+    }
+
+    if (curPatch.includes('recorder')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'long', label: 'Long (Straight Tone)' },
+        { id: 'soft', label: 'Soft (Feathered Air)' },
+        { id: 'bend_vib', label: 'Bend Vibrato (Expressive)' },
+        { id: 'chiff', label: 'Chiff (Short Breathy Attack)' },
+        { id: 'flutter', label: 'Flutter Tongue' },
+        { id: 'layered_flutter', label: 'Layered Flutter' },
+        { id: 'perf', label: 'Performance (Dynamic Legato)' },
+        { id: 'rounded_short', label: 'Rounded Short (Clean Short)' },
+      ];
+    }
+
+    if (curPatch.includes('tuba')) {
+      return [
+        { id: 'auto', label: 'Auto Detect' },
+        { id: 'legato', label: 'Legato (Extended Smooth)' },
+        { id: 'long', label: 'Long (Sustained)' },
+        { id: 'staccatissimo', label: 'Staccatissimo (Ultra Short)' },
+        { id: 'marcato', label: 'Marcato (Accented)' },
+        { id: 'long_cuivre', label: 'Long Cuivre (Brassy Power)' },
+        { id: 'long_sfz', label: 'Long SFZ (Sforzando)' },
+        { id: 'long_flutter', label: 'Long Flutter (Flutter Tongue)' },
+        { id: 'multi_tongue', label: 'Multi-Tongue (Rapid)' },
+      ];
+    }
+
+    const cat = getActiveTrackCategory();
+    return ARTICULATIONS_BY_CATEGORY[cat] || ARTICULATIONS_BY_CATEGORY['Strings'];
   };
 
   const clearSelection = () => setSelectedJobs(new Set());
@@ -4401,43 +4697,18 @@ export const MidiEditorScreen = () => {
 
                   {/* Articulation Selector */}
                   <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.label, { color: themeColors.text, marginBottom: 6, fontSize: 12, fontWeight: 'bold' }]}>
-                      Articulation / Playing Technique
-                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.label, { color: themeColors.text, fontSize: 12, fontWeight: 'bold', marginBottom: 0 }]}>
+                        Articulation / Playing Technique
+                      </Text>
+                      <View style={{ backgroundColor: themeColors.surfaceSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: themeColors.border }}>
+                        <Text style={{ fontSize: 11, color: themeColors.accent, fontWeight: '700' }}>
+                          {getActiveTrackCategory()}
+                        </Text>
+                      </View>
+                    </View>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                      {[
-                        { id: 'auto', label: 'Auto Detect' },
-                        { id: 'legato', label: 'Legato' },
-                        { id: 'long', label: 'Long (Arco)' },
-                        { id: 'con_sordino', label: 'Long CS (Muted)' },
-                        { id: 'flautando', label: 'Long Flautando' },
-                        { id: 'spiccato', label: 'Spiccato (Bouncing)' },
-                        { id: 'staccato', label: 'Staccato (Short)' },
-                        { id: 'staccatissimo', label: 'Staccatissimo' },
-                        { id: 'pizzicato', label: 'Pizzicato (Plucked)' },
-                        { id: 'col_legno', label: 'Col Legno (Wood)' },
-                        { id: 'marcato', label: 'Marcato' },
-                        { id: 'long_cuivre', label: 'Long Cuivre' },
-                        { id: 'long_sfz', label: 'Long Sforzando' },
-                        { id: 'long_flutter', label: 'Long Flutter' },
-                        { id: 'multi_tongue', label: 'Multi-Tongue' },
-                        { id: 'trill_maj2', label: 'Trill Major 2nd' },
-                        { id: 'trill_min2', label: 'Trill Minor 2nd' },
-                        { id: 'tenuto', label: 'Tenuto' },
-                        { id: 'anvil', label: 'Anvil' },
-                        { id: 'bass_drum_1', label: 'Bass Drum 1' },
-                        { id: 'bass_drum_2', label: 'Bass Drum 2' },
-                        { id: 'cymbal', label: 'Cymbal' },
-                        { id: 'military_drum', label: 'Military Drum' },
-                        { id: 'piatti', label: 'Piatti' },
-                        { id: 'snare_1', label: 'Snare 1' },
-                        { id: 'snare_2', label: 'Snare 2' },
-                        { id: 'tam_tam', label: 'Tam Tam' },
-                        { id: 'tambourine', label: 'Tambourine' },
-                        { id: 'tenor_drum', label: 'Tenor Drum' },
-                        { id: 'toys', label: 'Toys' },
-                        { id: 'triangle', label: 'Triangle' },
-                      ].map(art => {
+                      {getAvailableArticulations().map(art => {
                         const curArt = editingTrackIndex !== null ? (tracksConfig[String(editingTrackIndex)]?.articulation || 'auto') : 'auto';
                         const isSelected = curArt === art.id;
                         return (
