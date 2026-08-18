@@ -426,7 +426,8 @@ def get_keyswitch_for_articulation(
 
 
 def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[List] = None) -> Optional[str]:
-    text = (track_name or "").lower()
+    raw_text = (track_name or "").lower()
+    text = raw_text.replace("-", " ").replace("_", " ").replace("/", " ")
 
     # 1. Untuned Percussion Specific Techniques
     if "anvil" in text or "amboss" in text or "enclume" in text:
@@ -445,7 +446,7 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "snare_2"
     if any(k in text for k in ["snare 1", "snare", "sd", "tamburo", "rullante", "caisse claire", "kleine trommel"]):
         return "snare_1"
-    if any(k in text for k in ["tam tam", "tamtam", "gong"]):
+    if any(k in text for k in ["tam tam", "tamtam", "gong"]) or "tam-tam" in raw_text:
         return "tam_tam"
     if any(k in text for k in ["tambourine", "tambourin", "schellentrommel", "tamburello"]):
         return "tambourine"
@@ -558,7 +559,7 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
 
     return None
 
-def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None, notes: Optional[List] = None) -> Optional[str]:
+def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: str = "", articulation: Optional[str] = None, notes: Optional[List] = None, is_drum: bool = False) -> Optional[str]:
     """
     5-Step / 2-Pass VST Preset Resolution Engine:
     - Pass 0: Manual user selection / override (track_patch != 'auto')
@@ -574,8 +575,9 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
     if not files:
         return None
 
-    articulation = articulation or detect_articulation(track_name, program)
-    combined_text = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
+    articulation = articulation or detect_articulation(track_name, program, notes=notes)
+    raw_combined = f"{track_patch or ''} {track_name or ''} {articulation or ''}".lower()
+    combined_text = raw_combined.replace("-", " ").replace("_", " ").replace("/", " ")
 
     # Pass 0: Direct exact filename or patch ID match (Manual User Selection)
     if track_patch and track_patch != "auto":
@@ -734,8 +736,8 @@ def resolve_vst_preset(track_patch: str = "auto", program: int = 0, track_name: 
             for f, clean in preset_map.items():
                 if "crotales" in clean: return os.path.join(preset_dir, f)
 
-        # Untuned Percussion (Evaluated before string/woodwind/brass program numbers if percussion text or program 114-127 is present)
-        is_untuned_perc = articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "cinelli", "snare", "rullante", "tamburo", "grancassa", "military drum", "tam tam", "tamtam", "tambourine", "tenor drum", "toys", "drum", "drums", "percussion", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or program in (114, 115, 116, 117, 118, 119, 127)
+        # Untuned Percussion (Evaluated before string/woodwind/brass program numbers if percussion text, is_drum, or program 114-127 is present)
+        is_untuned_perc = is_drum or articulation in PERCUSSION_TECHNIQUE_KEYS or any(k in combined_text for k in ["untuned", "anvil", "piatti", "cinelli", "snare", "rullante", "tamburo", "grancassa", "gran cassa", "grosse caisse", "military drum", "tam tam", "tamtam", "tambourine", "tambourin", "tenor drum", "toys", "drum", "drums", "percussion", "batterie", "schlagzeug", "percussioni", "tom", "toms", "floor tom", "mid tom", "low tom", "high tom"]) or "tam-tam" in raw_combined or program in (114, 115, 116, 117, 118, 119, 127)
         if is_untuned_perc:
             for f in file_subset:
                 if "untuned percussion" in f.lower():
@@ -1332,7 +1334,7 @@ def render_orchestrator_tracks(
             }
             
             # Resolve VST preset for track (always attempted for all jobs)
-            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=full_track_name, articulation=articulation, notes=new_inst.notes)
+            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=full_track_name, articulation=articulation, notes=new_inst.notes, is_drum=new_inst.is_drum)
             task["vst_preset"] = vst_preset
             
             # Pre-instantiate VST3 plugin if VST preset matched OR user explicitly selected a VST3 soundfont
