@@ -429,35 +429,35 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
     text = (track_name or "").lower()
 
     # 1. Untuned Percussion Specific Techniques
-    if "anvil" in text:
+    if "anvil" in text or "amboss" in text or "enclume" in text:
         return "anvil"
     if any(k in text for k in ["bass drum 2", "bd 2", "kick 2"]):
         return "bass_drum_2"
-    if any(k in text for k in ["bass drum", "bd", "kick", "grancassa"]):
+    if any(k in text for k in ["bass drum", "bd", "kick", "grancassa", "gran cassa", "grosse caisse", "grosse-caisse", "grosse trommel"]):
         return "bass_drum_1"
-    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals", "cinelli"]):
+    if any(k in text for k in ["piatti", "crash cymbal", "piatti cymbals", "cinelli", "becken paare"]):
         return "piatti"
-    if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat"]):
+    if any(k in text for k in ["cymbal", "ride", "crash", "hi-hat", "hihat", "cymbale", "cymbales", "becken", "piatto"]):
         return "cymbal"
-    if any(k in text for k in ["military drum", "march drum"]):
+    if any(k in text for k in ["military drum", "march drum", "tambour militaire"]):
         return "military_drum"
     if any(k in text for k in ["snare 2", "sd 2"]):
         return "snare_2"
-    if any(k in text for k in ["snare 1", "snare", "sd", "tamburo", "rullante"]):
+    if any(k in text for k in ["snare 1", "snare", "sd", "tamburo", "rullante", "caisse claire", "kleine trommel"]):
         return "snare_1"
     if any(k in text for k in ["tam tam", "tamtam", "gong"]):
         return "tam_tam"
-    if "tambourine" in text:
+    if any(k in text for k in ["tambourine", "tambourin", "schellentrommel", "tamburello"]):
         return "tambourine"
     if any(k in text for k in ["tenor drum", "tom", "toms", "tom-tom", "floor tom", "mid tom", "low tom", "high tom"]):
         return "tenor_drum"
-    if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets"]):
+    if any(k in text for k in ["toys", "shaker", "cabasa", "woodblock", "cowbell", "castanets", "castagnettes", "kastagnetten", "triangolo"]):
         return "toys"
-    if "triangle" in text:
+    if any(k in text for k in ["triangle", "triangel"]):
         return "triangle"
 
     # 2. General Drumset / Percussion Smart Keyswitch Resolver (Pitch-aware)
-    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion"]) or program in (114, 115, 116, 117, 118, 119, 127):
+    if any(k in text for k in ["drum", "drums", "drumset", "drum kit", "percussion", "batterie", "schlagzeug", "percussioni"]) or program in (114, 115, 116, 117, 118, 119, 127):
         if notes and len(notes) > 0:
             avg_pitch = sum(n.pitch for n in notes) / len(notes)
             if avg_pitch < 45:
@@ -469,20 +469,22 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "tenor_drum"
 
     # 3. Tuned Percussion / Harp / Timpani Techniques
-    if any(k in text for k in ["timpani roll", "roll", "rolls", "trill"]):
+    if any(k in text for k in ["timpani roll", "roll", "rolls", "trill", "wirbel", "roulement"]):
         return "rolls"
-    if any(k in text for k in ["hotrod", "brush"]):
+    if any(k in text for k in ["hotrod", "brush", "balai"]):
         return "hits_hotrods"
-    if any(k in text for k in ["super damped", "choke", "choked"]):
+    if any(k in text for k in ["super damped", "choke", "choked", "etouff"]):
         return "hits_super_damped"
-    if any(k in text for k in ["damped", "muff", "muted", "etouffe"]):
+    if any(k in text for k in ["damped", "muff", "muted", "gedampft", "gedämpft"]):
         return "hits_damped"
     if any(k in text for k in ["bisbigliando"]):
         return "bisbigliando"
     if any(k in text for k in ["glissando", "gliss"]):
         return "gliss_fx"
-    if any(k in text for k in ["bowed", "bow"]):
+    if any(k in text for k in ["bowed", "bow", "gestrichen", "archet"]):
         return "bowed"
+    if program == 47 or any(k in text for k in ["timpani", "timbales", "pauken", "timbal"]):
+        return "hits"
 
     # 4. British Drama Toolkit Techniques
     if any(k in text for k in ["growl"]):
@@ -495,16 +497,18 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "bend_vib"
 
     # 5. Brass Specific Articulations
-    if any(k in text for k in ["cuivre", "brassy"]):
+    if any(k in text for k in ["cuivre", "brassy", "schmetternd"]):
         return "long_cuivre"
     if any(k in text for k in ["sforzando", "sfz", "sfp"]):
         return "long_sfz"
-    if any(k in text for k in ["flutter", "flatter", "flz"]):
+    if any(k in text for k in ["flutter", "flatter", "flz", "flatterzunge", "frullato"]):
         return "long_flutter"
-    if any(k in text for k in ["multi tongue", "double tongue", "triple tongue"]):
+    if any(k in text for k in ["multi tongue", "double tongue", "triple tongue", "doppelzunge"]):
         return "multi_tongue"
     if any(k in text for k in ["staccatissimo"]):
         return "staccatissimo"
+    if program == 59:
+        return "con_sordino"
 
     # 6. Woodwind Specific Articulations
     if any(k in text for k in ["rip", "rips"]):
@@ -513,43 +517,43 @@ def detect_articulation(track_name: str = "", program: int = 0, notes: Optional[
         return "falls"
     if any(k in text for k in ["tenuto"]):
         return "tenuto"
-    if any(k in text for k in ["trill maj", "trill 2", "whole trill"]):
+    if any(k in text for k in ["trill maj", "trill 2", "whole trill", "triller"]):
         return "trill_maj2"
     if any(k in text for k in ["trill min", "trill 1", "half trill"]):
         return "trill_min2"
 
     # 7. String Articulations & General Terms
-    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato", "pizz."]):
+    if program == 45 or any(k in text for k in ["pizz", "plucked", "pizzicato", "pizz.", "pincé", "gezupft"]):
         if any(k in text for k in ["bartok", "snap"]):
             return "bartok_pizz"
         return "pizzicato"
     if any(k in text for k in ["spicc", "spiccato"]):
-        if any(k in text for k in ["sord", "muted"]):
+        if any(k in text for k in ["sord", "muted", "dämpf", "sourdine"]):
             return "spiccato_cs"
         return "spiccato"
-    if any(k in text for k in ["stacc", "staccato", "short", "stacc."]):
+    if any(k in text for k in ["stacc", "staccato", "short", "stacc.", "détaché", "kurz"]):
         return "staccato"
-    if (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo"]):
-        if any(k in text for k in ["pont", "sul pont"]):
+    if program == 44 or (program in [48, 49] and "trem" in text) or any(k in text for k in ["trem", "tremolo", "tremolando"]):
+        if any(k in text for k in ["pont", "sul pont", "am steg"]):
             return "tremolo_sul_pont"
-        if any(k in text for k in ["sord", "muted"]):
+        if any(k in text for k in ["sord", "muted", "dämpf", "sourdine"]):
             return "tremolo_cs"
         return "tremolo"
-    if any(k in text for k in ["col legno", "legno", "battuto"]):
+    if any(k in text for k in ["col legno", "legno", "battuto", "mit holz"]):
         return "col_legno"
-    if any(k in text for k in ["sul pont", "ponticello"]):
+    if any(k in text for k in ["sul pont", "ponticello", "am steg"]):
         return "sul_pont"
-    if any(k in text for k in ["sul tasto", "tasto"]):
+    if any(k in text for k in ["sul tasto", "tasto", "am griffbrett", "sur la touche"]):
         return "sul_tasto"
-    if any(k in text for k in ["sord", "sordino", "muted", "con sord"]):
+    if any(k in text for k in ["sord", "sordino", "muted", "con sord", "dämpf", "sourdine"]):
         return "con_sordino"
-    if any(k in text for k in ["marcato", "accent"]):
+    if any(k in text for k in ["marcato", "accent", "marqué", "betont"]):
         return "marcato"
-    if "flautando" in text or ("flaut" in text and not any(f in text for f in ["flauto", "flauti", "flute"])):
+    if "flautando" in text or ("flaut" in text and not any(f in text for f in ["flauto", "flauti", "flute", "flûte", "flöte"])):
         return "flautando"
     if any(k in text for k in ["harmonic", "harmonics", "flageolet"]):
         return "harmonics"
-    if any(k in text for k in ["legato", "smooth"]):
+    if any(k in text for k in ["legato", "smooth", "gebunden"]):
         return "legato"
 
     return None
@@ -1304,8 +1308,15 @@ def render_orchestrator_tracks(
             stem_wav = os.path.join(temp_dir, f"track_{idx}.wav")
             single_pm.write(stem_midi)
             
+            custom_name = track_cfg.get("name", "")
+            try:
+                gm_inst_name = pretty_midi.program_to_instrument_name(new_inst.program)
+            except Exception:
+                gm_inst_name = ""
+            full_track_name = f"{orig_inst.name} {custom_name} {gm_inst_name} {track_patch}".strip()
+
             user_art = track_cfg.get("articulation", "auto")
-            articulation = user_art if user_art != "auto" else detect_articulation(orig_inst.name, new_inst.program, notes=new_inst.notes)
+            articulation = user_art if user_art != "auto" else detect_articulation(full_track_name, new_inst.program, notes=new_inst.notes)
 
             task = {
                 "idx": idx,
@@ -1321,7 +1332,7 @@ def render_orchestrator_tracks(
             }
             
             # Resolve VST preset for track (always attempted for all jobs)
-            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=orig_inst.name, articulation=articulation, notes=new_inst.notes)
+            vst_preset = resolve_vst_preset(track_patch, new_inst.program, track_name=full_track_name, articulation=articulation, notes=new_inst.notes)
             task["vst_preset"] = vst_preset
             
             # Pre-instantiate VST3 plugin if VST preset matched OR user explicitly selected a VST3 soundfont
