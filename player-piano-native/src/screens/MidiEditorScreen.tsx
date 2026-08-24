@@ -2112,6 +2112,7 @@ export const MidiEditorScreen = () => {
     try {
       setSystemBusy(true);
       setRecleanVisible(false);
+      await teardownAllAudio();
       
       await midiOrchestratorApi.process(
         contextJob.job_id,
@@ -2347,6 +2348,11 @@ export const MidiEditorScreen = () => {
         }
       );
 
+      if (stage !== 'visualizer') {
+        try { await sound.unloadAsync(); } catch (e) {}
+        return;
+      }
+
       previewSoundRef.current = sound;
       setIsPreviewPlaying(true);
     } catch (e: any) {
@@ -2357,11 +2363,41 @@ export const MidiEditorScreen = () => {
     }
   };
 
+  const teardownAllAudio = async () => {
+    if (playbackTimerRef.current) {
+      clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch (e) {}
+      soundRef.current = null;
+    }
+    if (previewSoundRef.current) {
+      try {
+        await previewSoundRef.current.stopAsync();
+        await previewSoundRef.current.unloadAsync();
+      } catch (e) {}
+      previewSoundRef.current = null;
+    }
+    try {
+      await pianoApi.stop();
+    } catch (e) {}
+    setIsPlaying(false);
+    setIsPreviewPlaying(false);
+    setIsPreviewLoading(false);
+    setSystemBusy(false);
+    setPlaybackPos(0);
+  };
+
   // Run Backend Split & Synthesize Process
   const executeProcessTask = async () => {
     if (!selectedJobId) return;
     try {
       setLoading(true);
+      await teardownAllAudio();
       await midiOrchestratorApi.process(
         selectedJobId,
         Array.from(pianoTracks),
@@ -2558,9 +2594,12 @@ export const MidiEditorScreen = () => {
     if (soundRef.current) {
       try {
         await soundRef.current.stopAsync();
+        await soundRef.current.setPositionAsync(0);
       } catch (e) {}
     }
-    await pianoApi.stop();
+    try {
+      await pianoApi.stop();
+    } catch (e) {}
     setIsPlaying(false);
     setSystemBusy(false);
     setPlaybackPos(0);
@@ -3112,9 +3151,8 @@ export const MidiEditorScreen = () => {
     );
   };
 
-  const handleExitWorkspace = () => {
-    stopPlayback();
-    stopPreview();
+  const handleExitWorkspace = async () => {
+    await teardownAllAudio();
     setStage('list');
   };
   const renderJobItem = useCallback(({ item }: { item: any }) => {
