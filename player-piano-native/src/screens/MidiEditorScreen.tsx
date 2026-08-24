@@ -1538,13 +1538,24 @@ export const MidiEditorScreen = () => {
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
     
-    // 1. Search Filter (treat dashes and underscores as spaces)
-    if (search.trim()) {
-      const query = search.toLowerCase().replace(/[-_]/g, ' ');
+    // 1. Search Filter (normalize punctuation/special characters and match all tokens)
+    const cleanQuery = search.toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ').trim();
+    if (cleanQuery) {
+      const tokens = cleanQuery.split(/\s+/).filter(t => t.length > 0);
       result = result.filter(j => {
-        const title = (j.filename || '').toLowerCase().replace(/[-_]/g, ' ');
-        const artist = (j.artist || '').toLowerCase().replace(/[-_]/g, ' ');
-        return title.includes(query) || artist.includes(query);
+        const title = (j.filename || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const cleanTitle = getCleanTitle(j.filename || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const artist = (j.artist || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const source = (j.source || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const genre = (j.genre || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const mood = (j.mood || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const comments = (j.comments || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+        const playlists = Array.isArray(j.playlists) ? j.playlists.join(' ').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ') : '';
+        const importedVocalsName = (j.imported_vocals?.original_name || '').toLowerCase().replace(/[-_.,/\\()[\]{}:;!?'"`~@#$%^&*+=<>|]/g, ' ');
+
+        const combinedText = `${title} ${cleanTitle} ${artist} ${source} ${genre} ${mood} ${comments} ${playlists} ${importedVocalsName}`;
+
+        return tokens.every(token => combinedText.includes(token));
       });
     }
 
