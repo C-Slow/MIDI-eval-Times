@@ -553,7 +553,7 @@ class MidiOrchestrator:
             return guide_wav_path
 
     def _mix_wav_files(self, input_paths: List[Path], output_path: Path):
-        from scipy.io import wavfile
+        import soundfile as sf
         import scipy.signal
         import numpy as np
         
@@ -566,19 +566,21 @@ class MidiOrchestrator:
             return
             
         tensors = []
-        rate = None
+        target_sr = 48000
         
         for p in valid_paths:
             try:
-                r, d = wavfile.read(str(p))
-                if rate is None:
-                    rate = r
-                
-                d_float = d.astype(np.float32)
-                if r != rate:
-                    num_samples = int(len(d_float) * rate / r)
-                    d_float = scipy.signal.resample(d_float, num_samples, axis=0)
-                tensors.append(d_float)
+                data, sr = sf.read(str(p), dtype='float32')
+                # Ensure stereo
+                if data.ndim == 1:
+                    data = np.stack([data, data], axis=1)
+                elif data.shape[1] == 1:
+                    data = np.hstack([data, data])
+                    
+                if sr != target_sr:
+                    num_samples = int(len(data) * target_sr / sr)
+                    data = scipy.signal.resample(data, num_samples, axis=0)
+                tensors.append(data)
             except Exception as e:
                 print(f"Error reading {p} for mixing: {e}")
                 
@@ -587,39 +589,18 @@ class MidiOrchestrator:
             
         # Find max length and pad smaller arrays
         max_len = max(len(t) for t in tensors)
-        mixed_data = np.zeros(max_len, dtype=np.float32)
+        mixed_data = np.zeros((max_len, 2), dtype=np.float32)
         
-        # Check if any input is stereo
-        is_stereo = any(t.ndim == 2 for t in tensors)
-        if is_stereo:
-            mixed_data = np.zeros((max_len, 2), dtype=np.float32)
-            
         for t in tensors:
-            # Pad
-            if t.ndim == 2:
-                # Stereo
-                padded = np.zeros((max_len, 2), dtype=np.float32)
-                padded[:len(t)] = t
-            else:
-                # Mono
-                padded = np.zeros(max_len, dtype=np.float32)
-                padded[:len(t)] = t
-                if is_stereo:
-                    # Duplicate to stereo
-                    padded = np.stack([padded, padded], axis=1)
-            mixed_data += padded
+            mixed_data[:len(t), :] += t
             
-        # Prevent clipping and apply peak ceiling headroom
+        # Write output as 24-bit 48kHz PCM WAV
+        sf.write(str(output_path), mixed_data, target_sr, subtype='PCM_24')
+        
+        # Apply peak ceiling headroom normalization
         settings = utils.load_settings()
         peak_ceiling_db = float(settings.get("peak_ceiling_db", -6.0))
-        target_max = 32767.0 * (10.0 ** (peak_ceiling_db / 20.0))
-
-        max_val = np.max(np.abs(mixed_data))
-        if max_val > 0:
-            mixed_data = (mixed_data / max_val) * target_max
-
-        mixed_int = np.clip(mixed_data, -32768.0, 32767.0).astype(np.int16)
-        wavfile.write(str(output_path), rate, mixed_int)
+        utils.normalize_wav_file(str(output_path), target_peak_db=peak_ceiling_db)
 
     def _process_task(self, job_id: str, piano_tracks: List[int], speaker_tracks: List[int], pedal_preset: str, rhythm_factor: float, melody_factor: float, vocal_male_tracks: List[int] = None, vocal_female_tracks: List[int] = None):
         try:
@@ -754,11 +735,6 @@ class MidiOrchestrator:
                 )
                 if actual_sf:
                     self.status[job_id]["last_built_soundfont"] = actual_sf
-                if backing_insts_wav_path.exists():
-                    try:
-                        shutil.copyfile(str(backing_insts_wav_path), str(job_dir / "backing_dry.wav"))
-                    except Exception as e:
-                        print(f"Notice: Failed to save backing_dry.wav ({e})")
             
             self.status[job_id]["progress"] = 70
             self.status[job_id]["status"] = "mixing audio"
@@ -781,12 +757,11 @@ class MidiOrchestrator:
                 if src_vocals_wav.exists():
                     imported_wav_path = job_dir / "imported_vocals_aligned.wav"
                     try:
-                        import scipy.io.wavfile as wavfile
+                        import soundfile as sf
                         import numpy as np
                         import scipy.signal
                         
-                        rate, data = wavfile.read(str(src_vocals_wav))
-                        data_float = data.astype(np.float32)
+                        data_float, rate = sf.read(str(src_vocals_wav), dtype='float32')
                         
                         # Trim the 4-second beep preamble
                         skip_samples = int(4.0 * rate)
@@ -795,11 +770,11 @@ class MidiOrchestrator:
                         else:
                             data_no_beeps = np.zeros((0, data_float.shape[1]) if data_float.ndim == 2 else (0,), dtype=np.float32)
                             
-                        # Resample to 44.1k Hz
-                        if rate != 44100:
-                            num_samples = int(len(data_no_beeps) * 44100 / rate)
+                        # Resample to master 48kHz
+                        if rate != 48000:
+                            num_samples = int(len(data_no_beeps) * 48000 / rate)
                             data_no_beeps = scipy.signal.resample(data_no_beeps, num_samples, axis=0)
-                            rate = 44100
+                            rate = 48000
                             
                         # Get breaklines
                         breaklines = imported_vocals.get("breaklines", [])
@@ -862,15 +837,11 @@ class MidiOrchestrator:
                                     else:
                                         aligned_data[target_start:target_start + write_len] += seg_data[:write_len]
                             
-                        # Normalize, apply volume factor, clip and convert back to int16
-                        max_amp = np.max(np.abs(aligned_data))
-                        if max_amp > 0:
-                            aligned_data = (aligned_data / max_amp) * 32767.0
+                        # Apply volume factor
+                        aligned_data = aligned_data * volume_factor
                         
-                        aligned_data = np.clip(aligned_data * volume_factor, -32768.0, 32767.0)
-                        aligned_int16 = aligned_data.astype(np.int16)
-                        
-                        wavfile.write(str(imported_wav_path), rate, aligned_int16)
+                        # Save aligned vocals in 24-bit 48kHz
+                        sf.write(str(imported_wav_path), aligned_data, rate, subtype='PCM_24')
                     except Exception as ve:
                         print(f"Error processing imported vocals: {ve}")
                         imported_wav_path = None
@@ -892,10 +863,15 @@ class MidiOrchestrator:
                 
             if mix_list:
                 self._mix_wav_files(mix_list, final_backing_wav_path)
+                if final_backing_wav_path.exists():
+                    try:
+                        shutil.copyfile(str(final_backing_wav_path), str(job_dir / "backing_dry.wav"))
+                    except Exception as e:
+                        print(f"Notice: Failed to save backing_dry.wav ({e})")
                 # Clean up intermediate wav files
                 for wav_p in mix_list:
-                    # Do not delete the final target path if it's the only one
-                    if wav_p != final_backing_wav_path and wav_p.exists():
+                    # Do not delete the final target path or dry backup
+                    if wav_p != final_backing_wav_path and wav_p != (job_dir / "backing_dry.wav") and wav_p.exists():
                         wav_p.unlink()
             
             # Complete Job status
