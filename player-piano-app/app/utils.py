@@ -2283,8 +2283,9 @@ def _play_audio_thread(audio_path: str, seek_offset: float, delay_seconds: float
             ready_event.set()
         return
 
-    # Trigger connection to selected Bluetooth device if paired
-    if device_name:
+    # Trigger connection to selected Bluetooth device if paired and backend audio is enabled
+    settings = load_settings()
+    if device_name and settings.get("backend_audio_enabled", False):
         connect_paired_device(device_name)
 
     try:

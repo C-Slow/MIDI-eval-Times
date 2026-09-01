@@ -240,10 +240,11 @@ class PlaylistManager:
                     if job.get("validated", False):
                         from app.utils import load_settings, connect_paired_device, _active_bt_device_name
                         settings = load_settings()
-                        selected_device = settings.get("selected_device", "")
-                        if selected_device and not _active_bt_device_name:
-                            print(f"Smart Speaker Pre-Connection: Upcoming track '{upcoming_fn}' is validated hybrid. Pre-connecting speaker '{selected_device}'...")
-                            connect_paired_device(selected_device)
+                        if settings.get("backend_audio_enabled", False):
+                            selected_device = settings.get("selected_device", "")
+                            if selected_device and not _active_bt_device_name:
+                                print(f"Smart Speaker Pre-Connection: Upcoming track '{upcoming_fn}' is validated hybrid. Pre-connecting speaker '{selected_device}'...")
+                                connect_paired_device(selected_device)
             else:
                 next_path = self._resolve_path(upcoming_fn)
 
@@ -295,7 +296,7 @@ class PlaylistManager:
                     if job and job.get("status") == "completed" and job.get("validated", False):
                         upcoming_validated = True
 
-        if playing and upcoming_validated:
+        if playing and upcoming_validated and settings.get("backend_audio_enabled", False):
             selected_device = settings.get("selected_device", "")
             if selected_device and not _active_bt_device_name:
                 print(f"Smart Speaker Pre-Connection (status check): Pre-connecting to speaker '{selected_device}'...")

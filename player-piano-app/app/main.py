@@ -2308,6 +2308,16 @@ def save_midi_orchestrator_audio_settings(req: AudioSettingsRequest):
         
     utils.save_settings(settings)
     utils._backend_audio_volume = req.backend_audio_volume
+
+    if not req.backend_audio_enabled:
+        device_name = utils._active_bt_device_name or req.selected_device or settings.get("selected_device", "")
+        if device_name:
+            try:
+                utils.disconnect_paired_device(device_name)
+                utils._active_bt_device_name = None
+            except Exception as e:
+                print(f"Error disconnecting Bluetooth device on audio toggle OFF: {e}")
+
     return {"status": "success", "settings": settings}
 
 @app.get("/midi-orchestrator/audio-devices", dependencies=[Depends(verify_auth)])
