@@ -2121,9 +2121,8 @@ export const MidiEditorScreen = () => {
   const handleRunQuickReclean = async () => {
     if (!contextJob) return;
     try {
-      setSystemBusy(true);
       setRecleanVisible(false);
-      await teardownAllAudio();
+      await teardownWorkspacePreviewAudio();
       
       await midiOrchestratorApi.process(
         contextJob.job_id,
@@ -2143,7 +2142,6 @@ export const MidiEditorScreen = () => {
       console.error(e);
       Alert.alert('Error', e.message || 'Failed to start processing.');
     } finally {
-      setSystemBusy(false);
       setContextJob(null);
     }
   };
@@ -2374,7 +2372,7 @@ export const MidiEditorScreen = () => {
     }
   };
 
-  const teardownAllAudio = async () => {
+  const teardownWorkspacePreviewAudio = async () => {
     if (playbackTimerRef.current) {
       clearTimeout(playbackTimerRef.current);
       playbackTimerRef.current = null;
@@ -2393,13 +2391,9 @@ export const MidiEditorScreen = () => {
       } catch (e) {}
       previewSoundRef.current = null;
     }
-    try {
-      await pianoApi.stop();
-    } catch (e) {}
     setIsPlaying(false);
     setIsPreviewPlaying(false);
     setIsPreviewLoading(false);
-    setSystemBusy(false);
     setPlaybackPos(0);
   };
 
@@ -2408,7 +2402,7 @@ export const MidiEditorScreen = () => {
     if (!selectedJobId) return;
     try {
       setLoading(true);
-      await teardownAllAudio();
+      await teardownWorkspacePreviewAudio();
       await midiOrchestratorApi.process(
         selectedJobId,
         Array.from(pianoTracks),
@@ -3163,7 +3157,12 @@ export const MidiEditorScreen = () => {
   };
 
   const handleExitWorkspace = async () => {
-    await teardownAllAudio();
+    if (isPlaying) {
+      try {
+        await pianoApi.stop();
+      } catch (e) {}
+    }
+    await teardownWorkspacePreviewAudio();
     setStage('list');
   };
   const renderJobItem = useCallback(({ item }: { item: any }) => {
