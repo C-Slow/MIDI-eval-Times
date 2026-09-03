@@ -3707,34 +3707,6 @@ export const MidiEditorScreen = () => {
 
 
 
-            {/* Panic Stop Button */}
-            <TouchableOpacity 
-              onPress={async () => {
-                try {
-                  stopPlayback();
-                  stopPreview();
-                  await pianoApi.panicStop();
-                } catch (e) {
-                  console.error('Panic stop failed', e);
-                }
-              }}
-              style={{ 
-                marginRight: 10, 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                backgroundColor: 'rgba(20, 20, 25, 0.92)', 
-                paddingHorizontal: 8, 
-                paddingVertical: 5, 
-                borderRadius: 6,
-                borderWidth: 1.2,
-                borderColor: (isPlaying || isPreviewPlaying || pianoPlayback.isPlaying) ? 'rgba(255, 77, 77, 0.75)' : 'rgba(255, 255, 255, 0.2)',
-                gap: 4
-              }}
-            >
-              <Ionicons name="stop" size={12} color={(isPlaying || isPreviewPlaying || pianoPlayback.isPlaying) ? "#ff4d4d" : "#ff7675"} />
-              <Text style={{ fontSize: 11, color: '#fff', fontWeight: 'bold' }}>STOP</Text>
-            </TouchableOpacity>
-
             {/* Worker Log Button */}
             <TouchableOpacity 
               onPress={() => setShowWorkerLogModal(true)} 
@@ -5198,7 +5170,8 @@ const styles = StyleSheet.create({
   visualizerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
   },
   visualizerFilename: {
