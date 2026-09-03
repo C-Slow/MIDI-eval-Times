@@ -910,14 +910,7 @@ class MidiOrchestrator:
         with self._db_lock:
             disk_data = self._load_db()
             if disk_data:
-                for k, v in disk_data.items():
-                    if k not in self.status:
-                        self.status[k] = v
-                    elif self.status[k].get("status") in ["processing", "synthesizing"]:
-                        # Preserve live processing status in memory
-                        pass
-                    else:
-                        self.status[k] = v
+                self.status.update(disk_data)
             jobs = list(self.status.values())
             updated = False
             for job in jobs:
@@ -932,6 +925,21 @@ class MidiOrchestrator:
                             shutil.copy(up, orig)
                         except Exception:
                             pass
+
+                    # Auto-heal: If backing.wav/backing_dry.wav and piano.mid exist, ensure status is completed
+                    backing = job_dir / "backing.wav"
+                    backing_dry = job_dir / "backing_dry.wav"
+                    piano = job_dir / "piano.mid"
+                    active_backing = backing if backing.exists() else (backing_dry if backing_dry.exists() else None)
+                    if active_backing and piano.exists() and job.get("status") != "completed":
+                        job["status"] = "completed"
+                        job["progress"] = 100
+                        job["vocals"] = str(active_backing)
+                        job["midi"] = str(piano)
+                        job.pop("error", None)
+                        self.status[job_id] = job
+                        updated = True
+
                 if "tracks" in job and isinstance(job["tracks"], list):
                     for t in job["tracks"]:
                         if "display_name" not in t or is_garbled_or_generic_name(t.get("name", "")):
@@ -972,26 +980,40 @@ class MidiOrchestrator:
 
     def cleanup_stale_data_and_jobs(self):
         """Clean up stale files and reset hung jobs on startup."""
-        # Clean uploads dir
-        if self.uploads_dir.exists():
-            for f in self.uploads_dir.iterdir():
-                try: f.unlink()
-                except: pass
-                
-        # Reset hung jobs
-        updated = False
-        for job_id, job in list(self.status.items()):
-            if job.get("status") in ["processing", "synthesizing"]:
-                job["status"] = "failed"
-                job["error"] = "Process interrupted by server restart."
-                updated = True
-                
-        # Clean orphaned job dirs
-        if self.jobs_dir.exists():
-            for d in self.jobs_dir.iterdir():
-                if d.is_dir() and d.name not in self.status:
-                    try: shutil.rmtree(d)
+        with self._db_lock:
+            # Clean uploads dir
+            if self.uploads_dir.exists():
+                for f in self.uploads_dir.iterdir():
+                    try: f.unlink()
                     except: pass
                     
-        if updated:
-            self._save_db()
+            # Reset hung jobs or auto-heal completed ones
+            updated = False
+            for job_id, job in list(self.status.items()):
+                job_dir = self.jobs_dir / job_id
+                backing = job_dir / "backing.wav"
+                backing_dry = job_dir / "backing_dry.wav"
+                piano = job_dir / "piano.mid"
+                active_backing = backing if backing.exists() else (backing_dry if backing_dry.exists() else None)
+                if active_backing and piano.exists():
+                    if job.get("status") != "completed":
+                        job["status"] = "completed"
+                        job["progress"] = 100
+                        job["vocals"] = str(active_backing)
+                        job["midi"] = str(piano)
+                        job.pop("error", None)
+                        updated = True
+                elif job.get("status") in ["processing", "synthesizing"]:
+                    job["status"] = "failed"
+                    job["error"] = "Process interrupted by server restart."
+                    updated = True
+                    
+            # Clean orphaned job dirs
+            if self.jobs_dir.exists():
+                for d in self.jobs_dir.iterdir():
+                    if d.is_dir() and d.name not in self.status:
+                        try: shutil.rmtree(d)
+                        except: pass
+                        
+            if updated:
+                self._save_db()
