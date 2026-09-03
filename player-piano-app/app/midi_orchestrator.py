@@ -205,6 +205,7 @@ class MidiOrchestrator:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         
+        self._db_lock = threading.RLock()
         self.status: Dict[str, Dict] = self._load_db()
         self.rvc = None
         self.rvc_models_dir = storage_dir / "rvc_models"
@@ -214,18 +215,26 @@ class MidiOrchestrator:
         return Path(utils.get_active_soundfont_path())
 
     def _load_db(self) -> Dict:
-        if self.db_path.exists():
-            try:
-                return json.loads(self.db_path.read_text(encoding='utf-8'))
-            except Exception:
-                return {}
-        return {}
+        with getattr(self, '_db_lock', threading.RLock()):
+            if self.db_path.exists():
+                try:
+                    data = json.loads(self.db_path.read_text(encoding='utf-8'))
+                    if isinstance(data, dict):
+                        return data
+                except Exception as e:
+                    print(f"Warning loading midi jobs DB: {e}")
+                    if hasattr(self, 'status') and self.status:
+                        return self.status
+            return getattr(self, 'status', {}) or {}
 
     def _save_db(self):
-        try:
-            self.db_path.write_text(json.dumps(self.status, indent=2), encoding='utf-8')
-        except Exception as e:
-            print(f"Error saving midi jobs DB: {e}")
+        with self._db_lock:
+            try:
+                temp_path = self.db_path.with_suffix(".tmp")
+                temp_path.write_text(json.dumps(self.status, indent=2), encoding='utf-8')
+                temp_path.replace(self.db_path)
+            except Exception as e:
+                print(f"Error saving midi jobs DB: {e}")
 
     def upload_midi(self, midi_bytes: bytes, filename: str) -> str:
         job_id = str(uuid.uuid4())
@@ -898,57 +907,68 @@ class MidiOrchestrator:
             self._save_db()
 
     def list_jobs(self) -> List[Dict]:
-        self.status = self._load_db()
-        jobs = list(self.status.values())
-        updated = False
-        for job in jobs:
-            job_id = job.get("job_id")
-            if job_id:
-                job_dir = self.jobs_dir / job_id
-                job_dir.mkdir(parents=True, exist_ok=True)
-                orig = job_dir / "original.mid"
-                up = self.uploads_dir / f"{job_id}.mid"
-                if not orig.exists() and up.exists():
-                    try:
-                        shutil.copy(up, orig)
-                    except Exception:
+        with self._db_lock:
+            disk_data = self._load_db()
+            if disk_data:
+                for k, v in disk_data.items():
+                    if k not in self.status:
+                        self.status[k] = v
+                    elif self.status[k].get("status") in ["processing", "synthesizing"]:
+                        # Preserve live processing status in memory
                         pass
-            if "tracks" in job and isinstance(job["tracks"], list):
-                for t in job["tracks"]:
-                    if "display_name" not in t or is_garbled_or_generic_name(t.get("name", "")):
-                        inst_name = t.get("instrument_name") or get_instrument_name(t.get("program", 0))
-                        idx = t.get("index", 0)
-                        raw_name = (t.get("name") or "").strip()
-                        if is_garbled_or_generic_name(raw_name):
-                            t["display_name"] = f"{inst_name} (Track {idx+1})"
-                        else:
-                            t["display_name"] = f"{raw_name} [{inst_name}]" if inst_name.lower() not in raw_name.lower() else raw_name
-                        updated = True
-        if updated:
-            try:
-                self._save_db()
-            except Exception:
-                pass
-        return sorted(jobs, key=lambda x: x.get("timestamp", 0), reverse=True)
+                    else:
+                        self.status[k] = v
+            jobs = list(self.status.values())
+            updated = False
+            for job in jobs:
+                job_id = job.get("job_id")
+                if job_id:
+                    job_dir = self.jobs_dir / job_id
+                    job_dir.mkdir(parents=True, exist_ok=True)
+                    orig = job_dir / "original.mid"
+                    up = self.uploads_dir / f"{job_id}.mid"
+                    if not orig.exists() and up.exists():
+                        try:
+                            shutil.copy(up, orig)
+                        except Exception:
+                            pass
+                if "tracks" in job and isinstance(job["tracks"], list):
+                    for t in job["tracks"]:
+                        if "display_name" not in t or is_garbled_or_generic_name(t.get("name", "")):
+                            inst_name = t.get("instrument_name") or get_instrument_name(t.get("program", 0))
+                            idx = t.get("index", 0)
+                            raw_name = (t.get("name") or "").strip()
+                            if is_garbled_or_generic_name(raw_name):
+                                t["display_name"] = f"{inst_name} (Track {idx+1})"
+                            else:
+                                t["display_name"] = f"{raw_name} [{inst_name}]" if inst_name.lower() not in raw_name.lower() else raw_name
+                            updated = True
+            if updated:
+                try:
+                    self._save_db()
+                except Exception:
+                    pass
+            return sorted(jobs, key=lambda x: x.get("timestamp", 0), reverse=True)
 
     def delete_job(self, job_id: str) -> bool:
-        if job_id not in self.status:
-            return False
+        with self._db_lock:
+            if job_id not in self.status:
+                return False
+                
+            del self.status[job_id]
+            self._save_db()
             
-        del self.status[job_id]
-        self._save_db()
-        
-        job_dir = self.jobs_dir / job_id
-        if job_dir.exists():
-            shutil.rmtree(job_dir)
-            
-        # Also check uploads folder just in case
-        stale_upload = self.uploads_dir / f"{job_id}.mid"
-        if stale_upload.exists():
-            stale_upload.unlink()
-            
-        print(f"Deleted MIDI Orchestrate Job {job_id} and its files.")
-        return True
+            job_dir = self.jobs_dir / job_id
+            if job_dir.exists():
+                shutil.rmtree(job_dir)
+                
+            # Also check uploads folder just in case
+            stale_upload = self.uploads_dir / f"{job_id}.mid"
+            if stale_upload.exists():
+                stale_upload.unlink()
+                
+            print(f"Deleted MIDI Orchestrate Job {job_id} and its files.")
+            return True
 
     def cleanup_stale_data_and_jobs(self):
         """Clean up stale files and reset hung jobs on startup."""

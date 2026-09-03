@@ -789,6 +789,17 @@ def stop_play():
         raise HTTPException(status_code=500, detail=str(e))
     return {'status': 'stopped'}
 
+@app.post('/piano/panic-stop')
+def panic_stop():
+    try:
+        utils.stop_current_play()
+        if manager:
+            manager.stop()
+        utils.send_midi_panic()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {'status': 'panic_stopped'}
+
 @app.get('/playback/status')
 def playback_status():
     try:
@@ -1222,7 +1233,11 @@ def play_playlist(req: PlayPlaylistRequest, name: str = Query(...)):
 
 @app.post('/queue/stop')
 def stop_queue():
-    manager.stop()
+    try:
+        manager.stop()
+        utils.send_midi_panic()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     return {'status': 'stopped'}
 
 @app.post('/queue/next')

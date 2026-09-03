@@ -2593,6 +2593,26 @@ def start_play_async(path: str, port_name: str = None, seek_offset: float = 0, a
     return True
 
 
+def send_midi_panic():
+    """Immediately silence all piano keys and reset all controllers across all 16 MIDI channels."""
+    global _ble_handle, _midi_out_handle
+    out = _get_out(None)
+    if out:
+        try:
+            for ch in range(16):
+                # 1. All Notes Off (CC 123)
+                out.send(mido.Message('control_change', channel=ch, control=123, value=0))
+                # 2. All Sound Off (CC 120)
+                out.send(mido.Message('control_change', channel=ch, control=120, value=0))
+                # 3. Reset All Controllers (CC 121)
+                out.send(mido.Message('control_change', channel=ch, control=121, value=0))
+                # 4. Damper / Sustain Pedal Off (CC 64)
+                out.send(mido.Message('control_change', channel=ch, control=64, value=0))
+                # 5. Soft Pedal Off (CC 67)
+                out.send(mido.Message('control_change', channel=ch, control=67, value=0))
+        except Exception as e:
+            print(f"Error sending MIDI panic: {e}")
+
 def stop_current_play():
     ev = _current_play.get('event')
     t = _current_play.get('thread')
@@ -2604,18 +2624,16 @@ def stop_current_play():
         except Exception:
             pass
 
+    # Stop manager playlist playback if active
+    try:
+        from app.main import manager
+        if manager:
+            manager.stop()
+    except Exception:
+        pass
 
-
-    # Panic stop fallback - use shared handle
-    out = _get_out(port)
-    if out:
-        try:
-            for ch in range(16):
-                out.send(mido.Message('control_change', channel=ch, control=123, value=0))
-                out.send(mido.Message('control_change', channel=ch, control=121, value=0))
-                out.send(mido.Message('control_change', channel=ch, control=64, value=0))
-        except Exception:
-            pass
+    # Panic stop fallback - silence all keys & pedals
+    send_midi_panic()
     
     # clear metadata
     _current_play['thread'] = None

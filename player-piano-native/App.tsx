@@ -26,7 +26,7 @@ import { Colors } from './src/constants/Colors';
 import * as Notifications from 'expo-notifications';
 import { useBackingAudioSync } from './src/hooks/useBackingAudioSync';
 import Slider from '@react-native-community/slider';
-import { midiOrchestratorApi } from './src/services/api';
+import { midiOrchestratorApi, pianoApi } from './src/services/api';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -39,12 +39,27 @@ const HeaderControls = () => {
   const setBackendAudioVolume = useStore((state) => state.setBackendAudioVolume);
   const selectedDevice = useStore((state) => state.selectedDevice);
   const setSelectedDevice = useStore((state) => state.setSelectedDevice);
+  const pianoPlayback = useStore((state) => state.pianoPlayback);
+  const localPlayback = useStore((state) => state.localPlayback);
+  const isPlayingActive = pianoPlayback.isPlaying || localPlayback.isPlaying;
   const themeColors = Colors[theme];
 
   const [connecting, setConnecting] = React.useState(false);
+  const [stopping, setStopping] = React.useState(false);
   const [showPicker, setShowPicker] = React.useState(false);
   const [devices, setDevices] = React.useState<any[]>([]);
   const [loadingDevices, setLoadingDevices] = React.useState(false);
+
+  const handlePanicStop = async () => {
+    setStopping(true);
+    try {
+      await pianoApi.panicStop();
+    } catch (err) {
+      console.error('Panic stop failed', err);
+    } finally {
+      setStopping(false);
+    }
+  };
 
   const handleVolumeChange = async (vol: number) => {
     setBackendAudioVolume(vol);
@@ -105,6 +120,48 @@ const HeaderControls = () => {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
+      {/* Black Glass Stop Piano Button */}
+      <TouchableOpacity
+        onPress={handlePanicStop}
+        disabled={stopping}
+        activeOpacity={0.7}
+        accessibilityLabel="Stop Piano Playback"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: 'rgba(20, 20, 25, 0.92)',
+          paddingHorizontal: 9,
+          paddingVertical: 5,
+          borderRadius: 8,
+          borderWidth: 1.2,
+          borderColor: isPlayingActive ? 'rgba(255, 77, 77, 0.75)' : 'rgba(255, 255, 255, 0.2)',
+          shadowColor: isPlayingActive ? '#ff4d4d' : '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: isPlayingActive ? 0.55 : 0.25,
+          shadowRadius: 4,
+          elevation: 4,
+          gap: 4
+        }}
+      >
+        {stopping ? (
+          <ActivityIndicator size="small" color="#ff4d4d" style={{ width: 14, height: 14 }} />
+        ) : (
+          <Ionicons 
+            name="stop" 
+            size={12} 
+            color={isPlayingActive ? "#ff4d4d" : "#ff7675"} 
+          />
+        )}
+        <Text style={{ 
+          color: '#fff', 
+          fontSize: 10, 
+          fontWeight: 'bold', 
+          letterSpacing: 0.5 
+        }}>
+          STOP
+        </Text>
+      </TouchableOpacity>
+
       {/* Speaker / Device Name Link (Only if enabled) */}
       {backendAudioEnabled && (
         <TouchableOpacity 

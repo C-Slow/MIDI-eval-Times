@@ -129,8 +129,16 @@ export const pianoApi = {
   },
   stop: async () => {
     await Promise.all([
-      api.post('/play/stop'),
-      api.post('/queue/stop'),
+      api.post('/play/stop').catch(() => {}),
+      api.post('/queue/stop').catch(() => {}),
+      api.post('/piano/panic-stop').catch(() => {}),
+    ]);
+  },
+  panicStop: async () => {
+    await Promise.all([
+      api.post('/piano/panic-stop').catch(() => {}),
+      api.post('/play/stop').catch(() => {}),
+      api.post('/queue/stop').catch(() => {}),
     ]);
   },
   next: async () => {

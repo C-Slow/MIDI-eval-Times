@@ -84,7 +84,7 @@ export const GlobalPlayer = () => {
   const handleStop = async () => {
     stopLocal();
     try {
-      await pianoApi.stop();
+      await pianoApi.panicStop();
     } catch (e) {
       console.error('Failed to stop piano/backend playback', e);
     }

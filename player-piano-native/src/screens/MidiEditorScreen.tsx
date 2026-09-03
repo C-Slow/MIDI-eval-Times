@@ -853,6 +853,7 @@ export const MidiEditorScreen = () => {
   const [loading, setLoading] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [activeWorkspaceJob, setActiveWorkspaceJob] = useState<any | null>(null);
   
   // Track configuration state
   const [pianoTracks, setPianoTracks] = useState<Set<number>>(new Set());
@@ -1511,10 +1512,14 @@ export const MidiEditorScreen = () => {
     });
   };
 
-  // Selected job details
+  // Selected job details with resilient fallback
   const currentJob = useMemo(() => {
-    return jobs.find(j => j.job_id === selectedJobId) || null;
-  }, [jobs, selectedJobId]);
+    if (!selectedJobId) return null;
+    const found = jobs.find(j => j.job_id === selectedJobId);
+    if (found) return found;
+    if (activeWorkspaceJob && activeWorkspaceJob.job_id === selectedJobId) return activeWorkspaceJob;
+    return null;
+  }, [jobs, selectedJobId, activeWorkspaceJob]);
 
   const editingTrackInfo = useMemo(() => {
     if (editingTrackIndex === null || !currentJob || !currentJob.tracks) return null;
@@ -1624,9 +1629,10 @@ export const MidiEditorScreen = () => {
   }, [currentJob?.status, hasChanges]);
 
   const openUnifiedWorkspace = async (jobId: string) => {
-    const job = jobs.find(j => j.job_id === jobId);
+    const job = jobs.find(j => j.job_id === jobId) || activeWorkspaceJob;
     if (!job) return;
 
+    setActiveWorkspaceJob(job);
     setSelectedJobId(jobId);
     setPianoTracks(new Set(job.piano_tracks || []));
     setSpeakerTracks(new Set(job.speaker_tracks || []));
@@ -3163,6 +3169,8 @@ export const MidiEditorScreen = () => {
       } catch (e) {}
     }
     await teardownWorkspacePreviewAudio();
+    setActiveWorkspaceJob(null);
+    setSelectedJobId(null);
     setStage('list');
   };
   const renderJobItem = useCallback(({ item }: { item: any }) => {
@@ -3679,8 +3687,9 @@ export const MidiEditorScreen = () => {
       )}
 
       {/* 2. VISUALIZER & PLAYBACK STAGE */}
-      {stage === 'visualizer' && currentJob && (
-        <View style={styles.visualizerStage}>
+      {stage === 'visualizer' && (
+        currentJob ? (
+          <View style={styles.visualizerStage}>
           {/* Header */}
           <View style={[styles.visualizerHeader, { borderBottomColor: themeColors.border, backgroundColor: themeColors.surface }]}>
             <TouchableOpacity onPress={handleExitWorkspace}>
@@ -3697,6 +3706,34 @@ export const MidiEditorScreen = () => {
             </View>
 
 
+
+            {/* Panic Stop Button */}
+            <TouchableOpacity 
+              onPress={async () => {
+                try {
+                  stopPlayback();
+                  stopPreview();
+                  await pianoApi.panicStop();
+                } catch (e) {
+                  console.error('Panic stop failed', e);
+                }
+              }}
+              style={{ 
+                marginRight: 10, 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                backgroundColor: 'rgba(20, 20, 25, 0.92)', 
+                paddingHorizontal: 8, 
+                paddingVertical: 5, 
+                borderRadius: 6,
+                borderWidth: 1.2,
+                borderColor: (isPlaying || isPreviewPlaying || pianoPlayback.isPlaying) ? 'rgba(255, 77, 77, 0.75)' : 'rgba(255, 255, 255, 0.2)',
+                gap: 4
+              }}
+            >
+              <Ionicons name="stop" size={12} color={(isPlaying || isPreviewPlaying || pianoPlayback.isPlaying) ? "#ff4d4d" : "#ff7675"} />
+              <Text style={{ fontSize: 11, color: '#fff', fontWeight: 'bold' }}>STOP</Text>
+            </TouchableOpacity>
 
             {/* Worker Log Button */}
             <TouchableOpacity 
@@ -4874,6 +4911,18 @@ export const MidiEditorScreen = () => {
 
 
         </View>
+        ) : (
+          <View style={[styles.visualizerStage, { justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background }]}>
+            <View style={[styles.visualizerHeader, { width: '100%', borderBottomColor: themeColors.border, backgroundColor: themeColors.surface, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }]}>
+              <TouchableOpacity onPress={handleExitWorkspace} style={{ flexDirection: 'row', alignItems: 'center', padding: 5 }}>
+                <Ionicons name="arrow-back" size={24} color={themeColors.text} />
+                <Text style={{ color: themeColors.text, marginLeft: 10, fontWeight: 'bold' }}>Back to File List</Text>
+              </TouchableOpacity>
+            </View>
+            <ActivityIndicator size="large" color={themeColors.accent} />
+            <Text style={{ color: themeColors.textMuted, marginTop: 15, fontWeight: '600' }}>Loading workspace details...</Text>
+          </View>
+        )
       )}
 
       {/* Worker Log Modal (Global Root) */}
