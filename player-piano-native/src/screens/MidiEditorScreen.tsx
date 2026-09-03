@@ -655,17 +655,36 @@ const JobCardItem = React.memo(({
               <Ionicons name="checkmark-circle" size={15} color="#2ecc71" />
             </View>
           )}
+
+          {/* Worker Log Pill Button */}
+          <TouchableOpacity
+            onPress={onLogPress}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: themeColors.surfaceSecondary,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 4,
+              borderWidth: 1,
+              borderColor: themeColors.border,
+              marginLeft: 4
+            }}
+          >
+            <Ionicons name="terminal-outline" size={11} color={themeColors.accent} style={{ marginRight: 3 }} />
+            <Text style={{ fontSize: 9, color: themeColors.text, fontWeight: 'bold' }}>Log</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Progress details */}
         {(item.status === 'processing' || item.status === 'synthesizing' || item.status?.includes('synthesizing') || item.status?.includes('mixing')) && (
-          <View style={[styles.progressContainer, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          <View style={[styles.progressContainer, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }]}>
             <View style={{ flex: 1, marginRight: 10 }}>
               <View style={[styles.progressBarBg, { backgroundColor: themeColors.surfaceSecondary }]}>
                 <View style={[styles.progressBarFill, { width: `${item.progress || 0}%`, backgroundColor: themeColors.accent }]} />
               </View>
               <Text style={[styles.progressText, { color: themeColors.textMuted }]}>
-                {`Processing (${item.progress || 0}%)`}
+                {`Synthesizing (${item.progress || 0}%)`}
               </Text>
             </View>
             <TouchableOpacity
@@ -673,7 +692,7 @@ const JobCardItem = React.memo(({
               onPress={onLogPress}
             >
               <Ionicons name="terminal-outline" size={14} color={themeColors.accent} style={{ marginRight: 4 }} />
-              <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>Logs</Text>
+              <Text style={{ fontSize: 10, color: themeColors.text, fontWeight: 'bold' }}>Live Log</Text>
             </TouchableOpacity>
           </View>
         )}
