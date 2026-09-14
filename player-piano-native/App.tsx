@@ -120,7 +120,7 @@ const HeaderControls = () => {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
-      {/* Black Glass Stop Piano Button */}
+      {/* Break Glass Stop Piano Button */}
       <TouchableOpacity
         onPress={handlePanicStop}
         disabled={stopping}

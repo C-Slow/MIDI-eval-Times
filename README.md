@@ -1,6 +1,6 @@
 # MIDI-eval Times — AI Player Piano Ecosystem
 
-A professional, high-performance ecosystem for managing, cleaning, editing, and performing MIDI files on a Yamaha Disklavier player piano. It features an advanced hybrid MIDI editor, multi-stem MP3 backing track integration, direct PC audio server capabilities, and smart dynamic playlists.
+A professional, high-performance ecosystem for managing, cleaning, editing, orchestrating, and performing MIDI files on a Yamaha Disklavier player piano. It features a studio-grade VST3 multi-track synthesis workstation, multi-stem MP3 backing track integration, direct PC audio server capabilities with sub-millisecond BLE synchronization, and dynamic metadata-driven playlists.
 
 ---
 
@@ -22,35 +22,115 @@ To protect your Disklavier, this ecosystem always processes raw files through a 
 ## Key Features & Workflows
 
 > [!NOTE]
-> **The Core Experience:** While this project includes advanced multi-track editing tools, the **standard MIDI files and playlists are the most stable, dependable, and frequently used features**. Downloading any clean MIDI, uploading it, and playing it within seconds is the rock-solid core of this system.
+> **The Core Experience:** While this project includes an advanced multi-track orchestrator and audio editor, the **standard MIDI files and playlists are the most stable, dependable, and frequently used features**. Downloading any clean MIDI, uploading it, and playing it within seconds is the rock-solid core of this system.
 
-### Library & Workspace Overview
-A "Files-style" workspace designed for easy navigation and comprehensive library management:
+```
+[ Uploaded / Clean MIDI ]
+           │
+           ▼
+┌────────────────────────────────────────────────────────┐
+│  Track Splitting & Dynamic Analysis                    │
+│  • Routes piano parts to Disklavier (BLE)              │
+│  • Multi-lingual articulation analysis (IT/FR/DE/EN)   │
+│  • Pitch register & drum pitch analysis                │
+└──────────────────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  2-Pass / 5-Stage VST3 Preset Resolution Engine        │
+│  • Pass 0: Manual User Override (Track Settings Modal) │
+│  • Pass 1: Spitfire BBC Symphony Orchestra Presets     │
+│  • Pass 2: Extended Libraries (BDT, Aperture, Kontakt, │
+│            Splice Epic Choir, Cinematic Percussion)    │
+│  • Fallback: FluidR3_GM / SGM-V2 SoundFonts (Safety)   │
+└──────────────────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  Keyswitch & UACC Injection Engine                     │
+│  • Injects Spitfire Keyswitches (C-1=0 pitch mapping)  │
+│  • Injects UACC CC32 controllers at t=0s               │
+│  • Injects 50ms musical lead offset for sample attack  │
+└──────────────────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  Parallel Stem Rendering & Spatial Mixer               │
+│  • Multi-threaded rendering across CPU cores           │
+│  • Symphonic seating stereo pan (Violins L, Celli R)  │
+│  • Multi-stem headroom scaling: 0.85 / sqrt(N)         │
+│  • 24-bit / 48kHz PCM WAV resolution throughout        │
+└──────────────────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  Master VST3 Reverb Bus & Fast-Render Cache            │
+│  • AIR Studios Reverb Essentials acoustic convolution  │
+│  • Dual-cache: saves backing_dry.wav & backing_insts   │
+│  • 2-second instant reverb re-rendering on preset swap │
+└──────────────────────────────────┬─────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  Playback & Sync Engine                                │
+│  • Physical Disklavier (BLE) + PC Room Speakers (A2DP) │
+│  • Dynamic RAM precaching & pre-roll audio warmup      │
+│  • Real-time Speaker Sync Offset (ms)                  │
+└────────────────────────────────────────────────────────┘
+```
+
+### 1. Studio-Grade MIDI Orchestrator (VST3 Virtual Instruments)
+The MIDI Orchestrator transforms multi-track MIDI arrangements into full symphonic productions. The physical piano part is routed to the Disklavier, while backing instruments are synthesized via dedicated VST3 virtual instrument libraries and routed to your room speaker system.
+
+* **No More SoundFonts:** Legacy SoundFonts (`.sf2` via FluidSynth) have been replaced with dedicated 64-bit VST3 virtual instrument plugins hosted directly via Spotify's `pedalboard` engine. SoundFonts now serve solely as a zero-failure emergency fallback.
+* **24-bit / 48kHz PCM Master Pipeline:** All internal stem synthesis, MP3 vocal alignment, and audio mixing run natively in 48kHz 24-bit float resolution (`PCM_24` WAV).
+* **Curated Sound Libraries & VST Presets (`storage/vst_presets/`):**
+  * **Spitfire Audio — BBC Symphony Orchestra (VST3):**
+    * *Strings:* First Violins, Second Violins, Violas, Celli, Double Basses.
+    * *Woodwinds:* Piccolo, Flutes (solo & a3), Oboes (solo & a3), Clarinets (solo & a3), Bassoons (solo & a3).
+    * *Brass:* French Horns (solo & a4), Trumpets (solo & a3), Tenor Trombones (solo & a3), Bass Trombones a2, Tuba.
+    * *Percussion (Tuned & Untuned):* Timpani, Harp, Celeste, Glockenspiel, Marimba, Xylophone, Vibraphone, Tubular Bells, Crotales, and Untuned Percussion Kits (Bass Drum, Snare, Piatti, Cymbals, Tam-tam, Anvil, Tambourine, Tenor Drum, Toys, Triangle).
+  * **Spitfire Audio — British Drama Toolkit (BDT):**
+    * Saxophones (Alto, Bass, Ensemble), Recorder Ensemble, Cor Anglais, Flugelhorn, and expressive Brass Combis.
+  * **Spitfire Audio — Aperture The Stack:**
+    * Cinematic overdriven electric guitars and heavy analog synth pads/leads.
+  * **Native Instruments — Kontakt 8:**
+    * Acoustic solo guitars, banjo, mandolin, plucky folk guitars, plucked folk ensembles, and solo cello.
+  * **Splice INSTRUMENT:**
+    * *Epic Choir:* Soprano/Alto and Tenor/Bass sections in long ahhs, episodic combos, and short staccato syllables.
+    * *Cinematic Percussion:* Earthquake hits, sub hits, metal hits, swells, tams, and gongs.
+  * **AIR Studios Reverb Essentials (Master VST3 Bus):**
+    * High-end studio impulse response & acoustic convolution: *Intimate Close, Lush Hall, Solo Violin, Solo Viola, Solo Cello, Solo Bass, and Dry (No Reverb)*.
+* **Intelligent 2-Pass / 5-Stage Preset Resolver:**
+  * **Pass 0:** Exact manual user override selected via the Track Settings modal.
+  * **Pass 1:** BBC SO orchestral mapping, tuned percussion, and untuned percussion techniques.
+  * **Pass 2:** Extended sound libraries (Choir, BDT, Aperture, Kontakt).
+  * Automatically analyzes GM program numbers, track names, international instrument terms across English, Italian (*grancassa, tamburo, rullante, piatti, violoncelli, corno*), German (*grosse trommel, becken, amboss*), and French (*caisse claire, enclume*), and pitch registers.
+* **Automated Keyswitch & UACC (CC32) Injection:** Dynamically detects playing techniques (*staccato, pizzicato, col legno, tremolo, marcato, con sordino, flautando, rips, falls*) and automatically injects exact Spitfire keyswitches (calibrated to the C-1=0 pitch standard) and UACC CC32 controller events at `t=0s`, paired with an automatic **50ms lead offset** to allow sample engines to switch articulations before musical notes sound.
+* **Pitch-Aware Strings & Smart Drum Keyswitch Resolvers:** Automatically analyzes the note pitch distribution of generic string tracks to distribute them across Violins, Violas, Celli, or Basses, and maps General MIDI drum notes to the untuned percussion keyswitch matrix.
+* **Symphonic Seating & Multi-Stem Headroom Scaling:** Instruments are spatialized across the stereo field according to realistic orchestral seating laws (Violins Left, Celli/Basses Right, Woodwinds Center, Brass/Percussion Rear). Headroom is scaled mathematically (`0.85 / sqrt(N)`) to prevent digital clipping when mixing dense orchestral arrangements.
+* **Master AIR Studios Reverb & Fast 2-Second Re-Rendering:** Backing mixes are treated with AIR Studios Reverb Essentials convolution acoustics. The dry mix is saved as `backing_dry.wav` alongside `backing_insts.wav`, enabling instant (~2-second) reverb preset adjustments without re-rendering individual instrument stems.
+* **Isolated Multi-Process Worker & Live Progress:** Synthesis tasks run in an isolated worker process (`multiprocessing`), protecting FastAPI from native VST crashes. Real-time progress (0% to 100%) and live logging are streamed to the UI with a permanent **"Log"** button on every file card and an interactive worker log viewer.
+
+---
+
+### 2. Library & Workspace Overview
+A clean, "Files-style" workspace designed for easy navigation and comprehensive library management:
 * **Bulk Actions:** Supports bulk file uploads, bulk deletions, and bulk additions to playlists directly from the file list screen.
 * **Instant Playback Control:** Click a file once to play it locally through device speakers, or long-press to play it directly on the physical Disklavier.
-* **Normalized Search:** Find files instantly with responsive search logic.
-* **Track Information & Editing:** Access detailed track information views to edit metadata and configuration settings.
+* **Normalized Search:** Find files instantly with multi-token, punctuation-agnostic search logic.
+* **Track Information & Editing:** Access detailed track information views to inspect note counts, GM programs, and edit metadata.
 
 <p align="center">
   <img src="./screenshots/file_list_screen.png" width="45%" />
   <img src="./screenshots/file_details.png" width="45%" />
 </p>
 
-### Smart & Dynamic Playlists
-Organize your collection with a metadata-driven playlist builder featuring AND-logic filtering and a suggestive query builder.
-* **Manual & Dynamic Building:** Playlists can be manually curated or generated dynamically using metadata conditions. By default, standard MIDI files that match the metadata conditions will automatically populate (note that the mobile frontend must be pulled to refresh to render new additions).
-* **Visual Metadata Tags:** Playlists automatically add tag labels to files on the main Files Screen, helping identify associated collections at a glance.
-* **Hybrid Track Integration:** As long as a hybrid (MIDI + MP3) song is marked as **validated**, it can be manually added to playlists or will automatically populate if its metadata matches the dynamic criteria. Validated hybrid tracks launch utilizing global speaker and sync configurations automatically.
-* **Performance Disclaimer:** Once your music library becomes extremely large, loading massive dynamic playlists can be slow on mobile devices, sometimes triggering the OS "App Not Responding / Close App" popup. Fortunately, since the mobile app acts purely as a UI remote, closing and restarting the app **will not disrupt active piano playback**. Playlist expansion and loading is nearly instantaneous in the web app version.
+---
 
-<p align="center">
-  <img src="./screenshots/smart_playlists.png" width="45%" />
-  <img src="./screenshots/smart_playlist_builder_scrolling.png" width="45%" />
-</p>
-
-### Advanced MIDI Editor & Hybrid Sync
-For complex MIDI arrangements, bypass the automated cleaning limits and take full manual control:
-* **Custom Track Routing:** Route individual MIDI tracks selectively. Send the piano parts to the physical Disklavier, and route backing instruments (e.g., cellos, violins, drums) to the speaker system to play simultaneously.
+### 3. Hybrid MIDI Editor & MP3 Backing Track Alignment
+For complex MIDI arrangements or pop/vocal backing tracks, take full manual control:
+* **Custom Track Routing:** Route individual MIDI tracks selectively. Send the piano parts to the physical Disklavier, and route backing instruments or vocals to the speaker system.
   
   <p align="center">
     <img src="./screenshots/midi_editor_file_list.png" width="45%" />
@@ -61,139 +141,151 @@ For complex MIDI arrangements, bypass the automated cleaning limits and take ful
     <img src="./screenshots/midi_editor_workspace_track_routing.png" width="90%" />
   </p>
   
-* **Waveform-Level Breaklines:** Perfect the synchronization between backing audio and the piano. Add **Breaklines** anywhere on the audio waveform to stretch/shift the track (adding/removing milliseconds) to align vocals or instrument beats to the exact millisecond.
+* **Waveform-Level Breaklines:** Perfect the synchronization between backing audio and the piano. Add **Breaklines** anywhere on the audio waveform to stretch/shift the track (adding/removing milliseconds) to align vocals or instrument beats to the millisecond.
   
   <p align="center">
     <img src="./screenshots/midi_editor_workspace_mp3_backing.png" width="90%" />
   </p>
 
-* **Smart Vocal Track Swapping:** Align your MIDI using a clean vocal-only stem, and then swap the audio track for a full instrument/drum/bass mix. The system automatically preserves all your breakline alignments. *(Note: breakline stretching will introduce audio distortions; the severity depends heavily on matching original MP3 and MIDI lengths).*
-* **Multitasking Local Playback:** Play tracks locally on your phone (synthesized via FluidSynth) at any time—even while the physical piano is performing a song. This is highly useful for verifying how a clean MIDI sounds when converted to piano before sending it to the physical Disklavier.
+* **Smart Vocal Track Swapping:** Align your MIDI using a clean vocal-only stem, then swap the audio track for a full instrument/drum/bass mix while preserving all breakline alignments.
+* **Instant Mobile Speaker Preview:** Toggle the phone speaker preview in the control bar to audition synthesized backing tracks locally before or during physical Disklavier playback.
+* **Break Glass Panic Stop:** Dedicated emergency button permanently accessible on the piano interface header to immediately send all-notes-off commands to the physical Disklavier.
 
-### Direct Server-PC Audio System
-Playing backing tracks through a phone connected to Bluetooth speakers is susceptible to latency, drift, and dropouts as the user moves around. 
-* **Zero-Drift Local Output:** Route backing audio directly through the server PC's hardware outputs to a static room speaker system to keep audio in perfect sub-millisecond sync with the BLE-connected piano.
-* **Automatic Power Management:** The backend auto-connects to the speaker system when playback starts and auto-disconnects when idle.
-* *Caveat:* If your speaker system goes into a standby sleep state, there may be a minor audio latency adjustment on the first song played after a period of inactivity.
+---
 
-### App Settings & Configuration
+### 4. Smart & Dynamic Playlists
+Organize your collection with a metadata-driven playlist builder featuring AND-logic filtering and a suggestive query builder:
+* **Manual & Dynamic Building:** Playlists can be manually curated or generated dynamically using metadata conditions (genres, tags, ratings, mood, tempo). Standard clean MIDIs matching dynamic rules populate automatically upon pull-to-refresh.
+* **Visual Metadata Tags:** Playlists automatically add tag labels to files on the main Files Screen, helping identify associated collections at a glance.
+* **Hybrid Track Validation ("V" Tag):** Once an orchestrated song or hybrid (MIDI + MP3) track is verified, toggle the **Validated** boolean. Validated songs display a green **V** badge and automatically populate into dynamic playlists matching their metadata.
+* **Direct Add from Orchestrator:** Add orchestrated songs directly to existing playlists via the "List" button on the MIDI Orchestrator long-press action bar without returning to the library.
+* **Sub-Millisecond Speaker Sync:** Configure global or per-track speaker sync offsets (in milliseconds). The backend employs dynamic audio pre-roll warmup buffers and RAM audio precaching to eliminate Bluetooth speaker standby lag and keep audio in sync with piano solenoids.
+
+<p align="center">
+  <img src="./screenshots/smart_playlists.png" width="45%" />
+  <img src="./screenshots/smart_playlist_builder_scrolling.png" width="45%" />
+</p>
+
+---
+
+### 5. Direct Server-PC Audio System
+Playing backing tracks through a mobile phone connected to Bluetooth speakers is prone to packet loss, latency drift, and battery drain.
+* **Zero-Drift Local Output:** Route backing audio directly through the server PC's hardware outputs to a static room speaker system to keep audio in perfect sync with the BLE-connected piano.
+* **Win32 A2DP Power Management:** The backend auto-connects to the room speaker system when playback starts and auto-disconnects after 5 minutes of idle time to conserve power.
+* **Dynamic Header Volume Slider:** Real-time master volume control embedded directly in the mobile and web navigation headers.
+
+---
+
+### 6. App Settings & Configuration
 Manage system preferences, connections, security, and recovery actions:
 * **Visual Theme:** Toggle dark mode for comfortable navigation in low-light environments.
-* **Connections:** Configure communication parameters. Note that the mobile application relies on a **low-latency Bluetooth connection** to the player piano.
+* **Connections:** Configure communication parameters and low-latency Bluetooth MIDI settings.
 * **Security & Keys:** Set your master server password (default is `piano`) and your Gemini API key.
 * **Backups:** Perform manual database and configuration backups (in addition to the system's **daily automatic backups**).
-* **Bluetooth Target Hard Reset:** A safety reset switch designed for rare situations where a crash or disconnect causes the piano's Bluetooth connection to get stuck, preventing reconnects to a restarted server.
+* **Bluetooth Target Hard Reset:** Safety reset switch designed for rare situations where a crash or disconnect leaves the piano's Bluetooth connection locked.
 
 <p align="center">
   <img src="./screenshots/settings_top.png" width="45%" />
   <img src="./screenshots/settings_bottom.png" width="45%" />
 </p>
 
-### Legacies & Work-in-Progress (Disclaimer)
-This application has been developed experimentally over a long period. As such, some experimental features are less polished:
-* **MP3 Orchestrator (Automatic Transcription/Sync):** Originally designed to automatically transcribe MP3 audio into piano MIDIs and perform wave-anchored Dynamic Time Warping (DTW) to sync them. Due to the limitations of audio-to-piano transcription, this automated process can cause "rubber-banding" timing errors and force the piano to play vocal notes. **This feature is semi-legacy;** the MP3 Orchestrator is now primarily recommended as a utility for stripping vocals/stems to load into the manual MIDI Editor.
-  
-  <p align="center">
-    <img src="./screenshots/mp3_orchestrator.png" width="60%" />
-  </p>
+---
 
-* **Breakline Audio Distortion & Gaps:** Adding adjustments in breaklines will introduce audio distortions. The level of distortion depends heavily on how well the lengths of your original MP3 and MIDI match (closer is better). In some cases, extreme breakline values can also cause the audio generator to repeat the previous audio chunk slightly.
-* **Mobile Screen Space:** Due to the dense layouts of waveforms, track lists, and editors, some screens can feel cramped on mobile devices. Visual layouts on arbitrary phone sizes are untested. The web app version (`player-piano-native` compiled for web) is highly recommended for doing extensive editing work.
-* **Gestures:** The app makes heavy use of **long-press gestures** to delete items, trigger settings, and access contextual menus.
-* **AI Vocal Synthesis (Male/Female Tracks):** The options to generate male or female vocal tracks within the MIDI Editor were part of an experiment to see if AI voice models could render high-quality singing from MIDI notes. Currently, the generated vocals do not sound production-grade, but the options are left in the workspace for future experimentation.
-* **Roadmap:** Planned future updates and optimizations:
-  * **Section Deletion:** Direct deletion of MIDI/MP3 sections utilizing A/B loop lines.
-  * **Selective Note Muting:** Option to select and mute individual MIDI notes or note ranges within the editor note grid.
-  * **Selective Note Output Routing:** Ability to long-press and drag a selection box (via mouse rectangle or touch gesture) over a section of notes on non-MP3 backing tracks to dynamically change their playback routing (e.g., routing a selected group of notes to the physical piano for a few bars before automatically reverting back to speaker playback).
-  * **Smart Speaker Pre-Connection:** A background process to check the upcoming song in the playlist; if it is a validated hybrid track (`validated === true`), the system will pre-connect to the backend speaker system to eliminate sleep/standby latency before playback starts.
-  * **Button Hold-to-Repeat:** *(Completed)* Hold-to-repeat gesture on timing adjustment buttons in the MIDI Editor to speed up backing offset adjustments.
-  * **Midi Editor Playlist Tags:** *(Completed)* Display playlist tag labels in the MIDI Editor file list screen, identical to the main Files Screen view.
+### 7. Legacies & Work-in-Progress (Disclaimer)
+* **MP3 Orchestrator (Automatic Transcription/Sync):** Originally designed to automatically transcribe MP3 audio into piano MIDIs and perform wave-anchored Dynamic Time Warping (DTW). Due to transcription limitations, this automated process can introduce timing artifacts. **This feature is semi-legacy;** the MP3 Orchestrator is now primarily recommended as a utility for stripping vocal stems to load into the manual MIDI Editor.
+* **Breakline Audio Distortion & Gaps:** Extreme breakline stretching values can introduce audio artifacts; closer length alignment between original MP3 and MIDI produces the cleanest results.
+* **Mobile Screen Space:** Due to dense waveform displays and multi-lane visualizers, the web app version (`player-piano-native` compiled for web) is recommended when performing detailed editing.
+* **Gestures:** The app makes extensive use of **long-press gestures** to delete items, trigger settings, and access contextual menus.
+* **AI Vocal Synthesis (Male/Female Tracks):** Experimental RVC-based vocal synthesis options remain in the workspace for testing, though they are not considered production-grade.
 
 ---
 
 ## Best Practices & Sourcing
 
-* **High-Quality MIDIs:** It is highly recommended to source MIDI files from community sites like **MuseScore** to get clean, multi-track arrangements.
-* **Gemini AI Integration:** Configure the Gemini API backend! Gemini automatically parses newly uploaded titles, assigns tags/genres, and calculates optimal velocity/pedal cleanup parameters to drive your smart playlists.
-* **Hardware Calibration:** Every Disklavier has a slightly different solenoid and pedal response. If the default presets in [clean_midi.py](file:///C:/app/player-piano-app/tools/clean_midi.py) are too loud or soft, you can adjust the `PEDAL_PRESETS` and velocity ceilings directly in the Python code.
+* **High-Quality MIDIs:** Source multi-track MIDI arrangements from reputable community sites (such as MuseScore) with cleanly separated instrument tracks.
+* **Gemini AI Integration:** Configure your Gemini API key in Settings. Gemini automatically parses newly uploaded titles, assigns genres/mood tags, and calculates optimal velocity/pedal cleanup parameters to drive your smart playlists.
+* **Hardware Calibration:** Every Disklavier has a slightly different solenoid and pedal response. If default presets in [clean_midi.py](file:///C:/app/player-piano-app/tools/clean_midi.py) are too loud or soft, adjust `PEDAL_PRESETS` and velocity ceilings directly.
 
 ---
 
 ## Project Structure
 
-* `player-piano-app/` — FastAPI backend, AI processing engine, and ML models.
-* `player-piano-native/` — Native mobile application (Expo/React Native).
-* `storage/` — Persistent storage for raw MIDIs, processed outputs, separated audio stems, and job databases (ignored from git tracking except for default SoundFonts).
+* `player-piano-app/` — FastAPI backend, VST3 Pedalboard synthesis engine, AI processing, and REST APIs.
+* `player-piano-native/` — Cross-platform client (Expo/React Native) for mobile devices and web browsers.
+* `storage/` — Persistent storage for raw MIDIs, processed outputs, separated audio stems, job databases, and VST preset files (`storage/vst_presets/`).
 * `tools/` — Utility scripts for MIDI inspection, re-cleaning, and model downloading.
 
 ---
 
 ## Setup & Installation
 
-### Backend Setup
-1. **Python 3.11 (Required):** Ensure Python 3.11 is installed (newer versions like 3.14 are incompatible with specific ML dependencies like Torch < 2.1).
+### 1. Backend Setup
+1. **Python 3.11 (Required):** Ensure Python 3.11 is installed (newer versions like 3.12+ break select PyTorch and Pedalboard dependencies).
 2. **Create Environment:**
-   ```bash
+   ```powershell
    cd player-piano-app
    py -3.11 -m venv .venv
    .\.venv\Scripts\activate
    ```
 3. **Install Dependencies:**
-   ```bash
+   ```powershell
    pip install -r requirements.txt
    ```
-4. **Download Transcription Checkpoint (Required for Windows):**
-   Run this Python command to pre-download the model checkpoint:
-   ```bash
+4. **Download Transcription Checkpoint (Required for MP3 stem separation):**
+   ```powershell
    python -c "import urllib.request, pathlib; url='https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1'; p = pathlib.Path.home() / 'piano_transcription_inference_data'; p.mkdir(exist_ok=True); print('Downloading checkpoint...'); urllib.request.urlretrieve(url, p / 'note_F1=0.9677_pedal_F1=0.9186.pth'); print('Done!')"
    ```
-5. **Install FluidSynth (Required for local audio rendering):**
-   * Download the latest Windows release (e.g., `win10-x64` zip) from [FluidSynth Releases](https://github.com/FluidSynth/fluidsynth/releases).
-   * Extract it to `C:\fluidsynth` or a folder of your choice (e.g. `C:\app\fluidsynth`).
-   * Define the environment variable `FLUIDSYNTH_BIN` pointing to `fluidsynth.exe` (defaults to `C:\fluidsynth\bin\fluidsynth.exe`).
-6. **Install FFmpeg (Required for audio separation & voice conversion):**
+5. **Install FFmpeg (Required for audio separation & voice conversion):**
    * Install via winget: `winget install Gnu.FFmpeg` (or download from [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/)).
    * Ensure `ffmpeg.exe` is added to your system's `PATH`.
-7. **Download RVC Voice Models (Optional, for vocal rendering):**
-   Run the model downloader script:
-   ```bash
-   python tools/download_rvc_models.py
-   ```
+6. **Virtual Instruments & VST Presets (Required for Orchestrator):**
+   * Install 64-bit VST3 plugins (e.g. Spitfire Audio BBC Symphony Orchestra, British Drama Toolkit, Aperture The Stack, Kontakt 8, Splice INSTRUMENT, AIR Studios Reverb Essentials) to your system VST3 directory (typically `C:\Program Files\Common Files\VST3`).
+   * Ensure calibrated `.vstpreset` files reside in `C:\app\storage\vst_presets\`.
+7. **Install FluidSynth (Emergency Safety Fallback):**
+   * Download the Windows release from [FluidSynth Releases](https://github.com/FluidSynth/fluidsynth/releases) to `C:\app\fluidsynth`.
+   * Set `FLUIDSYNTH_BIN` to `C:\app\fluidsynth\bin\fluidsynth.exe`.
 8. **Start the Server:**
-   ```bash
+   ```powershell
    $env:PYTHONPATH="."
    $env:FLUIDSYNTH_BIN="C:\app\fluidsynth\bin\fluidsynth.exe"
    python -m app.main
    ```
 
-### Web App & Access Settings (Easiest Method)
-Before configuring the mobile app, you can easily access the web-compiled version of the workstation, which is served directly from the FastAPI backend. It is much easier to use, fits all controls comfortably, and provides a roomier workspace for editing.
+### 2. Web App Access (Easiest Method)
+Before configuring the mobile app, you can access the web-compiled workstation served directly by FastAPI. It provides the most spacious environment for editing:
 
-1. **Default Password:** The default server authentication password is `piano`.
-2. **Access URL:** Open your web browser on any device connected to the same home network and go to:
+1. **Default Password:** `piano`.
+2. **Access URL:** Open your web browser on any device connected to the same local network:
    ```
    http://<your-server-ip>:8000/
    ```
-   *(To find `<your-server-ip>`, open Command Prompt/PowerShell and run `ipconfig` on your server PC; use the listed IPv4 address, e.g., `192.168.1.15`. **Recommendation:** Configure your home router to assign a static IP / DHCP reservation to the server PC so that your client URLs and settings do not break when the device or router restarts).*
-3. **Media Server Integration:** You can embed this web client directly in other server interfaces on your network, such as adding a custom navigation sidebar item inside Jellyfin (refer to the [Jellyfin Integration Guide](file:///C:/app/JELLYFIN.md) for step-by-step branding setup).
+   *(Find `<your-server-ip>` by running `ipconfig` on your server PC. Setting a static DHCP reservation on your home router is recommended).*
+3. **Media Server Integration:** Embed this web client directly into other network dashboards, such as adding a custom sidebar item inside Jellyfin (refer to the [Jellyfin Integration Guide](file:///C:/app/JELLYFIN.md)).
 
-### Mobile Setup (Local Dev)
-If you wish to run the app on your phone for mobile playback control:
+### 3. Mobile Setup (Local Dev & Production Builds)
+If you wish to run the app on an Android device:
+
 1. **Install Node.js & Dependencies:**
    ```bash
    cd player-piano-native
    npm install
    ```
-2. **Start the Development Server:**
+2. **Start the Expo Development Server:**
    ```bash
    npx expo start
    ```
-3. **Connect to Backend:** When prompted on launch, enter the backend server URL (e.g. `http://<your-server-ip>:8000`) and the default password (`piano`).
+3. **Production Standalone Android Release (APK over USB):**
+   To compile a native standalone release APK and deploy directly to a connected Android phone:
+   * Prerequisites: Android Studio, Android SDK (Platform & Build tools), Java JDK 17 (`JAVA_HOME` configured), phone with USB Debugging enabled.
+   * Run from `player-piano-native`:
+     ```bash
+     npx expo run:android --variant release
+     ```
 
-### Windows Automatic Startup (Optional)
-To have the backend server start automatically on Windows login:
+### 4. Windows Automatic Startup (Optional)
+To automatically launch the backend server on Windows login:
 1. Press `Win + R`, type `shell:startup`, and press **Enter**.
-2. Create a batch file named `start_midi_backend.bat` in that folder with the following content:
+2. Create a batch file named `start_midi_backend.bat` in that folder:
    ```cmd
    @echo off
    title MIDI-eval Times Backend
@@ -207,23 +299,11 @@ To have the backend server start automatically on Windows login:
 ---
 
 ## Development Guidelines
-* **Never Work in Main:** Do not make direct commits to `main`. Always create a feature branch (`feature/...`) for any tasks.
-* **Sync MCP Indexing:** Always ensure the `jcodemunch-mcp` watcher is running in the background during development to keep the symbol index up-to-date:
+
+* **Never Work in Main:** Do not make direct commits to `main`. Always create a descriptive feature or bugfix branch (`feature/...` or `bugfix/...`) for any tasks.
+* **Sync MCP Indexing:** Ensure the `jcodemunch-mcp` watcher is running in the background during development to keep the symbol index up-to-date:
   ```powershell
   .\player-piano-app\.venv\Scripts\jcodemunch-mcp watch .
   ```
-* **Production Standalone Mobile Releases (APK build):** 
-  To compile a native standalone release APK and deploy it directly to a physical Android device over USB:
-  1. **Prerequisites on Development PC:**
-     * **Android Studio & SDK:** You must have Android Studio installed, along with the Android SDK (Platform tools, Build tools, and command-line tools).
-     * **Java JDK:** Ensure Java Development Kit (e.g., JDK 17) is installed and the `JAVA_HOME` environment variable is configured to point to it.
-  2. **Prerequisites on Phone:**
-     * Enable **Developer Options** (tap *"Build Number"* 7 times in your phone's About settings).
-     * Enable **USB Debugging** inside Developer Options.
-     * Connect the phone to your PC via a USB cable.
-  3. **Build & Deploy Command:**
-     Run the following command from the `player-piano-native` directory:
-     ```bash
-     npx expo run:android --variant release
-     ```
-     *(This will compile the source native binaries locally and automatically install the standalone release APK onto your connected physical device over USB).*
+* **Offline Release Builds:** Always build mobile releases using offline release configurations (`--variant release`).
+* **Sync Static Web Builds:** When making changes to the mobile/web frontend in `player-piano-native`, export the web build (`npx expo export --platform web`) and synchronize outputs to `player-piano-app/app/static/`.
