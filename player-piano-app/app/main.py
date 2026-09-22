@@ -230,7 +230,13 @@ async def get_gemini_key():
     settings = get_settings_data()
     return {"key": settings.get('gemini_api_key', '')}
 
-async def process_uploaded_file(raw_path: Path, original_filename: str):
+async def process_uploaded_file(
+    raw_path: Path, 
+    original_filename: str,
+    source_url: Optional[str] = None,
+    score_id: Optional[str] = None,
+    extra_metadata: Optional[dict] = None
+):
     """Analyze with Gemini and auto-clean if possible."""
     settings = get_settings_data()
     api_key = settings.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
@@ -311,12 +317,25 @@ async def process_uploaded_file(raw_path: Path, original_filename: str):
             "source": gemini_data.get('source'),
             "is_game_or_movie": gemini_data.get('is_game_or_movie')
         }
+        if source_url:
+            metadata_updates["source_url"] = source_url
+        if score_id:
+            metadata_updates["score_id"] = score_id
+        if extra_metadata:
+            metadata_updates.update(extra_metadata)
         utils.update_file_metadata(final_filename, metadata_updates)
         print(f"DEBUG: Saved metadata for {final_filename}")
         
     except Exception as e:
         print(f"Auto-clean failed: {e}")
-        utils.update_file_metadata(original_filename, {"original_name": original_filename})
+        fail_meta = {"original_name": original_filename}
+        if source_url:
+            fail_meta["source_url"] = source_url
+        if score_id:
+            fail_meta["score_id"] = score_id
+        if extra_metadata:
+            fail_meta.update(extra_metadata)
+        utils.update_file_metadata(original_filename, fail_meta)
     
     return final_filename, gemini_data
 
@@ -330,6 +349,9 @@ class Base64UploadRequest(BaseModel):
     engine: Optional[str] = "bytedance"
     engine_sensitivity: Optional[float] = 1.0
     include_other: Optional[bool] = False
+    source_url: Optional[str] = None
+    score_id: Optional[str] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
 def get_unique_upload_path(filename: str):
     p = Path(filename)
     stem = p.stem
@@ -357,8 +379,18 @@ async def upload_base64(req: Base64UploadRequest):
         dest.write_bytes(file_data)
         
         print(f"DEBUG: Base64 upload successful: {new_name}")
-        final_name, gemini_data = await process_uploaded_file(dest, new_name)
-        return {'filename': final_name, 'gemini': gemini_data}
+        final_name, gemini_data = await process_uploaded_file(
+            dest, 
+            new_name,
+            source_url=req.source_url,
+            score_id=req.score_id,
+            extra_metadata=req.extra_metadata
+        )
+        return {
+            'filename': final_name, 
+            'gemini': gemini_data,
+            'metadata': utils.get_file_metadata(final_name)
+        }
     except Exception as e:
         print(f"DEBUG: Base64 upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -520,8 +552,8 @@ def get_file_metadata(filename: str):
 
 @app.post('/files/metadata/{filename}', dependencies=[Depends(verify_auth)])
 def update_file_metadata(filename: str, metadata: dict):
-    utils.update_file_metadata(filename, metadata)
-    return {'status': 'updated'}
+    updated = utils.update_file_metadata(filename, metadata)
+    return {'status': 'updated', 'filename': filename, 'metadata': updated}
 
 class BulkMetadataRequest(BaseModel):
     filenames: List[str]
@@ -529,8 +561,7 @@ class BulkMetadataRequest(BaseModel):
 
 @app.post('/files/metadata_bulk', dependencies=[Depends(verify_auth)])
 def bulk_update_file_metadata(req: BulkMetadataRequest):
-    for fn in req.filenames:
-        utils.update_file_metadata(fn, req.metadata)
+    utils.bulk_update_file_metadata(req.filenames, req.metadata)
     return {'status': 'updated', 'count': len(req.filenames)}
 
 @app.get('/files/download/{filename}', dependencies=[Depends(verify_auth)])
@@ -702,22 +733,8 @@ def _do_rename(old: str, new: str):
                 except Exception as e:
                     print(f"RENAME: Failed to rename cached paired render file: {e}")
 
-        # 3. Update metadata (Batch update for efficiency)
-        all_meta = utils.get_all_metadata()
-        meta_changed = False
-        
-        if old in all_meta:
-            all_meta[new] = all_meta.pop(old)
-            meta_changed = True
-            print(f"RENAME: Updated metadata for {new}")
-        
-        if paired_old and paired_old in all_meta:
-            all_meta[paired_new] = all_meta.pop(paired_old)
-            meta_changed = True
-            print(f"RENAME: Updated metadata for paired {paired_new}")
-            
-        if meta_changed:
-            utils.save_all_metadata(all_meta)
+        # 3. Update metadata (Atomic update under lock)
+        utils.rename_file_metadata(old, new, paired_old=paired_old, paired_new=paired_new)
             
         # 4. Update playlists
         with manager.lock:

@@ -2,6 +2,7 @@ import runpy
 import os
 import json
 import threading
+import contextlib
 import shutil
 import re
 import tempfile
@@ -17,6 +18,10 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.dirname(ROOT)
 PEDAL_JSON = os.path.join(PROJECT_ROOT, 'pedal_profiles.json')
 METADATA_JSON = os.path.join(PROJECT_ROOT, 'storage', 'metadata.json')
+METADATA_LOCK = os.path.join(PROJECT_ROOT, 'storage', 'metadata.lock')
+METADATA_BACKUPS_DIR = os.path.join(PROJECT_ROOT, 'storage', 'backups')
+_metadata_thread_lock = threading.RLock()
+_metadata_lock_depth = 0
 PLAYBACK_LOG = os.path.join(PROJECT_ROOT, 'storage', 'playback_debug.log')
 SOUNDFONT = os.path.join(PROJECT_ROOT, 'storage', 'Salamander.sf2')
 # Prefer environment variable, then system PATH, then default fallback path
@@ -1558,52 +1563,282 @@ def _log(msg):
         pass
 
 
-def get_all_metadata() -> dict:
-    if os.path.exists(METADATA_JSON):
+@contextlib.contextmanager
+def metadata_lock(timeout: float = 15.0):
+    """
+    Acquires both an in-process thread RLock and an OS-level file lock on METADATA_LOCK.
+    Ensures safe concurrent access across threads and separate processes (e.g. background bot, API requests).
+    Supports re-entrant nesting within the same thread.
+    """
+    global _metadata_lock_depth
+    acquired_thread = _metadata_thread_lock.acquire(timeout=timeout)
+    if not acquired_thread:
+        raise TimeoutError("Timed out waiting for metadata thread lock")
+
+    lock_file = None
+    is_outermost = False
+    try:
+        if _metadata_lock_depth == 0:
+            is_outermost = True
+            os.makedirs(os.path.dirname(METADATA_LOCK), exist_ok=True)
+            lock_file = open(METADATA_LOCK, 'a+', encoding='utf-8')
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write('0')
+                lock_file.flush()
+
+            start_time = time.time()
+            locked = False
+            if os.name == 'nt':
+                import msvcrt
+                while time.time() - start_time < timeout:
+                    try:
+                        lock_file.seek(0)
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                        locked = True
+                        break
+                    except (OSError, IOError, PermissionError):
+                        time.sleep(0.02)
+            else:
+                try:
+                    import fcntl
+                    while time.time() - start_time < timeout:
+                        try:
+                            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            locked = True
+                            break
+                        except (OSError, IOError):
+                            time.sleep(0.02)
+                except ImportError:
+                    locked = True
+
+            if not locked:
+                _log(f"WARNING: Metadata file lock timed out after {timeout}s; proceeding with thread lock.")
+
+        _metadata_lock_depth += 1
+        yield
+
+    finally:
+        _metadata_lock_depth -= 1
+        if is_outermost and lock_file:
+            try:
+                if os.name == 'nt':
+                    import msvcrt
+                    lock_file.seek(0)
+                    try:
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        import fcntl
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            finally:
+                try:
+                    lock_file.close()
+                except Exception:
+                    pass
+        _metadata_thread_lock.release()
+
+
+def _rotate_metadata_backup(current_path: str):
+    """Keep the last 10 good snapshots of metadata in storage/backups/."""
+    try:
+        if not os.path.exists(current_path) or os.path.getsize(current_path) < 20:
+            return
+        os.makedirs(METADATA_BACKUPS_DIR, exist_ok=True)
+        bak_file = os.path.join(METADATA_BACKUPS_DIR, 'metadata.json.bak')
+        shutil.copy2(current_path, bak_file)
+        
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        ts_backup = os.path.join(METADATA_BACKUPS_DIR, f'metadata_{timestamp}.json')
+        shutil.copy2(current_path, ts_backup)
+
+        backups = sorted([
+            os.path.join(METADATA_BACKUPS_DIR, f)
+            for f in os.listdir(METADATA_BACKUPS_DIR)
+            if f.startswith('metadata_') and f.endswith('.json')
+        ])
+        if len(backups) > 10:
+            for old_b in backups[:-10]:
+                try:
+                    os.remove(old_b)
+                except Exception:
+                    pass
+    except Exception as e:
+        _log(f"Error creating metadata backup: {e}")
+
+
+def _load_metadata_unlocked() -> dict:
+    """Internal unlocked read. Must be called inside metadata_lock()."""
+    if not os.path.exists(METADATA_JSON):
+        return {}
+
+    for attempt in range(3):
         try:
             with open(METADATA_JSON, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except Exception:
-            return {}
+        except (json.JSONDecodeError, OSError) as e:
+            if attempt < 2:
+                time.sleep(0.05 * (attempt + 1))
+            else:
+                _log(f"ERROR: Failed reading {METADATA_JSON}: {e}")
+                
+    bak_file = os.path.join(METADATA_BACKUPS_DIR, 'metadata.json.bak')
+    if os.path.exists(bak_file) and os.path.getsize(bak_file) > 20:
+        try:
+            with open(bak_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            _log(f"RECOVERY: Restored {len(data)} metadata items from backup {bak_file}")
+            return data
+        except Exception as e:
+            _log(f"ERROR: Failed reading backup {bak_file}: {e}")
+
+    if os.path.getsize(METADATA_JSON) <= 5:
+        return {}
+
+    _log(f"CRITICAL: {METADATA_JSON} exists ({os.path.getsize(METADATA_JSON)} bytes) but could not be parsed!")
     return {}
 
 
-def save_all_metadata(data: dict):
-    os.makedirs(os.path.dirname(METADATA_JSON), exist_ok=True)
-    with open(METADATA_JSON, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
+def _save_metadata_unlocked(data: dict, force: bool = False):
+    """
+    Internal unlocked write. Must be called inside metadata_lock().
+    Writes atomically to a temp file, validates size against previous state, and rotates backups.
+    """
+    if not isinstance(data, dict):
+        raise TypeError("Metadata data must be a dictionary")
+
+    # Circuit breaker: prevent accidental wipes (e.g. 1000 items -> 1 item)
+    if not force and os.path.exists(METADATA_JSON) and os.path.getsize(METADATA_JSON) > 100:
+        try:
+            with open(METADATA_JSON, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+            existing_count = len(existing_data)
+            incoming_count = len(data)
+            if existing_count >= 20 and incoming_count <= 5:
+                reject_file = os.path.join(
+                    os.path.dirname(METADATA_JSON),
+                    f"metadata_rejected_{int(time.time())}.json"
+                )
+                with open(reject_file, 'w', encoding='utf-8') as rf:
+                    json.dump(data, rf, indent=2)
+                err_msg = (
+                    f"Refusing to overwrite metadata: incoming data has only {incoming_count} items "
+                    f"while existing library has {existing_count} items. "
+                    f"Saved rejected data to {reject_file}."
+                )
+                _log(f"CRITICAL: {err_msg}")
+                raise ValueError(err_msg)
+        except (ValueError, TypeError):
+            raise
+        except Exception as e:
+            _log(f"Warning during metadata sanity check: {e}")
+
+    _rotate_metadata_backup(METADATA_JSON)
+
+    storage_dir = os.path.dirname(METADATA_JSON)
+    os.makedirs(storage_dir, exist_ok=True)
+
+    tmp_path = os.path.join(storage_dir, f"metadata.json.tmp.{os.getpid()}_{int(time.time()*1000)}")
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, METADATA_JSON)
+    except Exception as e:
+        _log(f"Error atomically saving metadata: {e}")
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
+
+
+def get_all_metadata() -> dict:
+    with metadata_lock():
+        return _load_metadata_unlocked()
+
+
+def save_all_metadata(data: dict, force: bool = False):
+    with metadata_lock():
+        _save_metadata_unlocked(data, force=force)
 
 
 def get_file_metadata(filename: str) -> dict:
-    all_meta = get_all_metadata()
-    return all_meta.get(filename, {
-        'original_name': filename,
-        'clean_profile': None,
-        'tempo_factor': 1.0,
-        'dnu': False,
-        'comments': ""
-    })
+    with metadata_lock():
+        all_meta = _load_metadata_unlocked()
+        return all_meta.get(filename, {
+            'original_name': filename,
+            'clean_profile': None,
+            'tempo_factor': 1.0,
+            'dnu': False,
+            'comments': ""
+        })
 
 
-def update_file_metadata(filename: str, updates: dict):
-    all_meta = get_all_metadata()
-    meta = all_meta.get(filename, {
-        'original_name': filename,
-        'clean_profile': None,
-        'tempo_factor': 1.0,
-        'dnu': False,
-        'comments': ""
-    })
-    meta.update(updates)
-    all_meta[filename] = meta
-    save_all_metadata(all_meta)
+def update_file_metadata(filename: str, updates: dict) -> dict:
+    with metadata_lock():
+        all_meta = _load_metadata_unlocked()
+        meta = all_meta.get(filename, {
+            'original_name': filename,
+            'clean_profile': None,
+            'tempo_factor': 1.0,
+            'dnu': False,
+            'comments': ""
+        })
+        meta.update(updates)
+        all_meta[filename] = meta
+        _save_metadata_unlocked(all_meta)
+        return meta
 
 
-def delete_file_metadata(filename: str):
-    all_meta = get_all_metadata()
-    if filename in all_meta:
-        del all_meta[filename]
-        save_all_metadata(all_meta)
+def bulk_update_file_metadata(filenames: List[str], updates: dict) -> dict:
+    with metadata_lock():
+        all_meta = _load_metadata_unlocked()
+        for filename in filenames:
+            meta = all_meta.get(filename, {
+                'original_name': filename,
+                'clean_profile': None,
+                'tempo_factor': 1.0,
+                'dnu': False,
+                'comments': ""
+            })
+            meta.update(updates)
+            all_meta[filename] = meta
+        _save_metadata_unlocked(all_meta)
+        return all_meta
+
+
+def delete_file_metadata(filename: str) -> bool:
+    with metadata_lock():
+        all_meta = _load_metadata_unlocked()
+        if filename in all_meta:
+            del all_meta[filename]
+            _save_metadata_unlocked(all_meta)
+            return True
+        return False
+
+
+def rename_file_metadata(old_name: str, new_name: str, paired_old: Optional[str] = None, paired_new: Optional[str] = None) -> bool:
+    with metadata_lock():
+        all_meta = _load_metadata_unlocked()
+        changed = False
+        if old_name in all_meta:
+            all_meta[new_name] = all_meta.pop(old_name)
+            changed = True
+        if paired_old and paired_old in all_meta:
+            all_meta[paired_new] = all_meta.pop(paired_old)
+            changed = True
+        if changed:
+            _save_metadata_unlocked(all_meta)
+        return changed
 
 
 def _find_script(names):
