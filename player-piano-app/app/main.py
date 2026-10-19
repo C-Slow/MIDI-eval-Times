@@ -476,11 +476,11 @@ def list_files():
                 'playlists': file_playlists.get(p.name, [])
             })
             
-    # Include completed, validated MIDI Editor jobs as virtual hybrid tracks
+    # Include completed, validated (or playlist-referenced) MIDI Editor jobs as virtual hybrid tracks
     from app.main import midi_orchestrator
     for job_id, job in midi_orchestrator.status.items():
-        if job.get("status") == "completed" and job.get("validated", False):
-            hybrid_name = f"hybrid:{job_id}"
+        hybrid_name = f"hybrid:{job_id}"
+        if job.get("status") == "completed" and (job.get("validated", False) or hybrid_name in file_playlists):
             created_time = job.get("timestamp", 0)
             midi_path = job.get("midi")
             length = 0

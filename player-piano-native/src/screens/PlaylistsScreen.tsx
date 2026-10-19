@@ -2,18 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, RefreshControl, ScrollView, Platform, Modal, TextInput, Switch, InteractionManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../store/useStore';
-import { playlistApi, pianoApi, settingsApi } from '../services/api';
+import { fileApi, playlistApi, pianoApi, settingsApi } from '../services/api';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { Colors } from '../constants/Colors';
 import { SmartPlaylistModal } from '../components/SmartPlaylistModal';
 
 const getDisplayName = (filename: string, fileMetadataMap: Record<string, any>) => {
+  if (!filename || typeof filename !== 'string') return '';
   if (filename.startsWith("hybrid:")) {
     const meta = fileMetadataMap[filename];
     if (meta?.original_name) {
       return meta.original_name.replace(/\.midi?$/i, '');
     }
-    const job_id = filename.split(":", 1)[1];
+    const job_id = filename.slice("hybrid:".length) || '';
     return `Orchestrated - ${job_id.substring(0, 8)}`;
   }
   return filename.replace(/\.midi?$/i, '');
@@ -55,6 +56,7 @@ export const PlaylistsScreen = () => {
   const playlists = useStore(state => state.playlists);
   const setPlaylists = useStore(state => state.setPlaylists);
   const files = useStore(state => state.files); // Needed for metadata
+  const setFiles = useStore(state => state.setFiles);
   const theme = useStore(state => state.theme);
   const isPianoConnected = useStore(state => state.isPianoConnected);
   const themeColors = Colors[theme];
@@ -101,6 +103,10 @@ export const PlaylistsScreen = () => {
       setPlaylists(data);
       const rules = await playlistApi.getPlaylistRules();
       setSmartRules(rules);
+      if (!files.processed || files.processed.length === 0) {
+        const fileData = await fileApi.listFiles();
+        setFiles(fileData);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -508,7 +514,7 @@ export const PlaylistsScreen = () => {
       ) : (
         <FlatList
           data={flattenedData}
-          keyExtractor={(item) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}`}
+          keyExtractor={(item) => item.type === 'header' ? `header-${item.name}` : `track-${item.playlistName}-${item.track}-${item.index}`}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={themeColors.accent} />}
           ListHeaderComponent={
