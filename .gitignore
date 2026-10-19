@@ -49,5 +49,8 @@ Midi-Projects/
 storage/rvc_models/
 fluidsynth/
 storage/screenshots/
+storage/*.lock
+storage/*.bak
 GEMINI.md
+tools/start_app.bat
 
