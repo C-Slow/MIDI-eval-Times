@@ -112,7 +112,7 @@ class GeminiService:
         }}
         """
 
-        models_to_try = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash-lite']
+        models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash-lite']
         
         last_error = None
         for model_name in models_to_try:
@@ -189,7 +189,7 @@ class GeminiService:
             """
 
             # gemini-2.5-flash and gemini-flash-latest support audio
-            models_to_try = ['gemini-2.5-flash', 'gemini-flash-latest']
+            models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
             
             for model_name in models_to_try:
                 try:
